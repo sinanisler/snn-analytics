@@ -1501,10 +1501,6 @@
 		mapScreen(rp, 'heat');
 	}
 
-	function renderTrails(rp) {
-		mapScreen(rp, 'trail');
-	}
-
 	// ------------------------------------------------------------- replay
 
 	var REPLAY_SPEEDS = [1, 2, 4, 8];
@@ -1920,8 +1916,7 @@
 				]),
 				canvas,
 				h('p', { class: 'snn-a-linkrow' }, [
-					h('a', { class: 'button', href: pageLink('snn-analytics-heatmaps') + '&pid=' + row.id }, 'Click heatmap'),
-					h('a', { class: 'button', href: pageLink('snn-analytics-trails') + '&pid=' + row.id }, 'Cursor trails')
+					h('a', { class: 'button', href: pageLink('snn-analytics-heatmaps') + '&pid=' + row.id }, 'Click heatmap')
 				])
 			], { sub: row.path, actions: close }));
 			detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -2658,7 +2653,6 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 		realtime: renderRealtime,
 		pages: renderPages,
 		heatmaps: renderHeatmaps,
-		trails: renderTrails,
 		replay: renderReplay,
 		referrers: renderReferrers,
 		geo: renderGeo,
