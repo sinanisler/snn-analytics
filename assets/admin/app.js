@@ -136,16 +136,21 @@
 		};
 	}
 
+	/** "42 seconds ago" or "5 minutes ago". Only used for the last hour. */
 	function ago(ts) {
 		var s = Math.max(0, Math.round(Date.now() / 1000 - ts));
-		if (s < 60) { return s + 's ago'; }
-		if (s < 3600) { return Math.round(s / 60) + 'm ago'; }
-		if (s < 86400) { return Math.round(s / 3600) + 'h ago'; }
-		return Math.round(s / 86400) + 'd ago';
+		if (s < 60) { return s + (s === 1 ? ' second ago' : ' seconds ago'); }
+		var m = Math.round(s / 60);
+		return m + (m === 1 ? ' minute ago' : ' minutes ago');
 	}
 
 	function when(ts) {
 		return new Date(ts * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+	}
+
+	/** Visits from the last hour read "5 minutes ago". Older visits show their date and time. */
+	function started(ts) {
+		return Date.now() / 1000 - ts < 3600 ? ago(ts) : when(ts);
 	}
 
 	function clock(ts) {
@@ -1484,7 +1489,7 @@
 					['Started', 'Visitor', 'Entry page', 'Exit page', 'Source', 'Country', 'Device', numCol('Views'), numCol('Active time')],
 					data.rows.map(function (s) {
 						return [
-							when(s.started_at),
+							started(s.started_at),
 							h('span', { class: 'snn-a-badge ' + (s['new'] ? 'is-new' : ''), text: s['new'] ? 'New' : 'Returning' }),
 							s.entry,
 							s.exit,
