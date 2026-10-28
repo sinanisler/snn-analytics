@@ -419,7 +419,7 @@
 		return h('div', { class: 'snn-a-live' }, [
 			h('span', { class: 'snn-a-live-dot', 'aria-hidden': 'true' }),
 			h('strong', { text: n(count) }),
-			h('span', { text: ' visitor' + (count === 1 ? '' : 's') + ' in the last 5 minutes' })
+			h('span', { text: ' visitor' + (count === 1 ? '' : 's') + ' in the last 30 minutes' })
 		]);
 	}
 
@@ -623,7 +623,7 @@
 				h('span', { class: 'snn-a-live-dot', 'aria-hidden': 'true' }),
 				h('strong', { class: 'snn-a-live-count', text: n(data.active) })
 			]),
-			h('p', { class: 'snn-a-muted', text: 'visitors active in the last 5 minutes' })
+			h('p', { class: 'snn-a-muted', text: 'visitors active in the last 30 minutes' })
 		]);
 	}
 
@@ -997,9 +997,9 @@
 				wide: true
 			}));
 			content.appendChild(h('div', { class: 'snn-a-split' }, [
-				card('Live pages', barList(data.pages.map(function (p) { return [pageName(p), p.visitors]; }), 'Nobody is on the site right now.'), { sub: 'Visitors in the last 5 minutes' }),
-				card('Live countries', barList(data.countries.map(function (c) { return [countryName(c.code), c.visitors]; }), 'No visitors.'), { sub: 'Visitors in the last 5 minutes' }),
-				card('Live referrers', barList(data.referrers.map(function (r) { return [r.domain, r.visitors]; }), 'No visitors.'), { sub: 'Visitors in the last 5 minutes' })
+				card('Live pages', barList(data.pages.map(function (p) { return [pageName(p), p.visitors]; }), 'Nobody is on the site right now.'), { sub: 'Visitors in the last 30 minutes' }),
+				card('Live countries', barList(data.countries.map(function (c) { return [countryName(c.code), c.visitors]; }), 'No visitors.'), { sub: 'Visitors in the last 30 minutes' }),
+				card('Live referrers', barList(data.referrers.map(function (r) { return [r.domain, r.visitors]; }), 'No visitors.'), { sub: 'Visitors in the last 30 minutes' })
 			]));
 			updated.textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 		}

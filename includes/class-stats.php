@@ -540,7 +540,7 @@ final class Stats {
 
 		$active = (int) $wpdb->get_var( $wpdb->prepare(
 			"SELECT COUNT(DISTINCT visitor_id) FROM {$sessions} WHERE last_seen >= %d",
-			$now - 300
+			$now - 1800
 		) );
 
 		$per_minute = $wpdb->get_results( $wpdb->prepare(
@@ -553,21 +553,21 @@ final class Stats {
 			"SELECT p.title, p.path, COUNT(DISTINCT v.session_id) AS visitors
 			 FROM {$views} v JOIN {$pages} p ON p.id = v.page_id
 			 WHERE v.created_at >= %d GROUP BY p.id, p.title, p.path ORDER BY visitors DESC LIMIT 10",
-			$now - 300
+			$now - 1800
 		), ARRAY_A );
 
 		$live_refs = $wpdb->get_results( $wpdb->prepare(
 			"SELECT COALESCE(r.domain, 'Direct') AS domain, COUNT(DISTINCT s.visitor_id) AS visitors
 			 FROM {$sessions} s LEFT JOIN {$refs} r ON r.id = s.referrer_id
 			 WHERE s.last_seen >= %d GROUP BY domain ORDER BY visitors DESC LIMIT 10",
-			$now - 300
+			$now - 1800
 		), ARRAY_A );
 
 		$live_countries = $wpdb->get_results( $wpdb->prepare(
 			"SELECT c.code, COUNT(DISTINCT s.visitor_id) AS visitors
 			 FROM {$sessions} s JOIN {$countries} c ON c.id = s.country_id
 			 WHERE s.last_seen >= %d GROUP BY c.code ORDER BY visitors DESC LIMIT 10",
-			$now - 300
+			$now - 1800
 		), ARRAY_A );
 
 		return [
