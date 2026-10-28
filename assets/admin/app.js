@@ -1153,7 +1153,7 @@
 		var scale = 1;
 		var showPage = opts.showPage !== false;
 
-		var frame = h('iframe', { class: 'snn-a-stage-frame', title: 'Page preview', tabindex: '-1', loading: 'lazy' });
+		var frame = h('iframe', { class: 'snn-a-stage-frame', title: 'Page preview', tabindex: '-1', loading: 'lazy', scrolling: 'no' });
 		var canvas = h('canvas', { class: 'snn-a-stage-canvas', 'aria-hidden': 'true' });
 		var sheet = h('div', { class: 'snn-a-stage-page' }, [frame, canvas]);
 		var inner = h('div', { class: 'snn-a-stage-inner' }, sheet);
