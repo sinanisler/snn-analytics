@@ -134,8 +134,12 @@ final class Geo {
 	public static function status(): array {
 		$path   = self::path();
 		$state  = get_option( self::STATUS, [] );
+		$edition = get_option( self::STATUS . '_edition', [] );
 
 		return [
+			'source'    => 'download.db-ip.com',
+			'edition'   => $path !== null && is_array( $edition ) ? (string) ( $edition['month'] ?? '' ) : '',
+			'installed_at' => $path !== null && is_array( $edition ) ? (int) ( $edition['installed'] ?? 0 ) : 0,
 			'installed' => $path !== null,
 			'size'      => $path !== null ? (int) filesize( $path ) : 0,
 			'state'     => is_array( $state ) ? (string) ( $state['state'] ?? 'idle' ) : 'idle',
@@ -173,7 +177,9 @@ final class Geo {
 		$tmp = $dir . '/download.tmp';
 
 		$response = null;
+		$edition  = '';
 		foreach ( [ gmdate( 'Y-m' ), gmdate( 'Y-m', strtotime( 'first day of last month' ) ) ] as $month ) {
+			$edition  = $month;
 			$response = wp_remote_get( sprintf( self::SOURCE, $month ), [
 				'timeout'  => 600,
 				'stream'   => true,
@@ -230,6 +236,7 @@ final class Geo {
 		self::$db_checked = false;
 		self::$db         = null;
 
+		update_option( self::STATUS . '_edition', [ 'month' => $edition, 'installed' => time() ], false );
 		self::set_status( 'done', 'City database installed.' );
 	}
 

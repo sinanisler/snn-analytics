@@ -2597,6 +2597,15 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 				? 'Installed, ' + Math.round(state.size / 1048576) + ' MB. New sessions get a city.'
 				: 'Not installed. Countries still work from CDN headers, but cities need this file.';
 			geoBox.appendChild(h('p', { text: installedText }));
+			var detail = 'Source: ' + (state.source || 'download.db-ip.com') + ' (DB-IP Lite City, updated monthly).';
+			if (state.installed && state.edition) {
+				detail += ' Installed edition: ' + state.edition;
+				if (state.installed_at) {
+					detail += ', downloaded ' + new Date(state.installed_at * 1000).toLocaleDateString();
+				}
+				detail += '.';
+			}
+			geoBox.appendChild(h('p', { class: 'snn-a-muted', text: detail }));
 			if (busy) {
 				geoBox.appendChild(h('progress', { class: 'snn-a-progress', 'aria-label': 'Download in progress' }));
 			}
