@@ -27,8 +27,9 @@ final class Frontend {
 		$config = [
 			'u'   => plugins_url( 't.php', SNN_A_FILE ),
 			'f'   => rest_url( 'snn-a/v1/t' ),
-			'dnt' => (bool) Settings::get()['respect_dnt'],
-			'pg'  => self::page(),
+			'dnt'   => (bool) Settings::get()['respect_dnt'],
+			'pg'    => self::page(),
+			'goals' => Goals::click_rules(),
 		];
 
 		// JSON_HEX_* keeps a title such as "</script>" from ending the inline script.
@@ -113,7 +114,17 @@ final class Frontend {
 	}
 
 	private static function path( mixed $url ): string {
-		$path = is_string( $url ) ? (string) parse_url( $url, PHP_URL_PATH ) : '';
+		if ( ! is_string( $url ) ) {
+			return '/';
+		}
+
+		$path  = (string) parse_url( $url, PHP_URL_PATH );
+		$query = (string) parse_url( $url, PHP_URL_QUERY );
+
+		// With plain permalinks every post is "/?p=ID". Keep the ID, or all posts share one path.
+		if ( $query !== '' && preg_match( '/(^|&)(p|page_id|cat|tag|author)=/', $query ) ) {
+			$path = ( $path === '' ? '/' : $path ) . '?' . $query;
+		}
 
 		return $path === '' ? '/' : $path;
 	}

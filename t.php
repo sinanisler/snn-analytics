@@ -6,7 +6,26 @@
 
 if ( ! defined( 'ABSPATH' ) ) {
 	define( 'SHORTINIT', true );
-	require dirname( __DIR__, 3 ) . '/wp-load.php';
+
+	// Normally wp-content/plugins/snn-analytics/t.php, three levels below the WordPress root.
+	// A symlinked or junctioned plugin resolves __FILE__ outside the site, so the
+	// requested path and the document root are tried too.
+	$snn_a_roots = [
+		dirname( (string) ( $_SERVER['SCRIPT_FILENAME'] ?? '' ), 3 ),
+		dirname( __FILE__, 3 ),
+		rtrim( (string) ( $_SERVER['DOCUMENT_ROOT'] ?? '' ), '/\\' ),
+	];
+	foreach ( $snn_a_roots as $snn_a_root ) {
+		if ( $snn_a_root !== '' && $snn_a_root !== '.' && file_exists( $snn_a_root . '/wp-load.php' ) ) {
+			require $snn_a_root . '/wp-load.php';
+			break;
+		}
+	}
+}
+
+if ( ! defined( 'ABSPATH' ) ) {
+	http_response_code( 503 ); // WordPress could not be loaded. The browser falls back to REST.
+	exit;
 }
 
 require_once __DIR__ . '/includes/class-store.php';
@@ -15,7 +34,9 @@ require_once __DIR__ . '/includes/class-db.php';
 require_once __DIR__ . '/includes/class-validator.php';
 require_once __DIR__ . '/includes/class-ua.php';
 require_once __DIR__ . '/includes/class-bot.php';
+require_once __DIR__ . '/includes/class-mmdb.php';
 require_once __DIR__ . '/includes/class-geo.php';
+require_once __DIR__ . '/includes/class-goals.php';
 require_once __DIR__ . '/includes/class-tracker.php';
 
 if ( ( $_SERVER['REQUEST_METHOD'] ?? '' ) !== 'POST' ) {

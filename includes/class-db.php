@@ -12,7 +12,7 @@ defined( 'ABSPATH' ) || exit;
 
 final class DB {
 
-	const VERSION = 1;
+	const VERSION = 2;
 	const OPTION  = 'snn_a_db_version';
 
 	/** Columns that hold 8 raw bytes. PHP passes them as hex, SQL converts with UNHEX(). */
@@ -55,6 +55,42 @@ final class DB {
 
 		[ $cols, $marks, $args ] = self::values( $row );
 		$wpdb->query( $wpdb->prepare( "INSERT INTO {$table} ({$cols}) VALUES ({$marks})", ...$args ) );
+
+		return (int) $wpdb->insert_id;
+	}
+
+	/**
+	 * Inserts many rows in one statement and returns the id of the first one.
+	 * The rows of one statement get consecutive ids on a single connection, which the
+	 * importer relies on to map old ids to new ones.
+	 */
+	public static function insert_many( string $table, array $rows ): int {
+		global $wpdb;
+
+		if ( $rows === [] ) {
+			return 0;
+		}
+
+		$cols   = array_keys( $rows[0] );
+		$groups = [];
+		$args   = [];
+
+		foreach ( $rows as $row ) {
+			$marks = [];
+			foreach ( $cols as $col ) {
+				$value = $row[ $col ];
+				if ( $value === null ) {
+					$marks[] = 'NULL';
+					continue;
+				}
+				$marks[] = in_array( $col, self::BINARY_COLUMNS, true ) ? 'UNHEX(%s)' : ( is_int( $value ) ? '%d' : '%s' );
+				$args[]  = $value;
+			}
+			$groups[] = '(' . implode( ', ', $marks ) . ')';
+		}
+
+		$sql = "INSERT INTO {$table} (" . implode( ', ', $cols ) . ') VALUES ' . implode( ', ', $groups );
+		$wpdb->query( $wpdb->prepare( $sql, ...$args ) );
 
 		return (int) $wpdb->insert_id;
 	}
@@ -232,6 +268,109 @@ CREATE TABLE {$p}events (
   KEY session_id (session_id),
   KEY created_at (created_at),
   KEY target_created (target_id, created_at)
+) $c;
+CREATE TABLE {$p}cities (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  country_id SMALLINT UNSIGNED NOT NULL,
+  hash BINARY(8) NOT NULL,
+  region VARCHAR(64) NOT NULL DEFAULT '',
+  name VARCHAR(64) NOT NULL DEFAULT '',
+  PRIMARY KEY  (id),
+  UNIQUE KEY hash_key (hash)
+) $c;
+CREATE TABLE {$p}goals (
+  id SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  name VARCHAR(100) NOT NULL DEFAULT '',
+  type TINYINT UNSIGNED NOT NULL,
+  match_type TINYINT UNSIGNED NOT NULL DEFAULT 1,
+  value VARCHAR(255) NOT NULL DEFAULT '',
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at INT UNSIGNED NOT NULL,
+  PRIMARY KEY  (id)
+) $c;
+CREATE TABLE {$p}conversions (
+  goal_id SMALLINT UNSIGNED NOT NULL,
+  session_id BIGINT UNSIGNED NOT NULL,
+  created_at INT UNSIGNED NOT NULL,
+  PRIMARY KEY  (goal_id, session_id),
+  KEY created_at (created_at),
+  KEY session_id (session_id)
+) $c;
+CREATE TABLE {$p}funnels (
+  id SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  name VARCHAR(100) NOT NULL DEFAULT '',
+  window_sec INT UNSIGNED NOT NULL DEFAULT 86400,
+  created_at INT UNSIGNED NOT NULL,
+  PRIMARY KEY  (id)
+) $c;
+CREATE TABLE {$p}funnel_steps (
+  funnel_id SMALLINT UNSIGNED NOT NULL,
+  position TINYINT UNSIGNED NOT NULL,
+  goal_id SMALLINT UNSIGNED NOT NULL,
+  PRIMARY KEY  (funnel_id, position)
+) $c;
+CREATE TABLE {$p}d_site (
+  day MEDIUMINT UNSIGNED NOT NULL,
+  sessions INT UNSIGNED NOT NULL DEFAULT 0,
+  visitors INT UNSIGNED NOT NULL DEFAULT 0,
+  new_visitors INT UNSIGNED NOT NULL DEFAULT 0,
+  bounces INT UNSIGNED NOT NULL DEFAULT 0,
+  duration_sum BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  views INT UNSIGNED NOT NULL DEFAULT 0,
+  events INT UNSIGNED NOT NULL DEFAULT 0,
+  PRIMARY KEY  (day)
+) $c;
+CREATE TABLE {$p}d_pages (
+  day MEDIUMINT UNSIGNED NOT NULL,
+  page_id INT UNSIGNED NOT NULL,
+  views INT UNSIGNED NOT NULL DEFAULT 0,
+  visitors INT UNSIGNED NOT NULL DEFAULT 0,
+  duration_sum BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  entrances INT UNSIGNED NOT NULL DEFAULT 0,
+  exits INT UNSIGNED NOT NULL DEFAULT 0,
+  PRIMARY KEY  (day, page_id)
+) $c;
+CREATE TABLE {$p}d_refs (
+  day MEDIUMINT UNSIGNED NOT NULL,
+  referrer_id INT UNSIGNED NOT NULL,
+  sessions INT UNSIGNED NOT NULL DEFAULT 0,
+  visitors INT UNSIGNED NOT NULL DEFAULT 0,
+  views INT UNSIGNED NOT NULL DEFAULT 0,
+  bounces INT UNSIGNED NOT NULL DEFAULT 0,
+  PRIMARY KEY  (day, referrer_id)
+) $c;
+CREATE TABLE {$p}d_geo (
+  day MEDIUMINT UNSIGNED NOT NULL,
+  country_id SMALLINT UNSIGNED NOT NULL,
+  city_id INT UNSIGNED NOT NULL,
+  sessions INT UNSIGNED NOT NULL DEFAULT 0,
+  visitors INT UNSIGNED NOT NULL DEFAULT 0,
+  views INT UNSIGNED NOT NULL DEFAULT 0,
+  PRIMARY KEY  (day, country_id, city_id)
+) $c;
+CREATE TABLE {$p}d_devices (
+  day MEDIUMINT UNSIGNED NOT NULL,
+  device TINYINT UNSIGNED NOT NULL,
+  browser_id SMALLINT UNSIGNED NOT NULL,
+  os_id SMALLINT UNSIGNED NOT NULL,
+  sessions INT UNSIGNED NOT NULL DEFAULT 0,
+  visitors INT UNSIGNED NOT NULL DEFAULT 0,
+  PRIMARY KEY  (day, device, browser_id, os_id)
+) $c;
+CREATE TABLE {$p}d_camps (
+  day MEDIUMINT UNSIGNED NOT NULL,
+  campaign_id INT UNSIGNED NOT NULL,
+  sessions INT UNSIGNED NOT NULL DEFAULT 0,
+  visitors INT UNSIGNED NOT NULL DEFAULT 0,
+  views INT UNSIGNED NOT NULL DEFAULT 0,
+  conversions INT UNSIGNED NOT NULL DEFAULT 0,
+  PRIMARY KEY  (day, campaign_id)
+) $c;
+CREATE TABLE {$p}d_goals (
+  day MEDIUMINT UNSIGNED NOT NULL,
+  goal_id SMALLINT UNSIGNED NOT NULL,
+  conversions INT UNSIGNED NOT NULL DEFAULT 0,
+  PRIMARY KEY  (day, goal_id)
 ) $c;";
 
 		return $sql;

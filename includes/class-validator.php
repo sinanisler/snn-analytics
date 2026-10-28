@@ -49,7 +49,7 @@ final class Validator {
 				return [ 'e' => 'ping', 'vk' => $vk, 'd' => min( $active, 14400 ) ];
 
 			case 'ev':
-				$kind = self::int( $in['t'] ?? null, 1, 5 );
+				$kind = self::int( $in['t'] ?? null, 1, 6 );
 				if ( $kind === null ) {
 					return null;
 				}
@@ -57,6 +57,7 @@ final class Validator {
 					3       => 'mailto',
 					4       => 'tel',
 					5       => self::name( $in['v'] ?? null ),
+					6       => self::goal_id( $in['v'] ?? null ),
 					default => self::url( $in['v'] ?? null ),
 				};
 				if ( $value === null ) {
@@ -157,6 +158,13 @@ final class Validator {
 		$url  = $scheme . '://' . strtolower( $parts['host'] ) . $port . ( $parts['path'] ?? '/' );
 
 		return mb_substr( $url, 0, 512 );
+	}
+
+	/** Goal clicks carry the goal id, stored as "goal:ID" so the timeline can show it. */
+	private static function goal_id( mixed $value ): ?string {
+		$id = self::text( $value, 8 );
+
+		return preg_match( '/^[1-9][0-9]{0,5}$/', $id ) ? 'goal:' . $id : null;
 	}
 
 	private static function name( mixed $value ): ?string {

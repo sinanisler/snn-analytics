@@ -22,6 +22,10 @@ final class Settings {
 			'exclude_roles'   => [ 'administrator' ],
 			'session_timeout' => 1800,     // seconds without a hit before a new session starts
 			'site_host'       => '',       // host without "www.", used for internal referrers
+			'retention_months' => 0,       // raw rows older than this are deleted; 0 keeps everything
+			'goal_rules'      => [],       // active goals, copied here so the tracker can check them without a query
+			'geo_city_file'   => '',       // absolute path of the installed city database, if any
+			'delete_on_uninstall' => false, // drop all tables and data when the plugin is deleted
 		];
 	}
 

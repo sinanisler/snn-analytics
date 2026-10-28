@@ -68,6 +68,7 @@ final class Tracker {
 		}
 
 		self::add_view( $session, $hit['vk'], $page_id, $now );
+		Goals::check_page( $session['id'], $hit['page']['path'], $now );
 	}
 
 	/**
@@ -106,6 +107,7 @@ final class Tracker {
 				'UPDATE ' . DB::table( 'sessions' ) . ' SET events = events + 1, is_bounce = 0 WHERE id = %d',
 				$session['id']
 			) );
+			Goals::check_event( $session['id'], $hit['t'], $hit['v'], $now );
 		}
 
 		self::touch( $session, $now );
@@ -168,6 +170,7 @@ final class Tracker {
 		global $wpdb;
 
 		$ua_info = UA::classify( $ua );
+		$geo     = Geo::locate( $server, self::client_ip( $server ) );
 
 		$id = DB::insert( DB::table( 'sessions' ), [
 			'visitor_id'    => $visitor['id'],
@@ -177,7 +180,8 @@ final class Tracker {
 			'exit_page_id'  => $page_id,
 			'referrer_id'   => self::referrer_id( $hit['ref'], $site_host ),
 			'campaign_id'   => self::campaign_id( $hit['q'] ),
-			'country_id'    => Geo::country_id( $server ),
+			'country_id'    => $geo['country_id'],
+			'city_id'       => $geo['city_id'],
 			'device'        => $ua_info['device'],
 			'browser_id'    => DB::upsert( DB::table( 'ua' ), [ 'kind' => 1, 'name' => $ua_info['browser'] ] ),
 			'os_id'         => DB::upsert( DB::table( 'ua' ), [ 'kind' => 2, 'name' => $ua_info['os'] ] ),

@@ -72,7 +72,23 @@
 	window.addEventListener('pagehide', ping);
 
 	document.addEventListener('click', function (event) {
-		var link = event.target.closest && event.target.closest('a[href]');
+		var target = event.target;
+		if (!target || !target.closest) {
+			return;
+		}
+
+		// Click goals: a configured selector that matches the clicked element (or an ancestor).
+		(cfg.goals || []).forEach(function (goal) {
+			var hit = null;
+			try {
+				hit = target.closest(goal.selector);
+			} catch (e) {}
+			if (hit) {
+				send({ e: 'ev', vk: vk, t: 6, v: String(goal.id) });
+			}
+		});
+
+		var link = target.closest('a[href]');
 		if (!link) {
 			return;
 		}

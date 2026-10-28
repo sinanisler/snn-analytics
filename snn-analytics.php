@@ -14,13 +14,37 @@ defined( 'ABSPATH' ) || exit;
 define( 'SNN_A_VERSION', '0.1.1' );
 define( 'SNN_A_FILE', __FILE__ );
 
-foreach ( [ 'class-store', 'class-settings', 'class-db', 'class-validator', 'class-ua', 'class-bot', 'class-geo', 'class-tracker', 'class-frontend', 'class-rest' ] as $snn_a_file ) {
+foreach ( [
+	'class-store', 'class-settings', 'class-db', 'class-validator', 'class-ua', 'class-bot',
+	'class-mmdb', 'class-geo', 'class-ranges', 'class-goals', 'class-tracker', 'class-frontend',
+	'class-rest', 'class-rollup', 'class-stats', 'class-api', 'class-maintenance', 'class-importer', 'class-admin',
+] as $snn_a_file ) {
 	require_once __DIR__ . '/includes/' . $snn_a_file . '.php';
 }
 
 register_activation_hook( __FILE__, static function (): void {
 	SNN_Analytics\DB::install();
 	SNN_Analytics\Settings::update( [ 'site_host' => SNN_Analytics\Settings::host_of( home_url( '/' ) ) ] );
+	SNN_Analytics\Admin::grant_capability();
+
+	if ( ! wp_next_scheduled( SNN_Analytics\Rollup::HOOK ) ) {
+		wp_schedule_event( time() + 60, 'snn_a_15min', SNN_Analytics\Rollup::HOOK );
+	}
+	if ( ! wp_next_scheduled( SNN_Analytics\Maintenance::HOOK ) ) {
+		wp_schedule_event( time() + 3600, 'daily', SNN_Analytics\Maintenance::HOOK );
+	}
+} );
+
+register_deactivation_hook( __FILE__, static function (): void {
+	wp_clear_scheduled_hook( SNN_Analytics\Rollup::HOOK );
+	wp_clear_scheduled_hook( SNN_Analytics\Maintenance::HOOK );
+	wp_clear_scheduled_hook( SNN_Analytics\Geo::HOOK );
+} );
+
+add_filter( 'cron_schedules', static function ( array $schedules ): array {
+	$schedules['snn_a_15min'] = [ 'interval' => 900, 'display' => 'Every 15 minutes (SNN Analytics)' ];
+
+	return $schedules;
 } );
 
 add_action( 'update_option_home', static function ( $old, $new ): void {
@@ -28,6 +52,14 @@ add_action( 'update_option_home', static function ( $old, $new ): void {
 }, 10, 2 );
 
 add_action( 'plugins_loaded', [ SNN_Analytics\DB::class, 'maybe_upgrade' ] );
+add_action( SNN_Analytics\Rollup::HOOK, [ SNN_Analytics\Rollup::class, 'refresh_recent' ] );
+add_action( SNN_Analytics\Maintenance::HOOK, [ SNN_Analytics\Maintenance::class, 'retention' ] );
+add_action( SNN_Analytics\Geo::HOOK, [ SNN_Analytics\Geo::class, 'run_download' ] );
 
 SNN_Analytics\Frontend::register();
 SNN_Analytics\REST::register();
+SNN_Analytics\API::register();
+
+if ( is_admin() ) {
+	SNN_Analytics\Admin::register();
+}

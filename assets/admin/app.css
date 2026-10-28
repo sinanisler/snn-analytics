@@ -1,0 +1,213 @@
+/* SNN Analytics admin. Built on WordPress admin styles, so it matches the rest of wp-admin. */
+
+.snn-a .snn-a-range {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+	margin: 12px 0 16px;
+}
+.snn-a .snn-a-range .snn-a-custom input[type="date"] {
+	margin: 0 4px;
+}
+
+.snn-a .snn-a-kpis {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+	gap: 12px;
+	margin-bottom: 16px;
+}
+.snn-a .snn-a-kpi {
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	padding: 12px 14px;
+}
+.snn-a .snn-a-kpi-label {
+	color: #50575e;
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+}
+.snn-a .snn-a-kpi-value {
+	font-size: 24px;
+	font-weight: 600;
+	margin-top: 4px;
+}
+.snn-a .snn-a-kpi-delta {
+	font-size: 12px;
+	color: #646970;
+	margin-top: 2px;
+}
+.snn-a .snn-a-kpi-delta.up {
+	color: #00a32a;
+}
+.snn-a .snn-a-kpi-delta.down {
+	color: #d63638;
+}
+
+.snn-a .snn-a-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+	gap: 16px;
+	align-items: start;
+}
+.snn-a .snn-a-grid > .snn-a-card:first-child {
+	grid-column: 1 / -1;
+}
+.snn-a .snn-a-card {
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	padding: 0 16px 16px;
+	min-width: 0;
+}
+.snn-a .snn-a-card[draggable="true"] {
+	cursor: move;
+}
+.snn-a .snn-a-card.is-dragging {
+	opacity: 0.5;
+}
+.snn-a .snn-a-card-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	padding-top: 12px;
+	border-bottom: 1px solid #f0f0f1;
+	margin-bottom: 12px;
+}
+.snn-a .snn-a-card-head h2 {
+	font-size: 15px;
+	margin: 0 0 8px;
+}
+.snn-a .snn-a-card-body {
+	overflow-x: auto;
+}
+
+.snn-a .snn-a-split {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+	gap: 16px;
+	margin-top: 16px;
+}
+
+.snn-a .snn-a-chart {
+	position: relative;
+	width: 100%;
+}
+
+.snn-a .snn-a-table {
+	max-width: 100%;
+}
+.snn-a .snn-a-table td,
+.snn-a .snn-a-table th {
+	vertical-align: top;
+}
+.snn-a .snn-a-clickable {
+	cursor: pointer;
+}
+
+.snn-a .snn-a-empty {
+	color: #646970;
+	font-style: italic;
+}
+.snn-a .snn-a-big {
+	font-size: 16px;
+}
+.snn-a .snn-a-big strong {
+	font-size: 28px;
+	margin-right: 4px;
+}
+.snn-a .snn-a-error {
+	color: #d63638;
+}
+
+.snn-a .snn-a-detail {
+	margin-top: 16px;
+}
+.snn-a .snn-a-timeline {
+	border-left: 2px solid #c3c4c7;
+	padding-left: 12px;
+}
+.snn-a .snn-a-timeline li {
+	margin-bottom: 8px;
+}
+.snn-a .snn-a-time {
+	color: #646970;
+	font-variant-numeric: tabular-nums;
+	margin-right: 6px;
+}
+
+.snn-a .snn-a-map {
+	width: 100%;
+	height: auto;
+	max-height: 420px;
+	background: #f6f7f7;
+	border-radius: 4px;
+}
+
+.snn-a .snn-a-funnel-wrap {
+	border-top: 1px solid #f0f0f1;
+	padding-top: 12px;
+	margin-top: 12px;
+}
+.snn-a .snn-a-step {
+	display: grid;
+	grid-template-columns: 1fr;
+	margin-bottom: 8px;
+}
+.snn-a .snn-a-step-label {
+	font-weight: 600;
+}
+.snn-a .snn-a-bar {
+	background: #2271b1;
+	color: #fff;
+	padding: 4px 8px;
+	border-radius: 3px;
+	min-width: 60px;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.snn-a .snn-a-add {
+	margin-top: 12px;
+	padding: 8px 12px;
+	background: #f6f7f7;
+	border-radius: 4px;
+}
+.snn-a .snn-a-add summary {
+	cursor: pointer;
+	font-weight: 600;
+}
+
+.snn-a .snn-a-customize {
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	padding: 10px 14px;
+	margin-bottom: 16px;
+}
+.snn-a .snn-a-check {
+	display: inline-block;
+	margin-right: 16px;
+}
+
+.snn-a .snn-a-tools .snn-a-card {
+	margin-bottom: 16px;
+}
+
+.snn-a .snn-a-form input[type="text"],
+.snn-a .snn-a-form input[type="number"] {
+	min-width: 220px;
+}
+
+/* Phone width: stack everything. */
+@media (max-width: 782px) {
+	.snn-a .snn-a-grid,
+	.snn-a .snn-a-split {
+		grid-template-columns: 1fr;
+	}
+	.snn-a .snn-a-kpi-value {
+		font-size: 20px;
+	}
+}
