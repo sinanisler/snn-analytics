@@ -336,10 +336,7 @@
 	var pointer = [0, 0];
 	var trailDone = !cfg.cur;
 
-	document.addEventListener('pointermove', function (event) {
-		if (trailDone) {
-			return;
-		}
+	function trackPointer(event) {
 		if (!trail) {
 			trail = [];
 			trailStart = Date.now();
@@ -348,6 +345,26 @@
 		var width = document.documentElement.scrollWidth || 1;
 		pointer = [clamp(Math.round(event.pageX / width * 10000), 0, 10000), clamp(Math.round(event.pageY), 0, 65535)];
 		trailDirty = true;
+	}
+
+	document.addEventListener('pointermove', function (event) {
+		if (!trailDone) {
+			trackPointer(event);
+		}
+	}, { passive: true });
+
+	// A click is its own sample, marked by the top bit of x (x never goes above 10000), so the replay
+	// can show where and when the visitor clicked.
+	document.addEventListener('pointerdown', function (event) {
+		if (trailDone) {
+			return;
+		}
+		trackPointer(event);
+		trail.push([pointer[0] | 0x8000, pointer[1], clamp(Date.now() - trailStart, 0, 60000)]);
+		trailDirty = false;
+		if (trail.length >= 240) {
+			finishTrail();
+		}
 	}, { passive: true });
 
 	function takeSample() {

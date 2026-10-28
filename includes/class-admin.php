@@ -22,6 +22,9 @@ final class Admin {
 		'snn-analytics'           => [ 'dashboard', 'Dashboard', self::MENU_CAP ],
 		'snn-analytics-realtime'  => [ 'realtime', 'Realtime', self::MENU_CAP ],
 		'snn-analytics-pages'     => [ 'pages', 'Pages', self::MENU_CAP ],
+		'snn-analytics-heatmaps'  => [ 'heatmaps', 'Heatmaps', self::MENU_CAP ],
+		'snn-analytics-trails'    => [ 'trails', 'Trails', self::MENU_CAP ],
+		'snn-analytics-replay'    => [ 'replay', 'Replay', self::MENU_CAP ],
 		'snn-analytics-referrers' => [ 'referrers', 'Referrers', self::MENU_CAP ],
 		'snn-analytics-geo'       => [ 'geo', 'Geographic', self::MENU_CAP ],
 		'snn-analytics-devices'   => [ 'devices', 'Devices', self::MENU_CAP ],
@@ -40,6 +43,9 @@ final class Admin {
 		'snn-analytics',
 		'snn-analytics-realtime',
 		'snn-analytics-pages',
+		'snn-analytics-heatmaps',
+		'snn-analytics-trails',
+		'snn-analytics-replay',
 		'snn-analytics-referrers',
 		'snn-analytics-geo',
 		'snn-analytics-devices',
@@ -148,6 +154,7 @@ final class Admin {
 			'cards'     => self::CARDS,
 			'timezone'  => wp_timezone_string(),
 			'pageUrl'   => admin_url( 'admin.php?page=' ),
+			'site'      => (string) preg_replace( '#^(https?://[^/]+).*$#', '$1', home_url() ),
 			'version'   => SNN_A_VERSION,
 		] );
 	}

@@ -15,6 +15,21 @@ final class Frontend {
 	public static function register(): void {
 		add_action( 'wp_enqueue_scripts', [ self::class, 'enqueue' ] );
 		add_filter( 'script_loader_tag', [ self::class, 'script_tag' ], 10, 2 );
+		add_action( 'init', [ self::class, 'admin_preview' ] );
+	}
+
+	/**
+	 * The heatmap, trail and replay screens load pages in an iframe with ?snn_a_preview=1. Those loads
+	 * are not tracked, and the admin bar is hidden so the page has the same layout a visitor sees.
+	 */
+	public static function admin_preview(): void {
+		if ( self::is_admin_preview() ) {
+			add_filter( 'show_admin_bar', '__return_false' );
+		}
+	}
+
+	private static function is_admin_preview(): bool {
+		return isset( $_GET['snn_a_preview'] ) && current_user_can( Admin::MENU_CAP );
 	}
 
 	/**
@@ -41,7 +56,7 @@ final class Frontend {
 	private static array $config = [];
 
 	public static function enqueue(): void {
-		if ( is_preview() || ! self::should_track() ) {
+		if ( is_preview() || self::is_admin_preview() || ! self::should_track() ) {
 			return;
 		}
 

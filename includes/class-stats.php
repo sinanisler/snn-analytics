@@ -302,13 +302,21 @@ final class Stats {
 		];
 	}
 
-	/** Turns the hex of 6-byte samples back into [x, y, t] points. */
+	/**
+	 * Turns the hex of 6-byte samples back into [x, y, t, click] points. The tracker marks a click
+	 * by setting the top bit of x, which is free because x never goes above 10000.
+	 */
 	private static function decode_samples( string $hex ): array {
-		return array_map( static fn( string $sample ) => [
-			(int) hexdec( substr( $sample, 0, 4 ) ),
-			(int) hexdec( substr( $sample, 4, 4 ) ),
-			(int) hexdec( substr( $sample, 8, 4 ) ),
-		], str_split( $hex, 12 ) );
+		return array_map( static function ( string $sample ): array {
+			$x = (int) hexdec( substr( $sample, 0, 4 ) );
+
+			return [
+				$x & 0x7fff,
+				(int) hexdec( substr( $sample, 4, 4 ) ),
+				(int) hexdec( substr( $sample, 8, 4 ) ),
+				$x >= 0x8000 ? 1 : 0,
+			];
+		}, str_split( $hex, 12 ) );
 	}
 
 	public static function page_series( int $page_id, array $r ): array {
@@ -739,7 +747,7 @@ final class Stats {
 		}
 
 		$view_rows = $wpdb->get_results( $wpdb->prepare(
-			"SELECT v.id, v.created_at, v.duration, v.seq, p.title, p.path, (t.view_id IS NOT NULL) AS has_trail
+			"SELECT v.id, v.created_at, v.duration, v.seq, p.title, p.path, (t.view_id IS NOT NULL) AS has_trail, HEX(t.samples) AS samples
 			 FROM {$views} v
 			 JOIN {$pages} p ON p.id = v.page_id
 			 LEFT JOIN {$trails} t ON t.view_id = v.id
@@ -765,6 +773,7 @@ final class Stats {
 				'path'      => (string) $v['path'],
 				'duration'  => (int) $v['duration'],
 				'has_trail' => (bool) $v['has_trail'],
+				'trail'     => $v['samples'] ? self::decode_samples( (string) $v['samples'] ) : [],
 				'events'    => [],
 			];
 		}

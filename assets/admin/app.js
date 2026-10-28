@@ -1112,75 +1112,720 @@
 	}
 
 	/*
-	 * The heatmap and the trails share one grid: 50 columns across the page width, and 8 px rows
-	 * for every 40 px of page height. Positions are therefore a share of the width and a distance
-	 * from the top, not an exact copy of the page.
+	 * Heatmaps, cursor trails and replays draw on top of the real page. The page is loaded in an
+	 * iframe at the width of the device (with ?snn_a_preview=1, so the load is not tracked), and a
+	 * canvas of the same size sits over it. Clicks are stored on a grid of 50 columns across the page
+	 * width and 40 px rows; trail points as a share of the width (per 10000) and px from the top.
 	 */
-	var MAP_COLS = 50;
-	var MAP_CELL = 12;
-	var MAP_ROW = 8;
-	// 2000 rows cover 80,000 px of page height, the same limit the tracker uses for click rows.
-	var MAP_ROWS = 2000;
+	var DEVICE_WIDTHS = { 0: 1280, 1: 1280, 2: 390, 3: 820 };
+	// The canvas is drawn at half size, so a long page does not need a huge bitmap.
+	var STAGE_RES = 0.5;
+	var STAGE_MAX_HEIGHT = 20000;
 
-	function heatmapView(data) {
-		if (!data.total) {
-			return empty('No clicks on this page in this range yet.');
-		}
-		var lowest = data.cells.reduce(function (most, c) { return Math.max(most, c[1]); }, 0);
-		var rows = Math.min(MAP_ROWS, lowest + 1);
-		var canvas = h('canvas', { class: 'snn-a-mapcanvas', width: MAP_COLS * MAP_CELL, height: rows * MAP_ROW, role: 'img', 'aria-label': 'Click heatmap for this page' });
-		var ctx = canvas.getContext('2d');
-		ctx.fillStyle = '#f6f7f7';
-		ctx.fillRect(0, 0, canvas.width, canvas.height);
-		data.cells.forEach(function (cell) {
-			if (cell[1] >= rows) {
-				return;
-			}
-			var x = cell[0] * MAP_CELL + MAP_CELL / 2;
-			var y = cell[1] * MAP_ROW + MAP_ROW / 2;
-			var radius = MAP_CELL * 2;
-			var strength = cell[2] / data.max;
-			var gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-			gradient.addColorStop(0, 'rgba(214,54,56,' + (0.25 + 0.6 * strength).toFixed(2) + ')');
-			gradient.addColorStop(1, 'rgba(214,54,56,0)');
-			ctx.fillStyle = gradient;
-			ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
-		});
-		return h('div', {}, [h('div', { class: 'snn-a-mapscroll' }, canvas), h('p', { class: 'snn-a-muted', text: n(data.total) + ' clicks in this range' })]);
+	function urlParam(name) {
+		return new URLSearchParams(window.location.search).get(name);
 	}
 
-	function trailView(data) {
-		if (!data.trails.length) {
-			return empty('No cursor trails in this range. They are recorded only when cursor trails are turned on in Settings.');
+	/** Puts a value in the address bar without reloading, so a link to this view can be shared. */
+	function setUrlParam(name, value) {
+		var url = new URL(window.location.href);
+		if (value === null || value === '') {
+			url.searchParams.delete(name);
+		} else {
+			url.searchParams.set(name, value);
 		}
-		var lowest = data.trails.reduce(function (most, trail) {
-			return trail.reduce(function (inner, p) { return Math.max(inner, p[1]); }, most);
-		}, 0);
-		var rows = Math.min(MAP_ROWS, Math.floor(lowest / 40) + 1);
-		var canvas = h('canvas', { class: 'snn-a-mapcanvas', width: MAP_COLS * MAP_CELL, height: rows * MAP_ROW, role: 'img', 'aria-label': 'Cursor trails for this page' });
-		var ctx = canvas.getContext('2d');
-		ctx.fillStyle = '#f6f7f7';
-		ctx.fillRect(0, 0, canvas.width, canvas.height);
-		ctx.lineWidth = 1;
-		ctx.strokeStyle = 'rgba(34,113,177,0.3)';
-		data.trails.forEach(function (trail) {
-			if (!trail.length) {
+		window.history.replaceState(null, '', url.toString());
+	}
+
+	function previewUrl(path) {
+		return cfg.site + path + (path.indexOf('?') === -1 ? '?' : '&') + 'snn_a_preview=1';
+	}
+
+	/**
+	 * The page at device width, scaled down to fit, with a canvas on top. draw(ctx, width, height) is
+	 * called with the context in page pixels each time the page height is known or changes.
+	 * opts: minHeight (px the data needs), showPage (false draws on a blank sheet).
+	 */
+	function pageStage(path, device, draw, opts) {
+		opts = opts || {};
+		var width = DEVICE_WIDTHS[device] || DEVICE_WIDTHS[0];
+		var height = Math.min(STAGE_MAX_HEIGHT, Math.max(800, opts.minHeight || 0));
+		var scale = 1;
+		var showPage = opts.showPage !== false;
+
+		var frame = h('iframe', { class: 'snn-a-stage-frame', title: 'Page preview', tabindex: '-1', loading: 'lazy' });
+		var canvas = h('canvas', { class: 'snn-a-stage-canvas', 'aria-hidden': 'true' });
+		var sheet = h('div', { class: 'snn-a-stage-page' }, [frame, canvas]);
+		var inner = h('div', { class: 'snn-a-stage-inner' }, sheet);
+		var status = h('p', { class: 'snn-a-stage-status', text: showPage ? 'Loading the page…' : '' });
+		var outer = h('div', { class: 'snn-a-stage' + (showPage ? '' : ' is-blank') }, [inner, status]);
+		var timers = [];
+
+		function layout() {
+			var room = outer.clientWidth || width;
+			scale = Math.min(1, room / width);
+			sheet.style.width = width + 'px';
+			sheet.style.height = height + 'px';
+			sheet.style.transform = 'scale(' + scale + ')';
+			inner.style.width = Math.round(width * scale) + 'px';
+			inner.style.height = Math.round(height * scale) + 'px';
+			frame.style.width = width + 'px';
+			frame.style.height = height + 'px';
+			canvas.width = Math.round(width * STAGE_RES);
+			canvas.height = Math.round(height * STAGE_RES);
+			canvas.style.width = width + 'px';
+			canvas.style.height = height + 'px';
+			paint();
+		}
+
+		function paint() {
+			var ctx = canvas.getContext('2d');
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
+			ctx.clearRect(0, 0, canvas.width, canvas.height);
+			ctx.setTransform(STAGE_RES, 0, 0, STAGE_RES, 0, 0);
+			draw(ctx, width, height);
+		}
+
+		/** The page can grow after load (images, lazy content), so it is measured twice. */
+		function measure() {
+			var docHeight = 0;
+			try {
+				var doc = frame.contentDocument;
+				docHeight = Math.max(doc.documentElement.scrollHeight, doc.body ? doc.body.scrollHeight : 0);
+			} catch (e) {
+				docHeight = 0;
+			}
+			status.textContent = docHeight ? '' : 'The page could not be measured, so its height is estimated from the data.';
+			var next = Math.min(STAGE_MAX_HEIGHT, Math.max(height, docHeight));
+			if (next !== height) {
+				height = next;
+				layout();
+			}
+		}
+
+		frame.addEventListener('load', function () {
+			measure();
+			timers.push(window.setTimeout(measure, 1500));
+		});
+
+		window.requestAnimationFrame(function () {
+			layout();
+			if (showPage) {
+				frame.src = previewUrl(path);
+			}
+		});
+
+		var onResize = function () { layout(); };
+		window.addEventListener('resize', onResize);
+
+		return {
+			el: outer,
+			width: width,
+			sheet: sheet,
+			redraw: paint,
+			scale: function () { return scale; },
+			/** Keeps a point of the page (px from the top) in view, for the replay cursor. */
+			follow: function (y) {
+				var top = y * scale;
+				if (top < outer.scrollTop + outer.clientHeight * 0.2 || top > outer.scrollTop + outer.clientHeight * 0.8) {
+					outer.scrollTop = Math.max(0, top - outer.clientHeight / 2);
+				}
+			},
+			destroy: function () {
+				window.removeEventListener('resize', onResize);
+				timers.forEach(window.clearTimeout);
+				frame.src = 'about:blank';
+			}
+		};
+	}
+
+	/** Blue to red, by how many clicks a spot has compared with the busiest one. */
+	var HEAT_STOPS = [[0, [37, 99, 235]], [0.35, [16, 185, 129]], [0.6, [250, 204, 21]], [0.8, [249, 115, 22]], [1, [220, 38, 38]]];
+
+	function heatColor(v) {
+		for (var i = 1; i < HEAT_STOPS.length; i++) {
+			if (v <= HEAT_STOPS[i][0]) {
+				var a = HEAT_STOPS[i - 1];
+				var b = HEAT_STOPS[i];
+				var f = (v - a[0]) / (b[0] - a[0]);
+				return a[1].map(function (c, k) { return Math.round(c + (b[1][k] - c) * f); });
+			}
+		}
+		return HEAT_STOPS[HEAT_STOPS.length - 1][1];
+	}
+
+	/**
+	 * Each cell adds a soft spot to an alpha layer; the summed alpha is then mapped to colours, so
+	 * spots that overlap get hotter instead of just darker.
+	 */
+	function drawHeat(ctx, width, cells, max) {
+		var colW = width / 50;
+		var radius = Math.max(18, colW * 1.4);
+		ctx.save();
+		ctx.globalCompositeOperation = 'source-over';
+		cells.forEach(function (cell) {
+			var x = (cell[0] + 0.5) * colW;
+			var y = cell[1] * 40 + 20;
+			var strength = Math.max(0.08, Math.sqrt(cell[2] / max));
+			var g = ctx.createRadialGradient(x, y, 0, x, y, radius);
+			g.addColorStop(0, 'rgba(0,0,0,' + strength.toFixed(3) + ')');
+			g.addColorStop(1, 'rgba(0,0,0,0)');
+			ctx.fillStyle = g;
+			ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+		});
+		ctx.restore();
+
+		var image = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
+		var px = image.data;
+		for (var i = 0; i < px.length; i += 4) {
+			var alpha = px[i + 3];
+			if (!alpha) {
+				continue;
+			}
+			var rgb = heatColor(Math.min(1, alpha / 255));
+			px[i] = rgb[0];
+			px[i + 1] = rgb[1];
+			px[i + 2] = rgb[2];
+			px[i + 3] = Math.min(210, 60 + alpha);
+		}
+		ctx.putImageData(image, 0, 0);
+	}
+
+	function drawTrail(ctx, width, trail, color, upTo) {
+		var points = trail.filter(function (p) { return upTo === undefined || p[2] <= upTo; });
+		if (!points.length) {
+			return;
+		}
+		ctx.strokeStyle = color;
+		ctx.lineWidth = 3;
+		ctx.lineJoin = 'round';
+		ctx.lineCap = 'round';
+		ctx.beginPath();
+		points.forEach(function (p, i) {
+			var x = p[0] / 10000 * width;
+			if (i === 0) {
+				ctx.moveTo(x, p[1]);
+			} else {
+				ctx.lineTo(x, p[1]);
+			}
+		});
+		ctx.stroke();
+		points.forEach(function (p) {
+			if (p[3]) {
+				ctx.fillStyle = 'rgba(220,38,38,0.85)';
+				ctx.beginPath();
+				ctx.arc(p[0] / 10000 * width, p[1], 9, 0, Math.PI * 2);
+				ctx.fill();
+			}
+		});
+	}
+
+	/** A select with the most viewed pages in the range. Resolves with the list once it is filled. */
+	function pagePicker(rp, current, pick) {
+		var select = h('select', { class: 'snn-a-pagepick', 'aria-label': 'Page', onchange: function () { pick(Number(select.value)); } },
+			h('option', { value: '' , text: 'Loading pages…' }));
+		var ready = api('stats/pages', Object.assign({}, rp, { orderby: 'views', order: 'desc', per_page: 100 })).then(function (data) {
+			clear(select);
+			if (!data.rows.length) {
+				select.appendChild(h('option', { value: '', text: 'No page views in this range' }));
+				return [];
+			}
+			var rows = data.rows.slice();
+			if (current && !rows.some(function (r) { return r.id === current; })) {
+				current = 0;
+			}
+			rows.forEach(function (row) {
+				select.appendChild(h('option', {
+					value: String(row.id),
+					text: (row.title || row.path) + ' · ' + row.path + ' (' + n(row.views) + ' views)',
+					selected: row.id === current ? true : null
+				}));
+			});
+			return rows;
+		});
+		return { el: select, ready: ready };
+	}
+
+	/** Shared shell for the heatmap and trail screens: range, page and device, then the stage. */
+	function mapScreen(rp, kind) {
+		var state = { page: Number(urlParam('pid')) || 0, device: Number(urlParam('device')) || 0, showPage: true };
+		var rows = [];
+		var bar = h('div', { class: 'snn-a-toolbar' });
+		var body = h('div', {}, skeleton(6));
+		var stage = null;
+
+		root.appendChild(h('div', { class: 'snn-a-toolbar' }, rangeControl()));
+		root.appendChild(bar);
+		root.appendChild(body);
+
+		teardown = function () {
+			if (stage) {
+				stage.destroy();
+			}
+		};
+
+		var picker = pagePicker(rp, state.page, function (id) {
+			state.page = id;
+			setUrlParam('pid', id);
+			load();
+		});
+
+		function toolbar() {
+			clear(bar);
+			bar.appendChild(h('div', { class: 'snn-a-mapbar' }, [
+				picker.el,
+				deviceSegment(state.device, function (value) {
+					state.device = value;
+					setUrlParam('device', value || null);
+					toolbar();
+					load();
+				}),
+				h('label', { class: 'snn-a-check' }, [
+					h('input', { type: 'checkbox', checked: state.showPage ? true : null, onchange: function (event) {
+						state.showPage = event.target.checked;
+						load();
+					} }),
+					' Show the page'
+				])
+			]));
+		}
+
+		function load() {
+			if (stage) {
+				stage.destroy();
+				stage = null;
+			}
+			clear(body);
+			var row = rows.filter(function (r) { return r.id === state.page; })[0];
+			if (!row) {
+				body.appendChild(empty('No page views in this range.'));
 				return;
 			}
-			ctx.beginPath();
-			trail.forEach(function (p, i) {
-				var x = p[0] / 10000 * canvas.width;
-				var y = p[1] / 40 * MAP_ROW;
-				if (i === 0) {
-					ctx.moveTo(x, y);
+			body.appendChild(skeleton(6));
+			var query = Object.assign({}, rp, { id: row.id, device: state.device });
+			api(kind === 'heat' ? 'stats/heatmap' : 'stats/trails', query).then(function (data) {
+				clear(body);
+				if (kind === 'heat') {
+					showHeat(row, data);
 				} else {
-					ctx.lineTo(x, y);
+					showTrails(row, data);
 				}
+			}).catch(function (err) {
+				clear(body);
+				body.appendChild(failed(err, load));
 			});
-			ctx.stroke();
+		}
+
+		function intro(row, text) {
+			return h('p', { class: 'snn-a-muted' }, [
+				h('strong', { text: row.title || row.path }),
+				' · ',
+				h('a', { href: cfg.site + row.path, target: '_blank', rel: 'noopener', text: row.path }),
+				' · ' + text
+			]);
+		}
+
+		function showHeat(row, data) {
+			if (!data.total) {
+				body.appendChild(intro(row, 'no clicks'));
+				body.appendChild(empty('No clicks on this page in this range yet. Clicks are recorded only when the click heatmap is turned on in Settings.'));
+				return;
+			}
+			var lowest = data.cells.reduce(function (most, c) { return Math.max(most, c[1]); }, 0);
+			body.appendChild(intro(row, n(data.total) + ' clicks in this range'));
+			body.appendChild(h('div', { class: 'snn-a-heatlegend' }, [
+				h('span', { text: 'Fewer clicks' }),
+				h('span', { class: 'snn-a-heatscale', 'aria-hidden': 'true' }),
+				h('span', { text: 'More clicks' })
+			]));
+			stage = pageStage(row.path, state.device, function (ctx, width) {
+				drawHeat(ctx, width, data.cells, data.max);
+			}, { minHeight: (lowest + 2) * 40, showPage: state.showPage });
+			body.appendChild(stage.el);
+			body.appendChild(note());
+		}
+
+		function showTrails(row, data) {
+			if (!data.trails.length) {
+				body.appendChild(intro(row, 'no trails'));
+				body.appendChild(empty('No cursor trails on this page in this range. They are recorded only when cursor trails are turned on in Settings.'));
+				return;
+			}
+			var pick = -1;
+			var lowest = data.trails.reduce(function (most, trail) {
+				return trail.reduce(function (inner, p) { return Math.max(inner, p[1]); }, most);
+			}, 0);
+			var shown = data.total > data.trails.length ? ', showing the latest ' + data.trails.length : '';
+			var select = h('select', { 'aria-label': 'Trail', onchange: function () {
+				pick = Number(select.value);
+				stage.redraw();
+			} }, [h('option', { value: '-1', text: 'All trails together' })].concat(data.trails.map(function (trail, i) {
+				var clicks = trail.filter(function (p) { return p[3]; }).length;
+				var secs = trail.length ? Math.round(trail[trail.length - 1][2] / 1000) : 0;
+				return h('option', { value: String(i), text: 'Trail ' + (i + 1) + ' · ' + secs + ' s' + (clicks ? ' · ' + clicks + (clicks === 1 ? ' click' : ' clicks') : '') });
+			})));
+			body.appendChild(intro(row, n(data.total) + ' trails in this range' + shown));
+			body.appendChild(h('div', { class: 'snn-a-mapbar' }, [select, h('span', { class: 'snn-a-muted', text: 'Red dots are clicks.' })]));
+			stage = pageStage(row.path, state.device, function (ctx, width) {
+				if (pick >= 0) {
+					drawTrail(ctx, width, data.trails[pick], 'rgba(34,113,177,0.9)');
+					return;
+				}
+				var alpha = Math.max(0.12, Math.min(0.6, 3 / data.trails.length));
+				data.trails.forEach(function (trail) {
+					drawTrail(ctx, width, trail, 'rgba(34,113,177,' + alpha.toFixed(2) + ')');
+				});
+			}, { minHeight: lowest + 200, showPage: state.showPage });
+			body.appendChild(stage.el);
+			body.appendChild(note());
+		}
+
+		function note() {
+			return h('p', { class: 'snn-a-muted snn-a-stage-note', text: 'The page is shown as it looks now. If it changed during this range, some marks may not line up with the content.' });
+		}
+
+		toolbar();
+		picker.ready.then(function (list) {
+			rows = list;
+			if (!state.page && rows.length) {
+				state.page = rows[0].id;
+			}
+			load();
+		}).catch(function (err) {
+			clear(body);
+			body.appendChild(failed(err));
 		});
-		var shown = data.total > data.trails.length ? ' Showing the latest ' + data.trails.length + '.' : '';
-		return h('div', {}, [h('div', { class: 'snn-a-mapscroll' }, canvas), h('p', { class: 'snn-a-muted', text: n(data.total) + ' trails recorded in this range.' + shown })]);
+	}
+
+	function renderHeatmaps(rp) {
+		mapScreen(rp, 'heat');
+	}
+
+	function renderTrails(rp) {
+		mapScreen(rp, 'trail');
+	}
+
+	// ------------------------------------------------------------- replay
+
+	var REPLAY_SPEEDS = [1, 2, 4, 8];
+
+	function renderReplay(rp) {
+		var state = { page: 1 };
+		var player = h('div', { class: 'snn-a-detail' });
+		var results = h('div', {}, skeleton(6));
+		var stop = null;
+
+		root.appendChild(h('div', { class: 'snn-a-toolbar' }, rangeControl()));
+		root.appendChild(player);
+		root.appendChild(results);
+
+		teardown = function () {
+			if (stop) {
+				stop();
+			}
+		};
+
+		function load() {
+			clear(results);
+			results.appendChild(skeleton(6));
+			api('stats/journeys', Object.assign({}, rp, state, { per_page: PER_PAGE })).then(function (data) {
+				clear(results);
+				var pages = Math.max(1, Math.ceil(data.total / PER_PAGE));
+				results.appendChild(h('p', { class: 'snn-a-muted', text: n(data.total) + ' sessions. Select one to replay it.' }));
+				if (!data.rows.length) {
+					results.appendChild(empty('No sessions in this range.'));
+					return;
+				}
+				results.appendChild(table(
+					['Started', 'Entry page', 'Source', 'Country', 'Device', numCol('Views'), numCol('Active time')],
+					data.rows.map(function (s) {
+						return [
+							started(s.started_at),
+							s.entry,
+							s.referrer,
+							h('span', { class: 'snn-a-country' }, [flag(s.country), countryName(s.country)]),
+							DEVICE_LABELS[s.device] || 'Other',
+							n(s.views),
+							duration(s.duration)
+						];
+					}),
+					'No sessions in this range.',
+					function (index) { open(data.rows[index].id); }
+				));
+				results.appendChild(pager(state.page, pages, function (page) { state.page = page; load(); }));
+			}).catch(function (err) {
+				clear(results);
+				results.appendChild(failed(err, load));
+			});
+		}
+
+		function open(id) {
+			if (stop) {
+				stop();
+				stop = null;
+			}
+			setUrlParam('session', id);
+			clear(player);
+			player.appendChild(skeleton(6));
+			player.scrollIntoView({ behavior: 'smooth', block: 'start' });
+			api('stats/journey', { id: id }).then(function (data) {
+				clear(player);
+				stop = replayPlayer(player, data, function () {
+					stop = null;
+					clear(player);
+					setUrlParam('session', null);
+				});
+			}).catch(function (err) {
+				clear(player);
+				player.appendChild(failed(err));
+			});
+		}
+
+		load();
+		if (urlParam('session')) {
+			open(Number(urlParam('session')));
+		}
+	}
+
+	/**
+	 * Plays one session page by page: the page at the visitor's device width, the pointer moving
+	 * along its trail, a ripple on each click, and the logged actions as they happen. Returns a
+	 * function that stops playback and frees the page.
+	 */
+	function replayPlayer(box, data, close) {
+		var s = data.session;
+		var steps = data.steps;
+		var index = 0;
+		var speed = 1;
+		var playing = false;
+		var time = 0;
+		var length = 1000;
+		var last = 0;
+		var raf = 0;
+		var advance = 0;
+		var stage = null;
+		var step = null;
+		var shownClicks = 0;
+
+		var cursor = h('div', { class: 'snn-a-cursor', 'aria-hidden': 'true' });
+		var playBtn = h('button', { type: 'button', class: 'button button-primary', onclick: function () { playing ? pause() : play(); } }, 'Play');
+		var scrub = h('input', { type: 'range', min: '0', max: '1000', value: '0', class: 'snn-a-scrub', 'aria-label': 'Position in this page view', oninput: function () {
+			seek(Number(scrub.value) / 1000 * length);
+		} });
+		var clockLabel = h('span', { class: 'snn-a-time', text: '0:00 / 0:00' });
+		var speedBar = h('div', { class: 'snn-a-segment', role: 'group', 'aria-label': 'Speed' });
+		var chips = h('ol', { class: 'snn-a-replay-steps' });
+		var log = h('ol', { class: 'snn-a-replay-log' });
+		var stageBox = h('div', { class: 'snn-a-replay-stage' });
+		var info = h('p', { class: 'snn-a-muted' });
+
+		function mmss(ms) {
+			var secs = Math.floor(ms / 1000);
+			return Math.floor(secs / 60) + ':' + ('0' + (secs % 60)).slice(-2);
+		}
+
+		function renderSpeeds() {
+			clear(speedBar);
+			REPLAY_SPEEDS.forEach(function (value) {
+				speedBar.appendChild(h('button', {
+					type: 'button',
+					class: 'snn-a-seg' + (speed === value ? ' is-active' : ''),
+					'aria-pressed': speed === value ? 'true' : 'false',
+					onclick: function () { speed = value; renderSpeeds(); }
+				}, value + '×'));
+			});
+		}
+
+		function renderChips() {
+			clear(chips);
+			steps.forEach(function (st, i) {
+				chips.appendChild(h('li', {}, h('button', {
+					type: 'button',
+					class: 'snn-a-replay-chip' + (i === index ? ' is-current' : '') + (st.trail.length ? '' : ' is-empty'),
+					'aria-current': i === index ? 'step' : null,
+					title: st.trail.length ? st.path : st.path + ' (no cursor trail)',
+					onclick: function () { show(i, playing); }
+				}, [h('span', { class: 'snn-a-replay-num', text: String(i + 1) }), st.title || st.path])));
+			});
+		}
+
+		/** Ms from the start of the view to an action, which is stored in whole seconds. */
+		function eventOffset(event) {
+			return Math.max(0, (event.at - step.at) * 1000);
+		}
+
+		function show(i, autoplay) {
+			window.clearTimeout(advance);
+			if (stage) {
+				stage.destroy();
+			}
+			index = i;
+			step = steps[i];
+			time = 0;
+			shownClicks = 0;
+			var trailEnd = step.trail.length ? step.trail[step.trail.length - 1][2] : 0;
+			var eventEnd = step.events.reduce(function (most, e) { return Math.max(most, eventOffset(e)); }, 0);
+			length = Math.max(trailEnd, Math.min(eventEnd, 120000), 1000) + 1000;
+			renderChips();
+
+			info.textContent = (step.title || step.path) + ' · ' + step.path + ' · on the page ' + duration(step.duration)
+				+ (step.trail.length ? '' : ' · no cursor trail for this view');
+
+			clear(log);
+			step.events.forEach(function (e) {
+				log.appendChild(h('li', { 'data-at': String(eventOffset(e)) }, [
+					h('span', { class: 'snn-a-time', text: mmss(eventOffset(e)) }),
+					h('span', { text: ' ' + e.label + ': ' }),
+					h('strong', { text: e.value })
+				]));
+			});
+			if (!step.events.length) {
+				log.appendChild(h('li', { class: 'snn-a-muted', text: 'No actions on this page.' }));
+			}
+
+			var lowest = step.trail.reduce(function (most, p) { return Math.max(most, p[1]); }, 0);
+			clear(stageBox);
+			stage = pageStage(step.path, s.device, function (ctx, width) {
+				drawTrail(ctx, width, step.trail, 'rgba(34,113,177,0.55)', time);
+			}, { minHeight: lowest + 400 });
+			stage.sheet.appendChild(cursor);
+			stageBox.appendChild(stage.el);
+			frame();
+			if (autoplay) {
+				play();
+			} else {
+				pause();
+			}
+		}
+
+		function positionAt(t) {
+			var trail = step.trail;
+			if (!trail.length) {
+				return null;
+			}
+			if (t <= trail[0][2]) {
+				return [trail[0][0], trail[0][1]];
+			}
+			for (var i = 1; i < trail.length; i++) {
+				if (trail[i][2] >= t) {
+					var a = trail[i - 1];
+					var b = trail[i];
+					var f = b[2] === a[2] ? 1 : (t - a[2]) / (b[2] - a[2]);
+					return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+				}
+			}
+			var end = trail[trail.length - 1];
+			return [end[0], end[1]];
+		}
+
+		function ripple(p) {
+			var dot = h('div', { class: 'snn-a-ripple', 'aria-hidden': 'true' });
+			dot.style.left = (p[0] / 10000 * stage.width) + 'px';
+			dot.style.top = p[1] + 'px';
+			stage.sheet.appendChild(dot);
+			window.setTimeout(function () { if (dot.parentNode) { dot.parentNode.removeChild(dot); } }, 900);
+		}
+
+		/** Draws the current moment: trail so far, pointer, new clicks, and actions already done. */
+		function frame() {
+			var pos = positionAt(time);
+			if (pos) {
+				cursor.hidden = false;
+				cursor.style.left = (pos[0] / 10000 * stage.width) + 'px';
+				cursor.style.top = pos[1] + 'px';
+				if (playing) {
+					stage.follow(pos[1]);
+				}
+			} else {
+				cursor.hidden = true;
+			}
+			var clicks = step.trail.filter(function (p) { return p[3] && p[2] <= time; });
+			if (playing) {
+				clicks.slice(shownClicks).forEach(ripple);
+			}
+			shownClicks = clicks.length;
+			stage.redraw();
+			Array.prototype.forEach.call(log.children, function (li) {
+				var at = li.getAttribute('data-at');
+				li.classList.toggle('is-done', at !== null && Number(at) <= time);
+			});
+			scrub.value = String(Math.round(time / length * 1000));
+			clockLabel.textContent = mmss(time) + ' / ' + mmss(length);
+		}
+
+		function tick(now) {
+			time = Math.min(length, time + (now - last) * speed);
+			last = now;
+			frame();
+			if (time >= length) {
+				pause();
+				if (index < steps.length - 1) {
+					advance = window.setTimeout(function () { show(index + 1, true); }, 800);
+				}
+				return;
+			}
+			raf = window.requestAnimationFrame(tick);
+		}
+
+		function play() {
+			if (time >= length) {
+				time = 0;
+				shownClicks = 0;
+			}
+			playing = true;
+			playBtn.textContent = 'Pause';
+			last = performance.now();
+			window.cancelAnimationFrame(raf);
+			raf = window.requestAnimationFrame(tick);
+		}
+
+		function pause() {
+			playing = false;
+			playBtn.textContent = 'Play';
+			window.cancelAnimationFrame(raf);
+		}
+
+		function seek(t) {
+			time = Math.max(0, Math.min(length, t));
+			shownClicks = step.trail.filter(function (p) { return p[3] && p[2] <= time; }).length;
+			frame();
+		}
+
+		function stopAll() {
+			pause();
+			window.clearTimeout(advance);
+			if (stage) {
+				stage.destroy();
+				stage = null;
+			}
+		}
+
+		var place = [s.city, countryName(s.country)].filter(Boolean).join(', ');
+		var device = [DEVICE_LABELS[s.device] || 'Other', s.browser, s.os].filter(Boolean).join(' · ');
+		var closeBtn = h('button', { type: 'button', class: 'button-link', onclick: function () { stopAll(); close(); } }, 'Close');
+
+		box.appendChild(card('Replay of the visit on ' + when(s.started_at), [
+			h('p', { class: 'snn-a-stat-row' }, [
+				h('span', {}, [h('strong', { text: String(steps.length) }), steps.length === 1 ? ' page' : ' pages']),
+				h('span', {}, [h('strong', { text: duration(s.duration) }), ' active time']),
+				h('span', { class: 'snn-a-country' }, [flag(s.country), place]),
+				h('span', { text: device }),
+				h('span', { text: 'From ' + s.referrer })
+			]),
+			chips,
+			h('div', { class: 'snn-a-replay-controls' }, [playBtn, scrub, clockLabel, speedBar]),
+			info,
+			h('div', { class: 'snn-a-replay-body' }, [stageBox, h('div', { class: 'snn-a-replay-side' }, [h('h3', { class: 'snn-a-subhead', text: 'Actions' }), log])]),
+			h('p', { class: 'snn-a-muted snn-a-stage-note', text: 'The page is shown as it looks now, at the visitor’s screen width. Scrolling and typing are not recorded; the view follows the pointer.' })
+		], { actions: closeBtn }));
+
+		renderSpeeds();
+		if (steps.length) {
+			show(0, false);
+		} else {
+			box.appendChild(empty('This visit has no page views to replay.'));
+		}
+		return stopAll;
 	}
 
 	function renderPages(rp) {
@@ -1263,47 +1908,6 @@
 			showPage(row);
 		}
 
-		function showMaps(row) {
-			var device = 0;
-			var bar = h('div', { class: 'snn-a-toolbar' });
-			var heatBox = h('div', {}, skeleton(3));
-			var trailBox = h('div', {}, skeleton(3));
-
-			function load() {
-				clear(bar);
-				bar.appendChild(deviceSegment(device, function (value) { device = value; load(); }));
-				clear(heatBox);
-				heatBox.appendChild(skeleton(3));
-				clear(trailBox);
-				trailBox.appendChild(skeleton(3));
-
-				var query = Object.assign({}, rp, { id: row.id, device: device });
-				api('stats/heatmap', query).then(function (data) {
-					clear(heatBox);
-					heatBox.appendChild(heatmapView(data));
-				}).catch(function (err) {
-					clear(heatBox);
-					heatBox.appendChild(failed(err, load));
-				});
-				api('stats/trails', query).then(function (data) {
-					clear(trailBox);
-					trailBox.appendChild(trailView(data));
-				}).catch(function (err) {
-					clear(trailBox);
-					trailBox.appendChild(failed(err, load));
-				});
-			}
-
-			detail.appendChild(bar);
-			detail.appendChild(card('Click heatmap', heatBox, {
-				sub: 'Where visitors clicked on this page. Darker means more clicks.'
-			}));
-			detail.appendChild(card('Cursor trails', trailBox, {
-				sub: 'How the pointer moved on each view of this page, up to 60 seconds per view.'
-			}));
-			load();
-		}
-
 		function showPage(row) {
 			clear(detail);
 			var canvas = chartBox(240);
@@ -1314,10 +1918,13 @@
 					h('span', {}, [h('strong', { text: n(row.visitors) }), ' visitors']),
 					h('span', {}, [h('strong', { text: duration(row.avg_time) }), ' avg. time'])
 				]),
-				canvas
+				canvas,
+				h('p', { class: 'snn-a-linkrow' }, [
+					h('a', { class: 'button', href: pageLink('snn-analytics-heatmaps') + '&pid=' + row.id }, 'Click heatmap'),
+					h('a', { class: 'button', href: pageLink('snn-analytics-trails') + '&pid=' + row.id }, 'Cursor trails')
+				])
 			], { sub: row.path, actions: close }));
 			detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
-			showMaps(row);
 			api('stats/page-series', Object.assign({}, rp, { id: row.id })).then(function (series) {
 				lineChart(canvas.querySelector('canvas'), series.map(function (d) { return dayLabel(d.date); }), [
 					{ label: 'Views', color: COLOR_VIEWS, data: series.map(function (d) { return d.views; }), fill: true },
@@ -1588,7 +2195,10 @@
 				clear(cell);
 				var s = data.session;
 				var v = data.visitor;
-				var close = h('button', { type: 'button', class: 'button-link', onclick: clearSelection }, 'Close');
+				var close = h('span', { class: 'snn-a-linkrow' }, [
+					h('a', { class: 'button', href: pageLink('snn-analytics-replay') + '&session=' + s.id }, 'Replay visit'),
+					h('button', { type: 'button', class: 'button-link', onclick: clearSelection }, 'Close')
+				]);
 				var place = [s.city, s.region].filter(Boolean).join(', ');
 				var campaign = [s.campaign.source, s.campaign.medium, s.campaign.campaign].filter(Boolean).join(' / ');
 				var device = [DEVICE_LABELS[s.device] || 'Other', s.browser, s.os].filter(Boolean).join(' · ');
@@ -2047,6 +2657,9 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 		dashboard: renderDashboard,
 		realtime: renderRealtime,
 		pages: renderPages,
+		heatmaps: renderHeatmaps,
+		trails: renderTrails,
+		replay: renderReplay,
 		referrers: renderReferrers,
 		geo: renderGeo,
 		devices: renderDevices,
