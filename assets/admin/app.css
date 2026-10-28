@@ -1054,12 +1054,12 @@
 .snn-a-tooltip {
 	position: fixed;
 	z-index: 100000;
-	max-width: 260px;
+	max-width: 220px;
 	padding: 8px 10px;
 	border-radius: 6px;
 	background: #1d2327;
 	color: #fff;
-	font-size: 12px;
+	font-size: 14px;
 	font-weight: 400;
 	line-height: 1.45;
 	text-align: left;
