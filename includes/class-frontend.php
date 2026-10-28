@@ -30,6 +30,8 @@ final class Frontend {
 			'dnt'   => (bool) Settings::get()['respect_dnt'],
 			'pg'    => self::page(),
 			'goals' => Goals::click_rules(),
+			'hm'    => (bool) Settings::get()['heatmap'],
+			'cur'   => (bool) Settings::get()['cursor_trails'],
 		];
 
 		// JSON_HEX_* keeps a title such as "</script>" from ending the inline script.

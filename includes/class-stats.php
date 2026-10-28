@@ -246,6 +246,71 @@ final class Stats {
 		];
 	}
 
+	/**
+	 * Click positions for one page, summed over the range. $device 0 means every device.
+	 * Cells are ordered by clicks, so the first one is the strongest.
+	 */
+	public static function heatmap( int $page_id, array $r, int $device ): array {
+		global $wpdb;
+
+		$heat  = DB::table( 'heat' );
+		$where = 'page_id = %d AND day BETWEEN %d AND %d AND (%d = 0 OR device = %d)';
+		$args  = [ $page_id, $r['from'], $r['to'], $device, $device ];
+
+		$rows = $wpdb->get_results( $wpdb->prepare(
+			"SELECT x, y, SUM(clicks) AS clicks FROM {$heat} WHERE {$where} GROUP BY x, y ORDER BY clicks DESC LIMIT 5000",
+			...$args
+		), ARRAY_A );
+
+		$total = (int) $wpdb->get_var( $wpdb->prepare(
+			"SELECT COALESCE(SUM(clicks), 0) FROM {$heat} WHERE {$where}",
+			...$args
+		) );
+
+		$cells = array_map( static fn( $row ) => [ (int) $row['x'], (int) $row['y'], (int) $row['clicks'] ], $rows );
+
+		return [
+			'cells' => $cells,
+			'max'   => $cells === [] ? 0 : $cells[0][2],
+			'total' => $total,
+		];
+	}
+
+	/**
+	 * Recent cursor trails for one page. Each trail is a list of points: [x per 10000 of the page
+	 * width, y in px from the top, t in ms since the view started].
+	 */
+	public static function trails( int $page_id, array $r, int $device ): array {
+		global $wpdb;
+
+		$table = DB::table( 'trails' );
+		$from  = Ranges::day_start( $r['from'] );
+		$to    = Ranges::day_start( $r['to'] + 1 );
+		$where = 'page_id = %d AND created_at >= %d AND created_at < %d AND (%d = 0 OR device = %d)';
+		$args  = [ $page_id, $from, $to, $device, $device ];
+
+		$rows = $wpdb->get_results( $wpdb->prepare(
+			"SELECT HEX(samples) AS samples FROM {$table} WHERE {$where} ORDER BY created_at DESC LIMIT 50",
+			...$args
+		), ARRAY_A );
+
+		$total = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE {$where}", ...$args ) );
+
+		return [
+			'total'  => $total,
+			'trails' => array_map( [ self::class, 'decode_samples' ], array_column( $rows, 'samples' ) ),
+		];
+	}
+
+	/** Turns the hex of 6-byte samples back into [x, y, t] points. */
+	private static function decode_samples( string $hex ): array {
+		return array_map( static fn( string $sample ) => [
+			(int) hexdec( substr( $sample, 0, 4 ) ),
+			(int) hexdec( substr( $sample, 4, 4 ) ),
+			(int) hexdec( substr( $sample, 8, 4 ) ),
+		], str_split( $hex, 12 ) );
+	}
+
 	public static function page_series( int $page_id, array $r ): array {
 		global $wpdb;
 

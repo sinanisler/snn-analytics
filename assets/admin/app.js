@@ -371,6 +371,20 @@
 		]);
 	}
 
+	/** Segmented control for the device filter on the heatmap and the trails. */
+	function deviceSegment(current, pick) {
+		var options = [[0, 'All devices'], [1, 'Desktop'], [2, 'Mobile'], [3, 'Tablet']];
+		return h('div', { class: 'snn-a-segment', role: 'group', 'aria-label': 'Device' }, options.map(function (option) {
+			var active = current === option[0];
+			return h('button', {
+				type: 'button',
+				class: 'snn-a-seg' + (active ? ' is-active' : ''),
+				'aria-pressed': active ? 'true' : 'false',
+				onclick: function () { pick(option[0]); }
+			}, option[1]);
+		}));
+	}
+
 	function card(title, body, opts) {
 		opts = opts || {};
 		var section = h('section', { class: 'snn-a-card' + (opts.wide ? ' is-wide' : ''), 'aria-label': title }, [
@@ -1053,6 +1067,77 @@
 		});
 	}
 
+	/*
+	 * The heatmap and the trails share one grid: 50 columns across the page width, and 8 px rows
+	 * for every 40 px of page height. Positions are therefore a share of the width and a distance
+	 * from the top, not an exact copy of the page.
+	 */
+	var MAP_COLS = 50;
+	var MAP_CELL = 12;
+	var MAP_ROW = 8;
+	var MAP_ROWS = 250;
+
+	function heatmapView(data) {
+		if (!data.total) {
+			return empty('No clicks on this page in this range yet.');
+		}
+		var lowest = data.cells.reduce(function (most, c) { return Math.max(most, c[1]); }, 0);
+		var rows = Math.min(MAP_ROWS, lowest + 1);
+		var canvas = h('canvas', { class: 'snn-a-mapcanvas', width: MAP_COLS * MAP_CELL, height: rows * MAP_ROW, role: 'img', 'aria-label': 'Click heatmap for this page' });
+		var ctx = canvas.getContext('2d');
+		ctx.fillStyle = '#f6f7f7';
+		ctx.fillRect(0, 0, canvas.width, canvas.height);
+		data.cells.forEach(function (cell) {
+			if (cell[1] >= rows) {
+				return;
+			}
+			var x = cell[0] * MAP_CELL + MAP_CELL / 2;
+			var y = cell[1] * MAP_ROW + MAP_ROW / 2;
+			var radius = MAP_CELL * 2;
+			var strength = cell[2] / data.max;
+			var gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+			gradient.addColorStop(0, 'rgba(214,54,56,' + (0.25 + 0.6 * strength).toFixed(2) + ')');
+			gradient.addColorStop(1, 'rgba(214,54,56,0)');
+			ctx.fillStyle = gradient;
+			ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+		});
+		return h('div', {}, [canvas, h('p', { class: 'snn-a-muted', text: n(data.total) + ' clicks in this range' })]);
+	}
+
+	function trailView(data) {
+		if (!data.trails.length) {
+			return empty('No cursor trails in this range. They are recorded only when cursor trails are turned on in Settings.');
+		}
+		var lowest = data.trails.reduce(function (most, trail) {
+			return trail.reduce(function (inner, p) { return Math.max(inner, p[1]); }, most);
+		}, 0);
+		var rows = Math.min(MAP_ROWS, Math.floor(lowest / 40) + 1);
+		var canvas = h('canvas', { class: 'snn-a-mapcanvas', width: MAP_COLS * MAP_CELL, height: rows * MAP_ROW, role: 'img', 'aria-label': 'Cursor trails for this page' });
+		var ctx = canvas.getContext('2d');
+		ctx.fillStyle = '#f6f7f7';
+		ctx.fillRect(0, 0, canvas.width, canvas.height);
+		ctx.lineWidth = 1;
+		ctx.strokeStyle = 'rgba(34,113,177,0.3)';
+		data.trails.forEach(function (trail) {
+			if (!trail.length) {
+				return;
+			}
+			ctx.beginPath();
+			trail.forEach(function (p, i) {
+				var x = p[0] / 10000 * canvas.width;
+				var y = p[1] / 40 * MAP_ROW;
+				if (i === 0) {
+					ctx.moveTo(x, y);
+				} else {
+					ctx.lineTo(x, y);
+				}
+			});
+			ctx.stroke();
+		});
+		var shown = data.total > data.trails.length ? ' Showing the latest ' + data.trails.length + '.' : '';
+		return h('div', {}, [canvas, h('p', { class: 'snn-a-muted', text: n(data.total) + ' trails recorded in this range.' + shown })]);
+	}
+
 	function renderPages(rp) {
 		var state = { page: 1, orderby: 'views', order: 'desc', search: '' };
 		var detail = h('div', { class: 'snn-a-detail' });
@@ -1133,6 +1218,47 @@
 			showPage(row);
 		}
 
+		function showMaps(row) {
+			var device = 0;
+			var bar = h('div', { class: 'snn-a-toolbar' });
+			var heatBox = h('div', {}, skeleton(3));
+			var trailBox = h('div', {}, skeleton(3));
+
+			function load() {
+				clear(bar);
+				bar.appendChild(deviceSegment(device, function (value) { device = value; load(); }));
+				clear(heatBox);
+				heatBox.appendChild(skeleton(3));
+				clear(trailBox);
+				trailBox.appendChild(skeleton(3));
+
+				var query = Object.assign({}, rp, { id: row.id, device: device });
+				api('stats/heatmap', query).then(function (data) {
+					clear(heatBox);
+					heatBox.appendChild(heatmapView(data));
+				}).catch(function (err) {
+					clear(heatBox);
+					heatBox.appendChild(failed(err, load));
+				});
+				api('stats/trails', query).then(function (data) {
+					clear(trailBox);
+					trailBox.appendChild(trailView(data));
+				}).catch(function (err) {
+					clear(trailBox);
+					trailBox.appendChild(failed(err, load));
+				});
+			}
+
+			detail.appendChild(bar);
+			detail.appendChild(card('Click heatmap', heatBox, {
+				sub: 'Where visitors clicked on this page. Darker means more clicks.'
+			}));
+			detail.appendChild(card('Cursor trails', trailBox, {
+				sub: 'How the mouse moved on each view of this page, up to 60 seconds per view.'
+			}));
+			load();
+		}
+
 		function showPage(row) {
 			clear(detail);
 			var canvas = chartBox(240);
@@ -1146,6 +1272,7 @@
 				canvas
 			], { sub: row.path, actions: close }));
 			detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+			showMaps(row);
 			api('stats/page-series', Object.assign({}, rp, { id: row.id })).then(function (series) {
 				lineChart(canvas.querySelector('canvas'), series.map(function (d) { return dayLabel(d.date); }), [
 					{ label: 'Views', color: COLOR_VIEWS, data: series.map(function (d) { return d.views; }), fill: true },

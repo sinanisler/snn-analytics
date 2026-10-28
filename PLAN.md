@@ -10,6 +10,9 @@ Status: **Approved. All eight milestones are implemented at the repo root.** Ver
 - Visitor salt: **never rotate** is preferred. Default is a **1-year cap** (`salt_rotation = yearly`). Other values are `never`, `monthly` and `daily`.
 - Charts: **Chart.js** (downloaded locally, not CDN). Other JS libraries are allowed if they are downloaded locally.
 - City-level location **is wanted**, with free data. The default source is **DB-IP Lite City** (CC BY 4.0). It is downloaded from Settings and read by a built-in MMDB reader. The city DB is still optional, and country always works without it.
+- Visitor identity: the hash mixes the salt, the IP, the browser family, the OS, the device type and the site host. Raw user agent versions are no longer used, so a browser update does not split a visitor. This reset returning-visitor history once.
+- Default raw retention is **12 months**. Existing installs keep whatever value they saved.
+- Click heatmaps are on by default. Cursor trails are off by default, and keep 14 days, 30 days (default), 1 year or 10 years.
 
 ---
 
@@ -33,7 +36,7 @@ WooCommerce/EDD/SureCart order tracking, form plugin integrations, email reports
 |---|---|
 | **SNN Analytics** (dashboard) | KPI row (visitors, views, sessions, avg duration, bounce rate, views/session) with the change vs the previous period. Main chart. Draggable cards: Realtime, Top Pages, Referrers, Countries (+ map), Devices / Browsers / OS, Campaigns, Goals/Conversions. Each card has a **"See more →"** button that opens the detail page with the same date range. Range picker: **Today, 7d, 30d, 90d, 12m, Custom**. |
 | **Realtime** | Visitors active in the last 5 min, views per minute for the last 30 min, live pages, live referrers and countries. Polls every 10 s, and stops polling when the tab is hidden. |
-| **Pages** | Table with sort, search and pagination: views, visitors, avg time, bounce, entrances, exits. Click a row to see that page's chart. |
+| **Pages** | Table with sort, search and pagination: views, visitors, avg time, bounce, entrances, exits. Click a row to see that page's chart, click heatmap and cursor trails. |
 | **Referrers** | Grouped by type (Direct / Search / Social / Referral / Ad / Email) and by domain. |
 | **Geographic** | Country table and a simple SVG world map. City table if the geo DB is installed. |
 | **Devices** | Device type, browser, OS. |
@@ -69,7 +72,7 @@ Browser ──sendBeacon(JSON ≤ 2KB)──▶  /wp-content/plugins/snn-analyti
 PHP prints a small inline config on each page: `{r: resource_id/type, s: HMAC(resource, secret)}`. The endpoint rejects any hit whose signature fails. A bot therefore cannot fill the DB with invented URLs or titles. This still works with full-page caching, because the token is per page, not per user.
 
 **Visitor ID (no cookies):**
-`visitor_hash = first 8 bytes of sha256(salt + ip + user_agent + site_host)`, stored as `BINARY(8)`. The IP is used only in memory, never stored.
+`visitor_hash = first 8 bytes of sha256(salt + ip + browser + os + device + site_host)`, stored as `BINARY(8)`. The IP is used only in memory, never stored.
 The salt rotates on a schedule you choose: never / yearly / monthly / daily. If you choose daily, returning visitors are not linked across days, which is the most private option. The default is **never**, so journeys stay linked across days.
 
 **Sessions:** a session continues if the same visitor has a hit within 30 minutes. Lookup uses the index `(visitor_id, last_seen)`.
@@ -157,6 +160,21 @@ snn_a_funnels      id SMALLINT UNSIGNED PK AI, name VARCHAR(100), window_sec INT
 snn_a_funnel_steps funnel_id SMALLINT, position TINYINT, goal_id SMALLINT, PRIMARY KEY(funnel_id, position)
 ```
 Goals are matched **at write time**: active goals are cached in an option and checked in memory. A conversion is one tiny insert. Funnel reports are computed from `snn_a_conversions` (ordered `created_at` per session) and cached in a transient.
+
+### Heatmap and cursor trails
+
+```sql
+snn_a_heat         day MEDIUMINT UNSIGNED, page_id INT UNSIGNED, device TINYINT UNSIGNED,
+                   x TINYINT UNSIGNED,      -- 0..49, columns of 2% of the page width
+                   y SMALLINT UNSIGNED,     -- 0..1999, rows of 40 px of page height
+                   clicks INT UNSIGNED      -- counter, PK(day,page_id,device,x,y)
+snn_a_trails       view_id BIGINT UNSIGNED PK, page_id INT UNSIGNED, device TINYINT UNSIGNED,
+                   created_at INT UNSIGNED, samples VARBINARY(1440)
+                   -- up to 240 samples of 6 bytes: x (per 10000 of width), y (px), t (ms)
+```
+- Heat is one upsert per click, so the table grows with cells, not clicks. It is kept forever, like the rollups.
+- Trails are one row per view, written once. Retention is `cursor_retention_days`, cleaned up daily.
+- The tracker numbers heat days with `tz_offset`, the site's UTC offset in seconds. It is refreshed on activation, on timezone changes and daily.
 
 ### Daily rollups (what the dashboard reads)
 

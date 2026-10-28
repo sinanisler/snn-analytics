@@ -51,6 +51,10 @@ add_action( 'update_option_home', static function ( $old, $new ): void {
 	SNN_Analytics\Settings::update( [ 'site_host' => SNN_Analytics\Settings::host_of( (string) $new ) ] );
 }, 10, 2 );
 
+foreach ( [ 'update_option_timezone_string', 'update_option_gmt_offset' ] as $snn_a_option ) {
+	add_action( $snn_a_option, [ SNN_Analytics\Settings::class, 'refresh_offset' ] );
+}
+
 add_action( 'plugins_loaded', [ SNN_Analytics\DB::class, 'maybe_upgrade' ] );
 add_action( SNN_Analytics\Rollup::HOOK, [ SNN_Analytics\Rollup::class, 'refresh_recent' ] );
 add_action( SNN_Analytics\Maintenance::HOOK, [ SNN_Analytics\Maintenance::class, 'retention' ] );

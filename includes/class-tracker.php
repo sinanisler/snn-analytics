@@ -40,21 +40,24 @@ final class Tracker {
 			return;
 		}
 
-		// The visitor hash is the only identifier. The IP exists only in memory, never in a row.
-		$vh = DB::key( Settings::salt() . '|' . self::client_ip( $server ) . '|' . $ua . '|' . $settings['site_host'] );
+		// The visitor hash is the only identifier: the salt, the IP, the browser family, the OS,
+		// the device type and the site. No version numbers, so a browser update does not split a visitor.
+		// The IP exists only in memory, never in a row.
+		$info = UA::classify( $ua );
+		$vh   = DB::key( Settings::salt() . '|' . self::client_ip( $server ) . '|' . $info['browser'] . '|' . $info['os'] . '|' . $info['device'] . '|' . $settings['site_host'] );
 		if ( ! self::within_rate_limit( $vh ) ) {
 			return;
 		}
 
 		$now = time();
 		if ( $hit['e'] === 'pv' ) {
-			self::pageview( $hit, $vh, $now, $ua, $server, $settings );
+			self::pageview( $hit, $vh, $now, $info, $server, $settings );
 		} else {
 			self::activity( $hit, $vh, $now, $settings );
 		}
 	}
 
-	private static function pageview( array $hit, string $vh, int $now, string $ua, array $server, array $settings ): void {
+	private static function pageview( array $hit, string $vh, int $now, array $info, array $server, array $settings ): void {
 		$visitor = self::visitor( $vh, $now );
 		$session = self::session_for_visitor( $visitor['id'], $now, $settings['session_timeout'] );
 
@@ -64,7 +67,7 @@ final class Tracker {
 
 		$page_id = self::page_id( $hit['page'] );
 		if ( $session === null ) {
-			$session = self::new_session( $visitor, $hit, $page_id, $now, $ua, $server, $settings['site_host'] );
+			$session = self::new_session( $visitor, $hit, $page_id, $now, $info, $server, $settings['site_host'] );
 		}
 
 		self::add_view( $session, $hit['vk'], $page_id, $now );
@@ -72,7 +75,8 @@ final class Tracker {
 	}
 
 	/**
-	 * Heartbeats and custom events. They attach to an existing view of a live session.
+	 * Heartbeats, custom events, clicks, heatmap positions and cursor trails. They attach to an
+	 * existing view of a live session.
 	 */
 	private static function activity( array $hit, string $vh, int $now, array $settings ): void {
 		global $wpdb;
@@ -82,8 +86,8 @@ final class Tracker {
 			return;
 		}
 
-		$view_id = self::view_id( $hit['vk'], $session['id'] );
-		if ( $view_id === 0 ) {
+		$view = self::view_row( $hit['vk'], $session['id'] );
+		if ( $view === null ) {
 			return;
 		}
 
@@ -91,14 +95,22 @@ final class Tracker {
 			$wpdb->query( $wpdb->prepare(
 				'UPDATE ' . DB::table( 'views' ) . ' SET duration = GREATEST(duration, %d) WHERE id = %d',
 				$hit['d'],
-				$view_id
+				$view['id']
 			) );
-		} else {
+		} elseif ( $hit['e'] === 'heat' ) {
+			if ( $settings['heatmap'] ) {
+				self::heat( $hit, $view, $session, $now, $settings );
+			}
+		} elseif ( $hit['e'] === 'trail' ) {
+			if ( $settings['cursor_trails'] ) {
+				self::trail( $hit, $view, $session, $now );
+			}
+		} elseif ( $hit['e'] === 'ev' ) {
 			$target = DB::upsert( DB::table( 'event_targets' ), [ 'hash' => DB::key( $hit['v'] ), 'value' => $hit['v'] ] );
 
 			DB::insert( DB::table( 'events' ), [
 				'session_id' => $session['id'],
-				'view_id'    => $view_id,
+				'view_id'    => $view['id'],
 				'created_at' => $now,
 				'type'       => $hit['t'],
 				'target_id'  => $target,
@@ -115,6 +127,48 @@ final class Tracker {
 		}
 
 		self::touch( $session, $now );
+	}
+
+	/**
+	 * One click position. Stored as a counter per page, day, device and 2%-by-40px cell, so the
+	 * table grows with the number of cells, not with the number of clicks.
+	 */
+	private static function heat( array $hit, array $view, array $session, int $now, array $settings ): void {
+		global $wpdb;
+
+		$wpdb->query( $wpdb->prepare(
+			'INSERT INTO ' . DB::table( 'heat' ) . ' (day, page_id, device, x, y, clicks) VALUES (%d, %d, %d, %d, %d, 1)
+			 ON DUPLICATE KEY UPDATE clicks = clicks + 1',
+			self::day( $now, $settings ),
+			$view['page_id'],
+			$session['device'],
+			$hit['x'],
+			$hit['y']
+		) );
+	}
+
+	/**
+	 * One mouse path per view, sent once. The page and device are stored with it, so a trail can be
+	 * read on its own. INSERT IGNORE keeps the first trail if a view sends a second one.
+	 */
+	private static function trail( array $hit, array $view, array $session, int $now ): void {
+		global $wpdb;
+
+		$wpdb->query( $wpdb->prepare(
+			'INSERT IGNORE INTO ' . DB::table( 'trails' ) . ' (view_id, page_id, device, created_at, samples) VALUES (%d, %d, %d, %d, UNHEX(%s))',
+			$view['id'],
+			$view['page_id'],
+			$session['device'],
+			$now,
+			$hit['s']
+		) );
+	}
+
+	/**
+	 * Day number in site time, from the stored offset. Same numbering as Ranges::day_of().
+	 */
+	private static function day( int $now, array $settings ): int {
+		return (int) floor( ( $now + (int) $settings['tz_offset'] ) / 86400 );
 	}
 
 	/**
@@ -149,7 +203,7 @@ final class Tracker {
 		global $wpdb;
 
 		$row = $wpdb->get_row( $wpdb->prepare(
-			'SELECT s.id, s.views, s.started_at FROM ' . DB::table( 'visitors' ) . ' v
+			'SELECT s.id, s.views, s.started_at, s.device FROM ' . DB::table( 'visitors' ) . ' v
 			 JOIN ' . DB::table( 'sessions' ) . ' s ON s.visitor_id = v.id
 			 WHERE v.hash = UNHEX(%s) AND s.last_seen >= %d
 			 ORDER BY s.last_seen DESC LIMIT 1',
@@ -160,21 +214,25 @@ final class Tracker {
 		return $row ? array_map( 'intval', $row ) : null;
 	}
 
-	private static function view_id( string $vk, int $session_id ): int {
+	/**
+	 * The view that a heartbeat, event, heatmap or trail belongs to, or null when it is unknown.
+	 */
+	private static function view_row( string $vk, int $session_id ): ?array {
 		global $wpdb;
 
-		return (int) $wpdb->get_var( $wpdb->prepare(
-			'SELECT id FROM ' . DB::table( 'views' ) . ' WHERE view_key = UNHEX(%s) AND session_id = %d ORDER BY id DESC LIMIT 1',
+		$row = $wpdb->get_row( $wpdb->prepare(
+			'SELECT id, page_id FROM ' . DB::table( 'views' ) . ' WHERE view_key = UNHEX(%s) AND session_id = %d ORDER BY id DESC LIMIT 1',
 			$vk,
 			$session_id
-		) );
+		), 'ARRAY_A' );
+
+		return $row ? array_map( 'intval', $row ) : null;
 	}
 
-	private static function new_session( array $visitor, array $hit, int $page_id, int $now, string $ua, array $server, string $site_host ): array {
+	private static function new_session( array $visitor, array $hit, int $page_id, int $now, array $info, array $server, string $site_host ): array {
 		global $wpdb;
 
-		$ua_info = UA::classify( $ua );
-		$geo     = Geo::locate( $server, self::client_ip( $server ) );
+		$geo = Geo::locate( $server, self::client_ip( $server ) );
 
 		$id = DB::insert( DB::table( 'sessions' ), [
 			'visitor_id'    => $visitor['id'],
@@ -186,9 +244,9 @@ final class Tracker {
 			'campaign_id'   => self::campaign_id( $hit['q'] ),
 			'country_id'    => $geo['country_id'],
 			'city_id'       => $geo['city_id'],
-			'device'        => $ua_info['device'],
-			'browser_id'    => DB::upsert( DB::table( 'ua' ), [ 'kind' => 1, 'name' => $ua_info['browser'] ] ),
-			'os_id'         => DB::upsert( DB::table( 'ua' ), [ 'kind' => 2, 'name' => $ua_info['os'] ] ),
+			'device'        => $info['device'],
+			'browser_id'    => DB::upsert( DB::table( 'ua' ), [ 'kind' => 1, 'name' => $info['browser'] ] ),
+			'os_id'         => DB::upsert( DB::table( 'ua' ), [ 'kind' => 2, 'name' => $info['os'] ] ),
 			'is_new'        => $visitor['new'] ? 1 : 0,
 		] );
 

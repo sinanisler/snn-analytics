@@ -16,6 +16,9 @@ final class Validator {
 	/** Custom event names: letters, digits, space, dot, colon, dash, underscore. */
 	private const EVENT_NAME = '/^[\p{L}\p{N} _.:\-]{1,64}$/u';
 
+	/** Link fragments that are kept: plain anchor ids, with no "=", "&", "/" or "." that tokens need. */
+	private const ANCHOR = '/^[A-Za-z0-9_\-:]{1,64}$/';
+
 	/**
 	 * Returns a clean hit, or null when anything is wrong.
 	 */
@@ -47,6 +50,23 @@ final class Validator {
 					return null;
 				}
 				return [ 'e' => 'ping', 'vk' => $vk, 'd' => min( $active, 14400 ) ];
+
+			case 'heat':
+				// Click position: 50 columns of 2 percent of the page width, and 40 px rows.
+				$x = self::int( $in['x'] ?? null, 0, 49 );
+				$y = self::int( $in['y'] ?? null, 0, 1999 );
+				if ( $x === null || $y === null ) {
+					return null;
+				}
+				return [ 'e' => 'heat', 'vk' => $vk, 'x' => $x, 'y' => $y ];
+
+			case 'trail':
+				// Hex of 6-byte samples: x (per 10000 of page width), y (px), t (ms). 1 to 240 samples.
+				$samples = self::text( $in['s'] ?? null, 2880 );
+				if ( ! preg_match( '/^(?:[0-9a-f]{12}){1,240}$/', $samples ) ) {
+					return null;
+				}
+				return [ 'e' => 'trail', 'vk' => $vk, 's' => $samples ];
 
 			case 'ev':
 				$kind = self::int( $in['t'] ?? null, 1, 11 );
@@ -155,9 +175,14 @@ final class Validator {
 			return null;
 		}
 
-		// Query strings and fragments are dropped: they often carry tokens or personal data.
-		$port = isset( $parts['port'] ) ? ':' . $parts['port'] : '';
-		$url  = $scheme . '://' . strtolower( $parts['host'] ) . $port . ( $parts['path'] ?? '/' );
+		// Query strings are dropped: they often carry tokens or personal data.
+		// A fragment is kept only when it reads like a plain anchor id, so "#access_token=..." never gets through.
+		$port     = isset( $parts['port'] ) ? ':' . $parts['port'] : '';
+		$url      = $scheme . '://' . strtolower( $parts['host'] ) . $port . ( $parts['path'] ?? '/' );
+		$fragment = (string) ( $parts['fragment'] ?? '' );
+		if ( preg_match( self::ANCHOR, $fragment ) ) {
+			$url .= '#' . $fragment;
+		}
 
 		return mb_substr( $url, 0, 512 );
 	}

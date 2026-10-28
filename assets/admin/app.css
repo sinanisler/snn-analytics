@@ -38,6 +38,47 @@
 	font-size: 12px;
 }
 
+/* ------------------------------------------------------- top bar tabs */
+
+.snn-a .snn-a-tabs {
+	display: flex;
+	gap: 4px;
+	overflow-x: auto;
+	margin: 12px 0 0;
+	border-bottom: 1px solid var(--sa-line);
+}
+.snn-a .snn-a-tab {
+	padding: 8px 12px;
+	margin-bottom: -1px;
+	border-bottom: 2px solid transparent;
+	color: var(--sa-muted);
+	text-decoration: none;
+	white-space: nowrap;
+}
+.snn-a .snn-a-tab:hover {
+	color: var(--sa-text);
+}
+.snn-a .snn-a-tab.is-current {
+	color: var(--sa-accent);
+	border-bottom-color: var(--sa-accent);
+	font-weight: 600;
+}
+.snn-a .snn-a-tab:focus-visible {
+	outline: 2px solid var(--sa-accent);
+	outline-offset: -2px;
+}
+
+/* ---------------------------------------------------- heatmap and trails */
+
+.snn-a .snn-a-mapcanvas {
+	display: block;
+	width: 100%;
+	max-width: 600px;
+	height: auto;
+	border-radius: 8px;
+	background: var(--sa-soft);
+}
+
 /* ---------------------------------------------------------- toolbar */
 
 .snn-a .snn-a-toolbar {

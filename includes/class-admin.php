@@ -32,10 +32,14 @@ final class Admin {
 		'snn-analytics-settings'  => [ 'settings', 'Settings', self::MANAGE_CAP ],
 	];
 
+	/** Screens that stay in the left sidebar. Every other screen is reached from the top bar. */
+	const SIDEBAR = [ 'snn-analytics', 'snn-analytics-import', 'snn-analytics-settings' ];
+
 	public static function register(): void {
 		add_action( 'admin_menu', [ self::class, 'menu' ] );
 		add_action( 'admin_enqueue_scripts', [ self::class, 'assets' ] );
 		add_action( 'admin_post_snn_a_save_settings', [ self::class, 'save_settings' ] );
+		add_filter( 'parent_file', [ self::class, 'highlight' ] );
 	}
 
 	public static function grant_capability(): void {
@@ -49,8 +53,17 @@ final class Admin {
 		add_menu_page( 'SNN Analytics', 'SNN Analytics', self::MENU_CAP, self::SLUG, [ self::class, 'screen' ], 'dashicons-chart-line', 3 );
 
 		foreach ( self::SCREENS as $slug => [ $view, $title, $cap ] ) {
-			add_submenu_page( self::SLUG, $title, $title, $cap, $slug, [ self::class, 'screen' ] );
+			// An empty parent keeps a top-bar screen reachable by URL without listing it in the sidebar.
+			$parent = in_array( $slug, self::SIDEBAR, true ) ? self::SLUG : '';
+			add_submenu_page( $parent, $title, $title, $cap, $slug, [ self::class, 'screen' ] );
 		}
+	}
+
+	/** A top-bar screen highlights the SNN Analytics entry in the sidebar, since it has no entry of its own. */
+	public static function highlight( string $parent_file ): string {
+		$page = sanitize_key( wp_unslash( $_GET['page'] ?? '' ) );
+
+		return isset( self::SCREENS[ $page ] ) && ! in_array( $page, self::SIDEBAR, true ) ? self::SLUG : $parent_file;
 	}
 
 	/** Shell for every screen. The page slug decides which view the app shows. */
@@ -65,6 +78,7 @@ final class Admin {
 		?>
 		<div class="wrap snn-a">
 			<h1>SNN Analytics<?php echo $title === 'Dashboard' ? '' : ' · ' . esc_html( $title ); ?></h1>
+			<?php self::tabs( $slug ); ?>
 			<div id="snn-a-app" data-view="<?php echo esc_attr( $view ); ?>">
 				<p class="snn-a-loading">Loading…</p>
 			</div>
@@ -72,6 +86,25 @@ final class Admin {
 				<?php self::settings_form(); ?>
 			<?php endif; ?>
 		</div>
+		<?php
+	}
+
+	/**
+	 * Top bar with every screen that is not in the sidebar. The date range carries over, so
+	 * switching screens keeps the period the admin is looking at.
+	 */
+	private static function tabs( string $current ): void {
+		$range = array_map( 'sanitize_text_field', array_intersect_key( wp_unslash( $_GET ), array_flip( [ 'range', 'from', 'to' ] ) ) );
+
+		?>
+		<nav class="snn-a-tabs" aria-label="SNN Analytics screens">
+			<?php foreach ( self::SCREENS as $slug => [ $view, $title, $cap ] ) : ?>
+				<?php if ( ! in_array( $slug, self::SIDEBAR, true ) ) : ?>
+					<?php $url = add_query_arg( $range + [ 'page' => $slug ], admin_url( 'admin.php' ) ); ?>
+					<a href="<?php echo esc_url( $url ); ?>" class="snn-a-tab<?php echo $slug === $current ? ' is-current' : ''; ?>"<?php echo $slug === $current ? ' aria-current="page"' : ''; ?>><?php echo esc_html( $title ); ?></a>
+				<?php endif; ?>
+			<?php endforeach; ?>
+		</nav>
 		<?php
 	}
 
@@ -112,9 +145,15 @@ final class Admin {
 			0  => 'Keep everything',
 			3  => '3 months',
 			6  => '6 months',
-			12 => '12 months',
+			12 => '12 months (default)',
 			24 => '24 months',
 			36 => '36 months',
+		];
+		$trails = [
+			14   => '14 days',
+			30   => '30 days (default)',
+			365  => '1 year',
+			3650 => '10 years',
 		];
 
 		?>
@@ -135,7 +174,7 @@ final class Admin {
 								<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $s['salt_rotation'], $value ); ?>><?php echo esc_html( $label ); ?></option>
 							<?php endforeach; ?>
 						</select>
-						<p class="description">Visitors are identified by a salted hash, never by stored IPs. Each rotation makes returning visitors count as new.</p>
+						<p class="description">Visitors are identified by a salted hash of the IP, browser, OS and device type. Never by stored IPs. Each rotation makes returning visitors count as new.</p>
 					</td>
 				</tr>
 				<tr>
@@ -147,6 +186,34 @@ final class Admin {
 							<?php endforeach; ?>
 						</select>
 						<p class="description">Individual visits and journeys older than this are deleted. Daily totals are kept.</p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row">Click heatmap</th>
+					<td>
+						<label>
+							<input type="checkbox" name="heatmap" value="1" <?php checked( $s['heatmap'] ); ?>>
+							Record where visitors click on each page
+						</label>
+						<p class="description">Counts only, per page, day and device. No click is stored on its own. Shown on the Pages screen.</p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row">Cursor trails</th>
+					<td>
+						<label>
+							<input type="checkbox" name="cursor_trails" value="1" <?php checked( $s['cursor_trails'] ); ?>>
+							Record how the mouse moves on each page
+						</label>
+						<p class="description">Off by default. Each view keeps one path of at most 60 seconds, sampled four times a second. Visitors are not identified by it.</p>
+						<p>
+							<label for="cursor_retention_days">Keep trails for</label>
+							<select name="cursor_retention_days" id="cursor_retention_days">
+								<?php foreach ( $trails as $days => $label ) : ?>
+									<option value="<?php echo esc_attr( (string) $days ); ?>" <?php selected( (int) $s['cursor_retention_days'], $days ); ?>><?php echo esc_html( $label ); ?></option>
+								<?php endforeach; ?>
+							</select>
+						</p>
 					</td>
 				</tr>
 				<tr>
@@ -206,12 +273,16 @@ final class Admin {
 		$defaults  = Settings::defaults();
 		$rotations = [ 'never', 'yearly', 'monthly', 'daily' ];
 		$retention = [ 0, 3, 6, 12, 24, 36 ];
+		$trails    = [ 14, 30, 365, 3650 ];
 
 		$rotation = (string) wp_unslash( $_POST['salt_rotation'] ?? '' );
 		$rotation = in_array( $rotation, $rotations, true ) ? $rotation : $defaults['salt_rotation'];
 
 		$months = (int) wp_unslash( $_POST['retention_months'] ?? 0 );
 		$months = in_array( $months, $retention, true ) ? $months : 0;
+
+		$days = (int) wp_unslash( $_POST['cursor_retention_days'] ?? $defaults['cursor_retention_days'] );
+		$days = in_array( $days, $trails, true ) ? $days : $defaults['cursor_retention_days'];
 
 		$submitted = array_map( 'sanitize_key', (array) wp_unslash( $_POST['exclude_roles'] ?? [] ) );
 		$excluded  = array_values( array_intersect( $submitted, array_keys( wp_roles()->get_names() ) ) );
@@ -220,12 +291,15 @@ final class Admin {
 		$timeout = min( 86400, max( 300, $timeout ) );
 
 		Settings::update( [
-			'salt_rotation'      => $rotation,
-			'retention_months'   => $months,
-			'respect_dnt'        => isset( $_POST['respect_dnt'] ),
-			'exclude_roles'      => $excluded,
-			'session_timeout'    => $timeout,
-			'delete_on_uninstall' => isset( $_POST['delete_on_uninstall'] ),
+			'salt_rotation'         => $rotation,
+			'retention_months'      => $months,
+			'heatmap'               => isset( $_POST['heatmap'] ),
+			'cursor_trails'         => isset( $_POST['cursor_trails'] ),
+			'cursor_retention_days' => $days,
+			'respect_dnt'           => isset( $_POST['respect_dnt'] ),
+			'exclude_roles'         => $excluded,
+			'session_timeout'       => $timeout,
+			'delete_on_uninstall'   => isset( $_POST['delete_on_uninstall'] ),
 		] );
 
 		wp_safe_redirect( add_query_arg(

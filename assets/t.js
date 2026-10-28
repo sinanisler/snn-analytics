@@ -69,7 +69,20 @@
 			since = Date.now();
 		}
 	});
-	window.addEventListener('pagehide', ping);
+	window.addEventListener('pagehide', function () {
+		ping();
+		finishTrail();
+	});
+
+	/** Keeps a number inside a range. */
+	function clamp(value, low, high) {
+		return Math.min(high, Math.max(low, value));
+	}
+
+	/** The fragment of a link when it is a plain anchor id. Same rule as the server, so tokens never pass. */
+	function anchor(hash) {
+		return /^#[A-Za-z0-9_\-:]{1,64}$/.test(hash) ? hash : '';
+	}
 
 	/** Visible text of a button or link, cleaned and capped. Input values are never read. */
 	function label(el) {
@@ -92,6 +105,12 @@
 
 	document.addEventListener('click', function (event) {
 		var target = event.target;
+
+		// Heatmap: where the click happened, counted per cell. Keyboard activations (detail 0) have no position.
+		if (cfg.hm && event.detail > 0) {
+			var width = document.documentElement.scrollWidth || 1;
+			send({ e: 'heat', vk: vk, x: clamp(Math.floor(event.pageX / width * 50), 0, 49), y: clamp(Math.floor(event.pageY / 40), 0, 1999) });
+		}
 		if (!target || !target.closest) {
 			return;
 		}
@@ -121,8 +140,8 @@
 		if (proto === 'mailto:' || proto === 'tel:') {
 			send({ e: 'ev', vk: vk, t: proto === 'mailto:' ? 3 : 4 });
 		} else if (proto === 'http:' || proto === 'https:') {
-			// Origin and path only, so query strings with tokens never leave the browser.
-			var url = link.origin + link.pathname;
+			// Origin, path and a plain anchor only, so query strings with tokens never leave the browser.
+			var url = link.origin + link.pathname + anchor(link.hash);
 			if (link.host !== location.host) {
 				send({ e: 'ev', vk: vk, t: 1, v: url });
 			} else if (/\.(pdf|zip|docx?|xlsx?|pptx?|csv|rar|7z|dmg|exe|mp3|mp4)$/i.test(link.pathname)) {
@@ -191,6 +210,65 @@
 			window.requestAnimationFrame(scrolled);
 		}
 	}, { passive: true });
+
+	// Cursor trails, only when the site turns them on. One trail per view: a sample every 250 ms while the
+	// mouse moves, at most 240 samples. It is sent once: when the tab is hidden, the page is left, or 60 seconds pass.
+	var trail = null;
+	var trailStart = 0;
+	var trailTimer = 0;
+	var trailDirty = false;
+	var pointer = [0, 0];
+	var trailDone = !cfg.cur;
+
+	document.addEventListener('mousemove', function (event) {
+		if (trailDone) {
+			return;
+		}
+		if (!trail) {
+			trail = [];
+			trailStart = Date.now();
+			trailTimer = window.setInterval(takeSample, 250);
+		}
+		var width = document.documentElement.scrollWidth || 1;
+		pointer = [clamp(Math.round(event.pageX / width * 10000), 0, 10000), clamp(Math.round(event.pageY), 0, 65535)];
+		trailDirty = true;
+	}, { passive: true });
+
+	function takeSample() {
+		var elapsed = Date.now() - trailStart;
+		if (trailDirty) {
+			trail.push([pointer[0], pointer[1], clamp(elapsed, 0, 60000)]);
+			trailDirty = false;
+		}
+		if (trail.length >= 240 || elapsed >= 60000) {
+			finishTrail();
+		}
+	}
+
+	/** Sends the samples as hex: 6 bytes each, x, y and t as 16-bit numbers. */
+	function finishTrail() {
+		if (trailDone) {
+			return;
+		}
+		trailDone = true;
+		window.clearInterval(trailTimer);
+		if (trail && trail.length) {
+			var hex = '';
+			trail.forEach(function (p) {
+				p.forEach(function (v) {
+					hex += ('000' + v.toString(16)).slice(-4);
+				});
+			});
+			send({ e: 'trail', vk: vk, s: hex });
+		}
+		trail = null;
+	}
+
+	document.addEventListener('visibilitychange', function () {
+		if (document.visibilityState === 'hidden') {
+			finishTrail();
+		}
+	});
 
 	window.snnA = {
 		track: function (name) {

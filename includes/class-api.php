@@ -54,7 +54,15 @@ final class API {
 		$get( '/stats/page-series', [ self::class, 'page_series' ], $range + [
 			'id' => [ 'type' => 'integer', 'required' => true ],
 		], $view );
-		$get( '/stats/referrers', [ self::class, 'referrers' ], $range, $view );
+		$get( '/stats/heatmap', [ self::class, 'heatmap' ], $range + [
+				'id'     => [ 'type' => 'integer', 'required' => true ],
+				'device' => [ 'type' => 'integer', 'default' => 0 ],
+			], $view );
+			$get( '/stats/trails', [ self::class, 'trails' ], $range + [
+				'id'     => [ 'type' => 'integer', 'required' => true ],
+				'device' => [ 'type' => 'integer', 'default' => 0 ],
+			], $view );
+			$get( '/stats/referrers', [ self::class, 'referrers' ], $range, $view );
 		$get( '/stats/geo', [ self::class, 'geo' ], $range, $view );
 		$get( '/stats/devices', [ self::class, 'devices' ], $range, $view );
 		$get( '/stats/campaigns', [ self::class, 'campaigns' ], $range, $view );
@@ -105,6 +113,11 @@ final class API {
 		);
 	}
 
+	/** 0 for every device, otherwise 1 desktop, 2 mobile or 3 tablet. */
+	private static function device( \WP_REST_Request $req ): int {
+		return min( 3, max( 0, (int) $req->get_param( 'device' ) ) );
+	}
+
 	private static function ok( mixed $data ): \WP_REST_Response {
 		return new \WP_REST_Response( $data, 200 );
 	}
@@ -140,6 +153,14 @@ final class API {
 
 	public static function page_series( \WP_REST_Request $req ): \WP_REST_Response {
 		return self::ok( Stats::page_series( (int) $req->get_param( 'id' ), self::range( $req ) ) );
+	}
+
+	public static function heatmap( \WP_REST_Request $req ): \WP_REST_Response {
+		return self::ok( Stats::heatmap( (int) $req->get_param( 'id' ), self::range( $req ), self::device( $req ) ) );
+	}
+
+	public static function trails( \WP_REST_Request $req ): \WP_REST_Response {
+		return self::ok( Stats::trails( (int) $req->get_param( 'id' ), self::range( $req ), self::device( $req ) ) );
 	}
 
 	public static function referrers( \WP_REST_Request $req ): \WP_REST_Response {

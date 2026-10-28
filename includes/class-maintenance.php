@@ -25,17 +25,24 @@ final class Maintenance {
 	];
 
 	public static function retention(): void {
-		$months = (int) Settings::get()['retention_months'];
-		if ( $months <= 0 ) {
-			return;
+		$settings = Settings::get();
+		$stop     = time() + self::TIME_LIMIT;
+
+		// Keeps the stored UTC offset current after DST changes, so day numbers match the summaries.
+		Settings::refresh_offset();
+
+		$months = (int) $settings['retention_months'];
+		if ( $months > 0 ) {
+			$cutoff = time() - (int) round( $months * 30.44 * 86400 );
+
+			foreach ( self::RAW as $table => $column ) {
+				self::delete_older_than( DB::table( $table ), $column, $cutoff, $stop );
+			}
 		}
 
-		$cutoff = time() - (int) round( $months * 30.44 * 86400 );
-		$stop   = time() + self::TIME_LIMIT;
-
-		foreach ( self::RAW as $table => $column ) {
-			self::delete_older_than( DB::table( $table ), $column, $cutoff, $stop );
-		}
+		// Cursor trails have their own retention, from 14 days to 10 years.
+		$days = max( 1, (int) $settings['cursor_retention_days'] );
+		self::delete_older_than( DB::table( 'trails' ), 'created_at', time() - $days * 86400, $stop );
 	}
 
 	private static function delete_older_than( string $table, string $column, int $cutoff, int $stop ): void {
@@ -59,6 +66,7 @@ final class Maintenance {
 		$tables = [
 			'views', 'events', 'event_targets', 'sessions', 'visitors', 'conversions',
 			'pages', 'referrers', 'campaigns', 'utm_values', 'countries', 'cities', 'ua',
+			'heat', 'trails',
 			'd_site', 'd_pages', 'd_refs', 'd_geo', 'd_devices', 'd_camps', 'd_goals',
 		];
 
@@ -80,7 +88,7 @@ final class Maintenance {
 	public static function uninstall(): void {
 		global $wpdb;
 
-		foreach ( [ 'views', 'events', 'event_targets', 'sessions', 'visitors', 'conversions', 'pages', 'referrers', 'campaigns', 'utm_values', 'countries', 'cities', 'ua', 'goals', 'funnels', 'funnel_steps', 'd_site', 'd_pages', 'd_refs', 'd_geo', 'd_devices', 'd_camps', 'd_goals' ] as $table ) {
+		foreach ( [ 'views', 'events', 'event_targets', 'sessions', 'visitors', 'conversions', 'pages', 'referrers', 'campaigns', 'utm_values', 'countries', 'cities', 'ua', 'heat', 'trails', 'goals', 'funnels', 'funnel_steps', 'd_site', 'd_pages', 'd_refs', 'd_geo', 'd_devices', 'd_camps', 'd_goals' ] as $table ) {
 			$wpdb->query( 'DROP TABLE IF EXISTS ' . DB::table( $table ) );
 		}
 

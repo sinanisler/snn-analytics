@@ -12,7 +12,7 @@ defined( 'ABSPATH' ) || exit;
 
 final class DB {
 
-	const VERSION = 2;
+	const VERSION = 3;
 	const OPTION  = 'snn_a_db_version';
 
 	/** Columns that hold 8 raw bytes. PHP passes them as hex, SQL converts with UNHEX(). */
@@ -37,6 +37,7 @@ final class DB {
 		}
 
 		dbDelta( self::schema() );
+		Settings::refresh_offset();
 		// Autoloaded so the version check on each request costs no extra query.
 		update_option( self::OPTION, self::VERSION, true );
 	}
@@ -268,6 +269,26 @@ CREATE TABLE {$p}events (
   KEY session_id (session_id),
   KEY created_at (created_at),
   KEY target_created (target_id, created_at)
+) $c;
+CREATE TABLE {$p}heat (
+  day MEDIUMINT UNSIGNED NOT NULL,
+  page_id INT UNSIGNED NOT NULL,
+  device TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  x TINYINT UNSIGNED NOT NULL,
+  y SMALLINT UNSIGNED NOT NULL,
+  clicks INT UNSIGNED NOT NULL DEFAULT 0,
+  PRIMARY KEY  (day, page_id, device, x, y),
+  KEY page_day (page_id, day)
+) $c;
+CREATE TABLE {$p}trails (
+  view_id BIGINT UNSIGNED NOT NULL,
+  page_id INT UNSIGNED NOT NULL,
+  device TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  created_at INT UNSIGNED NOT NULL,
+  samples VARBINARY(1440) NOT NULL,
+  PRIMARY KEY  (view_id),
+  KEY page_created (page_id, created_at),
+  KEY created_at (created_at)
 ) $c;
 CREATE TABLE {$p}cities (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,

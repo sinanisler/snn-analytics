@@ -22,10 +22,14 @@ final class Settings {
 			'exclude_roles'   => [ 'administrator' ],
 			'session_timeout' => 1800,     // seconds without a hit before a new session starts
 			'site_host'       => '',       // host without "www.", used for internal referrers
-			'retention_months' => 0,       // raw rows older than this are deleted; 0 keeps everything
+			'retention_months' => 12,       // raw rows older than this are deleted; 0 keeps everything
 			'goal_rules'      => [],       // active goals, copied here so the tracker can check them without a query
 			'geo_city_file'   => '',       // absolute path of the installed city database, if any
-			'delete_on_uninstall' => false, // drop all tables and data when the plugin is deleted
+			'delete_on_uninstall' => false,
+				'heatmap'         => true,     // record click positions as per-page counters
+				'cursor_trails'   => false,    // record mouse paths, one trail per view (off by default)
+				'cursor_retention_days' => 30, // trails older than this are deleted: 14, 30, 365 or 3650
+				'tz_offset'       => 0,        // site UTC offset in seconds, kept current so the tracker can number days // drop all tables and data when the plugin is deleted
 		];
 	}
 
@@ -36,6 +40,14 @@ final class Settings {
 	public static function update( array $values ): void {
 		Store::write( self::SETTINGS, array_merge( Store::read( self::SETTINGS ), $values ), false );
 		self::$settings = null;
+	}
+
+	/**
+	 * Stores the site's current UTC offset. The tracker numbers days with it, so it must match
+	 * the offset the daily summaries use. Refreshed on activation, on timezone changes and daily.
+	 */
+	public static function refresh_offset(): void {
+		self::update( [ 'tz_offset' => Ranges::offset() ] );
 	}
 
 	/**
