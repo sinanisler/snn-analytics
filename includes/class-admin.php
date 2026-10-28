@@ -15,7 +15,7 @@ final class Admin {
 	const SLUG          = 'snn-analytics';
 
 	/** Dashboard cards, in default order. Users can reorder and hide them. */
-	const CARDS = [ 'chart', 'pages', 'geo', 'newreturning', 'devices', 'sources', 'recent', 'realtime', 'campaigns', 'goals' ];
+	const CARDS = [ 'chart', 'realtime', 'geo', 'pages', 'newreturning', 'devices', 'sources', 'recent', 'campaigns', 'goals' ];
 
 	/** Screen slug => [ view name, menu title, capability ]. */
 	const SCREENS = [

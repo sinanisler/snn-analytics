@@ -12,8 +12,6 @@
 	var teardown = null;
 	var SVG_NS = 'http://www.w3.org/2000/svg';
 	var PER_PAGE = 25;
-	/** Default widths. Cards not listed here start as half width. */
-	var DEFAULT_SIZE = { chart: 'full' };
 
 	var ACCENT = '#2271b1';
 	var COLOR_VISITORS = ACCENT;
@@ -668,7 +666,7 @@
 		function mountCard(id, title, sub, link, load) {
 			var content = h('div', {}, skeleton(4));
 			var box = card(title, content, { id: id, sub: sub, link: link, grip: true });
-			box.setAttribute('data-size', DEFAULT_SIZE[id] || 'half');
+			box.setAttribute('data-size', 'half');
 			box.appendChild(editTools(box));
 			grid.appendChild(box);
 			load(content).catch(function (err) {
@@ -847,7 +845,7 @@
 
 		/** Puts cards in the saved order, at their saved widths, and hides the ones turned off. */
 		function applyLayout(layout) {
-			var order = layout.order || [];
+			var order = layout.order && layout.order.length ? layout.order : (cfg.cards || []);
 			var hidden = layout.hidden || [];
 			var sizes = layout.sizes || {};
 			var cards = Array.prototype.slice.call(grid.children);
@@ -862,7 +860,7 @@
 				var id = c.getAttribute('data-card');
 				grid.appendChild(c);
 				c.hidden = hidden.indexOf(id) >= 0;
-				c.setAttribute('data-size', sizes[id] || DEFAULT_SIZE[id] || 'half');
+				c.setAttribute('data-size', sizes[id] || 'half');
 				syncSizeButtons(c);
 			});
 			buildCustomize(hidden);
