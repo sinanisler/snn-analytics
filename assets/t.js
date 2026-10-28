@@ -1,11 +1,21 @@
 /*!
  * SNN Analytics tracker. No cookies and no storage, except one flag that remembers
- * the REST fallback for a day when the PHP endpoint is blocked.
+ * which route works for a day when the direct PHP endpoint is blocked.
  */
 (function () {
 	'use strict';
 
-	var cfg = window.snnAConfig;
+	// The config is an attribute on this script's tag (see Frontend::script_tag), so it survives delay plugins.
+	function readConfig() {
+		var tag = document.querySelector('script[data-snn-config]');
+		try {
+			return tag ? JSON.parse(tag.getAttribute('data-snn-config')) : null;
+		} catch (e) {
+			return null;
+		}
+	}
+
+	var cfg = readConfig();
 	if (!cfg || navigator.webdriver) {
 		return;
 	}
@@ -25,32 +35,47 @@
 	}
 	var vk = viewKey();
 
-	var endpoint = cfg.u;
+	// Three routes, tried in order: the plugin's t.php, the REST API, then admin-ajax.php, which hosts
+	// that block plugin PHP files and REST for visitors usually still allow.
+	var routes = [cfg.u, cfg.f, cfg.a];
+	var route = 0;
 	try {
-		if (Date.now() - Number(localStorage.getItem('snnAFallback')) < 864e5) {
-			endpoint = cfg.f;
+		var saved = JSON.parse(localStorage.getItem('snnARoute') || 'null');
+		if (saved && Date.now() - saved.at < 864e5) {
+			route = Math.min(saved.n | 0, routes.length - 1);
 		}
 	} catch (e) {}
 
-	function post(url, body) {
-		return fetch(url, {
-			method: 'POST',
-			body: JSON.stringify(body),
-			keepalive: true,
-			headers: { 'Content-Type': 'text/plain' }
-		});
+	function remember() {
+		try {
+			localStorage.setItem('snnARoute', JSON.stringify({ n: route, at: Date.now() }));
+		} catch (e) {}
 	}
 
-	function deliver(body) {
-		return post(endpoint, body).then(function (res) {
-			// Both endpoints answer 204. Anything else (403, 404, 5xx, or a redirect to an HTML page)
-			// means t.php is blocked, so switch to REST. A network error does not switch.
-			if (res.status !== 204 && endpoint === cfg.u) {
-				endpoint = cfg.f;
-				try {
-					localStorage.setItem('snnAFallback', String(Date.now()));
-				} catch (e) {}
-				return post(endpoint, body);
+	function post(stage, body) {
+		var options = { method: 'POST', keepalive: true };
+		if (stage === 2) {
+			options.body = new URLSearchParams({ action: 'snn_a_track', payload: JSON.stringify(body) });
+		} else {
+			options.body = JSON.stringify(body);
+			options.headers = { 'Content-Type': 'text/plain' };
+		}
+		return fetch(routes[stage], options);
+	}
+
+	function deliver(body, stage) {
+		if (stage === undefined) {
+			stage = route;
+		}
+		return post(stage, body).then(function (res) {
+			// Every route answers 204. Anything else (403, 404, 5xx, or a redirect to an HTML page) means this
+			// route is blocked, so move to the next one and remember it. A network error does not move.
+			if (res.status !== 204 && stage < routes.length - 1) {
+				if (stage >= route) {
+					route = stage + 1;
+					remember();
+				}
+				return deliver(body, stage + 1);
 			}
 		}).then(null, function () {});
 	}
@@ -62,7 +87,9 @@
 
 	function flush() {
 		viewStored = true;
-		waiting.splice(0).forEach(deliver);
+		waiting.splice(0).forEach(function (body) {
+			deliver(body);
+		});
 	}
 
 	function send(body) {
@@ -195,9 +222,10 @@
 	}, true);
 
 	// Text selections: that a selection happened, and under which heading. The selected text is never sent.
+	// Mouse, touch and keyboard (shift+arrow) selections all end with one of these events.
 	var lastSelection = '';
 	var selections = 0;
-	document.addEventListener('mouseup', function () {
+	function selectionEnded() {
 		window.setTimeout(function () {
 			var sel = window.getSelection ? window.getSelection() : null;
 			var text = sel ? sel.toString().trim() : '';
@@ -209,31 +237,41 @@
 			var size = text.length <= 20 ? 'short' : text.length <= 100 ? 'medium' : 'long';
 			send({ e: 'ev', vk: vk, t: 10, v: 'Under “' + heading(sel.anchorNode) + '”, ' + size + ' selection' });
 		}, 0);
+	}
+	['mouseup', 'touchend', 'keyup'].forEach(function (type) {
+		document.addEventListener(type, selectionEnded);
 	});
 
 	// Scroll depth: 25, 50, 75 and 100 percent. Each mark is sent once per page view.
 	var reached = {};
-	var scrollQueued = false;
-	function scrolled() {
-		scrollQueued = false;
-		var room = document.documentElement.scrollHeight - window.innerHeight;
-		if (room <= 0) {
-			return;
-		}
-		var pct = Math.min(100, Math.round(100 * window.scrollY / room));
-		[25, 50, 75, 100].forEach(function (mark) {
-			if (pct >= mark && !reached[mark]) {
-				reached[mark] = true;
-				send({ e: 'ev', vk: vk, t: 11, v: mark + '%' });
+	function mark(pct) {
+		[25, 50, 75, 100].forEach(function (step) {
+			if (pct >= step && !reached[step]) {
+				reached[step] = true;
+				send({ e: 'ev', vk: vk, t: 11, v: step + '%' });
 			}
 		});
 	}
-	window.addEventListener('scroll', function () {
-		if (!scrollQueued) {
-			scrollQueued = true;
-			window.requestAnimationFrame(scrolled);
+
+	/** Page scroll. A page that fits on one screen has been seen in full, so it counts as 100 percent. */
+	function windowScrolled() {
+		var room = document.documentElement.scrollHeight - window.innerHeight;
+		mark(room <= 0 ? 100 : Math.min(100, Math.round(100 * window.scrollY / room)));
+	}
+
+	// Scroll events do not bubble, so one capture listener on the document sees the window and any box
+	// inside the page. Only tall boxes count, so a small carousel does not register as the reader's scroll.
+	document.addEventListener('scroll', function (event) {
+		var el = event.target;
+		if (el === document) {
+			windowScrolled();
+			return;
 		}
-	}, { passive: true });
+		var span = el.scrollHeight - el.clientHeight;
+		if (el.nodeType === 1 && el.clientHeight >= 200 && span > 0) {
+			mark(Math.min(100, Math.round(100 * el.scrollTop / span)));
+		}
+	}, { capture: true, passive: true });
 
 	// Pointer trails, only when the site turns them on. One trail per view: a sample every 250 ms while the
 	// pointer moves (mouse, pen or touch), at most 240 samples. It is sent once: when the tab is hidden,
@@ -295,9 +333,27 @@
 		}
 	});
 
+	// Custom event names follow the server's rule: letters, digits, space, dot, colon, dash and underscore,
+	// up to 64 characters. Other characters become dashes, so the event is kept rather than silently dropped.
+	var nameRule;
+	try {
+		nameRule = new RegExp('[^\\p{L}\\p{N} _.:\\-]', 'gu');
+	} catch (e) {
+		nameRule = /[^A-Za-z0-9 _.:\-]/g;
+	}
+
+	function eventName(name) {
+		var clean = String(name).replace(nameRule, '-').trim();
+		var chars = typeof Array.from === 'function' ? Array.from(clean) : clean.split('');
+		return chars.slice(0, 64).join('');
+	}
+
 	window.snnA = {
 		track: function (name) {
-			send({ e: 'ev', vk: vk, t: 5, v: String(name) });
+			var clean = eventName(name);
+			if (clean !== '') {
+				send({ e: 'ev', vk: vk, t: 5, v: clean });
+			}
 		}
 	};
 
@@ -317,6 +373,7 @@
 		}).join('&');
 
 		deliver({ e: 'pv', vk: vk, pg: cfg.pg, r: ref, q: utm ? '?' + utm : '' }).then(flush);
+		windowScrolled();
 	}
 
 	// A page restored from the back/forward cache is a new view, but the script does not run again.
@@ -329,6 +386,9 @@
 			selections = 0;
 			active = 0;
 			since = document.visibilityState === 'visible' ? Date.now() : 0;
+			trailDone = !cfg.cur;
+			trail = null;
+			trailDirty = false;
 			pageview();
 		}
 	});

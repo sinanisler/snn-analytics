@@ -14,7 +14,31 @@ final class Frontend {
 
 	public static function register(): void {
 		add_action( 'wp_enqueue_scripts', [ self::class, 'enqueue' ] );
+		add_filter( 'script_loader_tag', [ self::class, 'script_tag' ], 10, 2 );
 	}
+
+	/**
+	 * Speed plugins (WP Rocket, Perfmatters, LiteSpeed, Cloudflare Rocket Loader) delay or rewrite scripts
+	 * until the visitor interacts with the page. Visitors who only read are then never counted. These
+	 * attributes are the common opt-outs those plugins check.
+	 */
+	private const SKIP_ATTRIBUTES = 'data-no-defer="1" data-no-delay="1" data-no-optimize="1" data-no-minify="1" data-cfasync="false"';
+
+	/** The config is printed on the tracker's own script tag, so no other script is touched. */
+	public static function script_tag( string $tag, string $handle ): string {
+		if ( $handle !== 'snn-a-tracker' ) {
+			return $tag;
+		}
+
+		// JSON_HEX_* keeps a title such as "</script>" from ending anything, and esc_attr keeps the quotes inside.
+		$config = esc_attr( (string) wp_json_encode( self::$config, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT ) );
+		$extra  = self::SKIP_ATTRIBUTES . ' data-snn-config="' . $config . '"';
+
+		return (string) preg_replace( '/ src=/', ' ' . $extra . ' src=', $tag, 1 );
+	}
+
+	/** Set by enqueue(), read by script_tag() when the tracker tag is printed. */
+	private static array $config = [];
 
 	public static function enqueue(): void {
 		if ( is_preview() || ! self::should_track() ) {
@@ -24,22 +48,16 @@ final class Frontend {
 		wp_enqueue_script( 'snn-a-tracker', plugins_url( 'assets/t.js', SNN_A_FILE ), [], SNN_A_VERSION, true );
 		wp_script_add_data( 'snn-a-tracker', 'strategy', 'defer' );
 
-		$config = [
-			'u'   => plugins_url( 't.php', SNN_A_FILE ),
-			'f'   => rest_url( 'snn-a/v1/t' ),
+		self::$config = [
+			'u'     => plugins_url( 't.php', SNN_A_FILE ),
+			'f'     => rest_url( 'snn-a/v1/t' ),
+			'a'     => admin_url( 'admin-ajax.php' ),
 			'dnt'   => (bool) Settings::get()['respect_dnt'],
 			'pg'    => self::page(),
 			'goals' => Goals::click_rules(),
 			'hm'    => (bool) Settings::get()['heatmap'],
 			'cur'   => (bool) Settings::get()['cursor_trails'],
 		];
-
-		// JSON_HEX_* keeps a title such as "</script>" from ending the inline script.
-		wp_add_inline_script(
-			'snn-a-tracker',
-			'window.snnAConfig = ' . wp_json_encode( $config, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT ) . ';',
-			'before'
-		);
 	}
 
 	/**

@@ -57,21 +57,47 @@ final class Tracker {
 		}
 	}
 
+	/**
+	 * Page views of one visitor run one at a time. Tabs opened together (or a page with several
+	 * requests in flight) would otherwise each see "no session" and create one each.
+	 */
 	private static function pageview( array $hit, string $vh, int $now, array $info, array $server, array $settings ): void {
-		$visitor = self::visitor( $vh, $now );
-		$session = self::session_for_visitor( $visitor['id'], $now, $settings['session_timeout'] );
+		$lock = 'snn_a_' . $vh;
+		$held = self::lock( $lock );
 
-		if ( $session !== null && $session['views'] >= self::MAX_VIEWS ) {
-			return;
+		try {
+			$visitor = self::visitor( $vh, $now );
+			$session = self::session_for_visitor( $visitor['id'], $now, $settings['session_timeout'] );
+
+			if ( $session !== null && $session['views'] >= self::MAX_VIEWS ) {
+				return;
+			}
+
+			$page_id = self::page_id( $hit['page'] );
+			if ( $session === null ) {
+				$session = self::new_session( $visitor, $hit, $page_id, $now, $info, $server, $settings['site_host'] );
+			}
+
+			self::add_view( $session, $hit['vk'], $page_id, $now );
+			Goals::check_page( $session['id'], $hit['page']['path'], $now );
+		} finally {
+			if ( $held ) {
+				self::unlock( $lock );
+			}
 		}
+	}
 
-		$page_id = self::page_id( $hit['page'] );
-		if ( $session === null ) {
-			$session = self::new_session( $visitor, $hit, $page_id, $now, $info, $server, $settings['site_host'] );
-		}
+	/** Named lock on the database connection. Waits up to 2 seconds. A failed lock lets the hit through anyway. */
+	private static function lock( string $name ): bool {
+		global $wpdb;
 
-		self::add_view( $session, $hit['vk'], $page_id, $now );
-		Goals::check_page( $session['id'], $hit['page']['path'], $now );
+		return (string) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 2)', $name ) ) === '1';
+	}
+
+	private static function unlock( string $name ): void {
+		global $wpdb;
+
+		$wpdb->query( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $name ) );
 	}
 
 	/**
