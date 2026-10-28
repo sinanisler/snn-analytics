@@ -440,6 +440,16 @@
 .snn-a .snn-a-table tr.is-selected td {
 	background: color-mix(in srgb, var(--sa-accent) 8%, transparent);
 }
+.snn-a .snn-a-table tr.snn-a-detail-row:hover {
+	background: none;
+}
+.snn-a .snn-a-table td.snn-a-detail-cell {
+	padding: 8px 0 16px;
+	border-bottom: 0;
+}
+.snn-a .snn-a-table td.snn-a-detail-cell > .snn-a-card {
+	margin-top: 0;
+}
 .snn-a .snn-a-table .snn-a-sort {
 	background: none;
 	border: 0;

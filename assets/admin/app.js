@@ -362,7 +362,7 @@
 
 	function pager(page, pages, go) {
 		if (pages <= 1) {
-			return null;
+			return document.createDocumentFragment();
 		}
 		return h('nav', { class: 'snn-a-pager', 'aria-label': 'Pagination' }, [
 			h('button', { type: 'button', class: 'button', disabled: page <= 1 ? true : null, onclick: function () { go(page - 1); } }, '‹ Previous'),
@@ -1453,46 +1453,18 @@
 
 	function renderJourneys(rp) {
 		var state = { page: 1 };
-		var detail = h('div', { class: 'snn-a-detail' });
 		var results = h('div', {}, skeleton(6));
+		var selected = null;
 
-		var interactions = h('div', {}, skeleton(4));
 		root.appendChild(h('div', { class: 'snn-a-toolbar' }, rangeControl()));
-		root.appendChild(card('Interactions', interactions, {
-			sub: 'Clicks, form submits, text selections and scroll depth in this range.'
-		}));
-		root.appendChild(detail);
 		root.appendChild(results);
-
-		api('stats/interactions', rp).then(function (data) {
-			clear(interactions);
-			if (!data.types.length) {
-				interactions.appendChild(empty('No interactions in this range yet.'));
-				return;
-			}
-			interactions.appendChild(h('div', { class: 'snn-a-split' }, [
-				h('div', {}, [
-					h('h3', { class: 'snn-a-subhead', text: 'By type' }),
-					barList(data.types.map(function (t) { return [t.label, t.total]; }), 'No interactions.')
-				]),
-				h('div', {}, [
-					h('h3', { class: 'snn-a-subhead', text: 'Most common targets' }),
-					table(['Interaction', 'Target', numCol('Count')], data.targets.map(function (t) {
-						return [t.label, t.value, n(t.total)];
-					}), 'No targets yet.')
-				])
-			]));
-		}).catch(function (err) {
-			clear(interactions);
-			interactions.appendChild(failed(err, render));
-		});
-
 
 		function load() {
 			clear(results);
 			results.appendChild(skeleton(6));
 			api('stats/journeys', Object.assign({}, rp, state, { per_page: PER_PAGE })).then(function (data) {
 				clear(results);
+				selected = null;
 				var pages = Math.max(1, Math.ceil(data.total / PER_PAGE));
 				results.appendChild(h('p', { class: 'snn-a-muted', text: n(data.total) + ' sessions. Select a row to see every page in that visit.' }));
 				if (!data.rows.length) {
@@ -1504,7 +1476,7 @@
 					data.rows.map(function (s) {
 						return [
 							when(s.started_at),
-							h('span', { class: 'snn-a-badge ' + (s['new'] ? 'is-new' : '') , text: s['new'] ? 'New' : 'Returning' }),
+							h('span', { class: 'snn-a-badge ' + (s['new'] ? 'is-new' : ''), text: s['new'] ? 'New' : 'Returning' }),
 							s.entry,
 							s.exit,
 							s.referrer,
@@ -1516,8 +1488,9 @@
 					}),
 					'No sessions in this range.',
 					function (index, tr) {
-						Array.prototype.forEach.call(results.querySelectorAll('tr.is-selected'), function (el) { el.classList.remove('is-selected'); });
+						clearSelection();
 						tr.classList.add('is-selected');
+						selected = tr;
 						showJourney(data.rows[index].id);
 					}
 				));
@@ -1528,15 +1501,30 @@
 			});
 		}
 
+		function clearDetail() {
+			Array.prototype.forEach.call(results.querySelectorAll('tr.snn-a-detail-row'), function (el) { el.parentNode.removeChild(el); });
+		}
+
+		function clearSelection() {
+			clearDetail();
+			Array.prototype.forEach.call(results.querySelectorAll('tr.is-selected'), function (el) { el.classList.remove('is-selected'); });
+			selected = null;
+		}
+
+		/** The visit opens as a full-width row directly under the session that was clicked. */
 		function showJourney(id) {
-			clear(detail);
-			detail.appendChild(card('Visit', skeleton(5)));
-			detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+			if (!selected) {
+				return;
+			}
+			clearDetail();
+			var cell = h('td', { class: 'snn-a-detail-cell', colspan: String(selected.cells.length) }, skeleton(5));
+			selected.parentNode.insertBefore(h('tr', { class: 'snn-a-detail-row' }, cell), selected.nextSibling);
+			selected.scrollIntoView({ behavior: 'smooth', block: 'start' });
 			api('stats/journey', { id: id }).then(function (data) {
-				clear(detail);
+				clear(cell);
 				var s = data.session;
-				var close = h('button', { type: 'button', class: 'button-link', onclick: function () { clear(detail); } }, 'Close');
-				detail.appendChild(card('Visit on ' + when(s.started_at), [
+				var close = h('button', { type: 'button', class: 'button-link', onclick: clearSelection }, 'Close');
+				cell.appendChild(card('Visit on ' + when(s.started_at), [
 					h('p', { class: 'snn-a-stat-row' }, [
 						h('span', {}, [h('strong', { text: duration(s.duration) }), ' duration']),
 						h('span', {}, [h('strong', { text: String(s.views) }), ' views']),
@@ -1563,8 +1551,8 @@
 					})) : null
 				], { actions: close }));
 			}).catch(function (err) {
-				clear(detail);
-				detail.appendChild(failed(err));
+				clear(cell);
+				cell.appendChild(failed(err));
 			});
 		}
 
