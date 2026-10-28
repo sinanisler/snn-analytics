@@ -48,7 +48,8 @@
 	border-bottom: 1px solid var(--sa-line);
 }
 .snn-a .snn-a-tab {
-	padding: 8px 12px;
+	padding: 10px 14px;
+	font-size: 15px;
 	margin-bottom: -1px;
 	border-bottom: 2px solid transparent;
 	color: var(--sa-muted);

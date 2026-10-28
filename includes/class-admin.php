@@ -32,8 +32,22 @@ final class Admin {
 		'snn-analytics-settings'  => [ 'settings', 'Settings', self::MANAGE_CAP ],
 	];
 
-	/** Screens that stay in the left sidebar. Every other screen is reached from the top bar. */
+	/** Screens that stay in the left sidebar. Dashboard, Import and Settings are always there. */
 	const SIDEBAR = [ 'snn-analytics', 'snn-analytics-import', 'snn-analytics-settings' ];
+
+	/** Top bar order. Dashboard comes first and Settings last. Import is reached from the sidebar only. */
+	const TOP_BAR = [
+		'snn-analytics',
+		'snn-analytics-realtime',
+		'snn-analytics-pages',
+		'snn-analytics-referrers',
+		'snn-analytics-geo',
+		'snn-analytics-devices',
+		'snn-analytics-campaigns',
+		'snn-analytics-journeys',
+		'snn-analytics-goals',
+		'snn-analytics-settings',
+	];
 
 	public static function register(): void {
 		add_action( 'admin_menu', [ self::class, 'menu' ] );
@@ -99,19 +113,17 @@ final class Admin {
 	}
 
 	/**
-	 * Top bar with every screen that is not in the sidebar. The date range carries over, so
-	 * switching screens keeps the period the admin is looking at.
+	 * Top bar with the screens in TOP_BAR. The date range carries over, so switching
+	 * screens keeps the period the admin is looking at.
 	 */
 	private static function tabs( string $current ): void {
 		$range = array_map( 'sanitize_text_field', array_intersect_key( wp_unslash( $_GET ), array_flip( [ 'range', 'from', 'to' ] ) ) );
 
 		?>
 		<nav class="snn-a-tabs" aria-label="SNN Analytics screens">
-			<?php foreach ( self::SCREENS as $slug => [ $view, $title, $cap ] ) : ?>
-				<?php if ( ! in_array( $slug, self::SIDEBAR, true ) ) : ?>
-					<?php $url = add_query_arg( $range + [ 'page' => $slug ], admin_url( 'admin.php' ) ); ?>
-					<a href="<?php echo esc_url( $url ); ?>" class="snn-a-tab<?php echo $slug === $current ? ' is-current' : ''; ?>"<?php echo $slug === $current ? ' aria-current="page"' : ''; ?>><?php echo esc_html( $title ); ?></a>
-				<?php endif; ?>
+			<?php foreach ( self::TOP_BAR as $slug ) : ?>
+				<?php $url = add_query_arg( $range + [ 'page' => $slug ], admin_url( 'admin.php' ) ); ?>
+				<a href="<?php echo esc_url( $url ); ?>" class="snn-a-tab<?php echo $slug === $current ? ' is-current' : ''; ?>"<?php echo $slug === $current ? ' aria-current="page"' : ''; ?>><?php echo esc_html( self::SCREENS[ $slug ][1] ); ?></a>
 			<?php endforeach; ?>
 		</nav>
 		<?php
