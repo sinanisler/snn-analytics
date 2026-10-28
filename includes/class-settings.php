@@ -25,11 +25,11 @@ final class Settings {
 			'retention_months' => 12,       // raw rows older than this are deleted; 0 keeps everything
 			'goal_rules'      => [],       // active goals, copied here so the tracker can check them without a query
 			'geo_city_file'   => '',       // absolute path of the installed city database, if any
-			'delete_on_uninstall' => false,
-				'heatmap'         => true,     // record click positions as per-page counters
-				'cursor_trails'   => false,    // record mouse paths, one trail per view (off by default)
-				'cursor_retention_days' => 30, // trails older than this are deleted: 14, 30, 365 or 3650
-				'tz_offset'       => 0,        // site UTC offset in seconds, kept current so the tracker can number days // drop all tables and data when the plugin is deleted
+			'delete_on_uninstall' => false,  // drop all tables and data when the plugin is deleted
+			'heatmap'             => true,   // record click positions as per-page counters
+			'cursor_trails'       => false,  // record pointer paths, one trail per view (off by default)
+			'cursor_retention_days' => 30,   // trails older than this are deleted: 14, 30, 365 or 3650
+			'tz_offset'           => 0,      // site UTC offset in seconds, kept current so the tracker can number days
 		];
 	}
 

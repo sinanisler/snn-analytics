@@ -301,7 +301,7 @@ snn_a_d_goals    day, goal_id      → conversions                              
 - **Binary hashes:** PHP passes hex, SQL converts with `UNHEX()`. This keeps arbitrary bytes out of the SQL text.
 - **Page identity is signed and is the only page input.** The server prints `{k, p, t, y, s}`. The browser echoes it back, and `s` is an HMAC over `k, p, t, y`. Keys for pages without an object (`search`, `404`, `date`, `blog`, `other`) are fixed, so no row can grow from user input.
 - **`views.view_key`** (8 random bytes per page load, generated in the browser) identifies a view for pings and events. The plan did not have this column.
-- **`sessions.is_bounce`** is maintained on write, not computed in rollups.
+- **`sessions.is_bounce`** is maintained on write, not computed in rollups. Event types 1 to 9 (links, downloads, goals, custom events, button clicks, form submits) count as engagement. Types 10 and 11 (text selection, scroll depth) are stored but do not.
 - **`countries`** stores only the ISO code for now. Names come with the Geographic page.
 - **Direct traffic:** `sessions.referrer_id` is `NULL`. There is no "direct" row in `referrers`.
 - **Fallback flag** for a blocked `t.php` is stored in `localStorage` for one day, not in a server option. Only a refusal (403/404/405/5xx) triggers the switch. A network error does not.

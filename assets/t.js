@@ -211,8 +211,9 @@
 		}
 	}, { passive: true });
 
-	// Cursor trails, only when the site turns them on. One trail per view: a sample every 250 ms while the
-	// mouse moves, at most 240 samples. It is sent once: when the tab is hidden, the page is left, or 60 seconds pass.
+	// Pointer trails, only when the site turns them on. One trail per view: a sample every 250 ms while the
+	// pointer moves (mouse, pen or touch), at most 240 samples. It is sent once: when the tab is hidden,
+	// the page is left, or 60 seconds pass.
 	var trail = null;
 	var trailStart = 0;
 	var trailTimer = 0;
@@ -220,7 +221,7 @@
 	var pointer = [0, 0];
 	var trailDone = !cfg.cur;
 
-	document.addEventListener('mousemove', function (event) {
+	document.addEventListener('pointermove', function (event) {
 		if (trailDone) {
 			return;
 		}

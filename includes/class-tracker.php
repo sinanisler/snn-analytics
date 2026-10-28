@@ -113,9 +113,10 @@ final class Tracker {
 				'type'       => $hit['t'],
 				'target_id'  => $target,
 			] );
-			// Only the original event types count as engagement. Scroll, selection and other
-			// automatic interactions are stored, but they do not change bounce rate.
-			if ( $hit['t'] <= 6 ) {
+			// Deliberate actions count as engagement: links, downloads, goals, custom events, button clicks
+			// and form submits (types 1 to 9). Text selection and scroll depth (10 and 11) are automatic,
+			// so they are stored but do not change bounce rate.
+			if ( $hit['t'] <= 9 ) {
 				$wpdb->query( $wpdb->prepare(
 					'UPDATE ' . DB::table( 'sessions' ) . ' SET events = events + 1, is_bounce = 0 WHERE id = %d',
 					$session['id']

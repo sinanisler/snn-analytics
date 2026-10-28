@@ -225,7 +225,7 @@ final class Admin {
 					<td>
 						<label>
 							<input type="checkbox" name="cursor_trails" value="1" <?php checked( $s['cursor_trails'] ); ?>>
-							Record how the mouse moves on each page
+							Record how the pointer moves on each page (mouse, pen or touch)
 						</label>
 						<p class="description">Off by default. Each view keeps one path of at most 60 seconds, sampled four times a second. Visitors are not identified by it.</p>
 						<p>

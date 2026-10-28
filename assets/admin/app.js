@@ -1083,7 +1083,8 @@
 	var MAP_COLS = 50;
 	var MAP_CELL = 12;
 	var MAP_ROW = 8;
-	var MAP_ROWS = 250;
+	// 2000 rows cover 80,000 px of page height, the same limit the tracker uses for click rows.
+	var MAP_ROWS = 2000;
 
 	function heatmapView(data) {
 		if (!data.total) {
@@ -1262,7 +1263,7 @@
 				sub: 'Where visitors clicked on this page. Darker means more clicks.'
 			}));
 			detail.appendChild(card('Cursor trails', trailBox, {
-				sub: 'How the mouse moved on each view of this page, up to 60 seconds per view.'
+				sub: 'How the pointer moved on each view of this page, up to 60 seconds per view.'
 			}));
 			load();
 		}
