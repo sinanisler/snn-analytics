@@ -1115,7 +1115,7 @@
 			ctx.fillStyle = gradient;
 			ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
 		});
-		return h('div', {}, [canvas, h('p', { class: 'snn-a-muted', text: n(data.total) + ' clicks in this range' })]);
+		return h('div', {}, [h('div', { class: 'snn-a-mapscroll' }, canvas), h('p', { class: 'snn-a-muted', text: n(data.total) + ' clicks in this range' })]);
 	}
 
 	function trailView(data) {
@@ -1149,7 +1149,7 @@
 			ctx.stroke();
 		});
 		var shown = data.total > data.trails.length ? ' Showing the latest ' + data.trails.length + '.' : '';
-		return h('div', {}, [canvas, h('p', { class: 'snn-a-muted', text: n(data.total) + ' trails recorded in this range.' + shown })]);
+		return h('div', {}, [h('div', { class: 'snn-a-mapscroll' }, canvas), h('p', { class: 'snn-a-muted', text: n(data.total) + ' trails recorded in this range.' + shown })]);
 	}
 
 	function renderPages(rp) {

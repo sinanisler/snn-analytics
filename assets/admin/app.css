@@ -71,6 +71,15 @@
 
 /* ---------------------------------------------------- heatmap and trails */
 
+/* Long pages scroll inside the card instead of stretching it. */
+.snn-a .snn-a-mapscroll {
+	max-width: 620px;
+	max-height: 660px;
+	overflow-y: auto;
+	overflow-x: hidden;
+	border-radius: 8px;
+}
+
 .snn-a .snn-a-mapcanvas {
 	display: block;
 	width: 100%;
