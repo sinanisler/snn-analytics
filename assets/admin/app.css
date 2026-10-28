@@ -7,13 +7,13 @@
 	--sa-accent: var(--wp-admin-theme-color, #2271b1);
 	--sa-text: #1d2327;
 	--sa-muted: #646970;
-	--sa-line: #dcdcde;
+	--sa-line: #dadce0;
 	--sa-line-soft: #f0f0f1;
 	--sa-soft: #f6f7f7;
 	--sa-surface: #fff;
 	--sa-good: #00843d;
 	--sa-bad: #b32d2e;
-	--sa-radius: 8px;
+	--sa-radius: 12px;
 	color: var(--sa-text);
 	max-width: 1400px;
 }
@@ -299,6 +299,18 @@
 }
 .snn-a .snn-a-card-title {
 	min-width: 0;
+	flex: 1;
+}
+.snn-a .snn-a-grip {
+	color: var(--sa-muted);
+	font-size: 16px;
+	line-height: 1.3;
+	margin: -2px 0 0 -4px;
+	cursor: grab;
+	user-select: none;
+}
+.snn-a .snn-a-card:hover .snn-a-grip {
+	color: var(--sa-accent);
 }
 .snn-a .snn-a-card-head h2 {
 	font-size: 15px;
@@ -851,6 +863,81 @@
 }
 .snn-a .snn-a-tools .snn-a-card-head {
 	padding-top: 16px;
+}
+
+/* ------------------------------------------- Google Analytics style details */
+
+.snn-a .snn-a-bars-wrap {
+	padding-top: 4px;
+}
+.snn-a .snn-a-bars {
+	display: flex;
+	align-items: flex-end;
+	gap: 3px;
+	border-bottom: 1px solid var(--sa-line);
+}
+.snn-a .snn-a-bar-col {
+	flex: 1;
+	height: 100%;
+	display: flex;
+	align-items: flex-end;
+	min-width: 0;
+}
+.snn-a .snn-a-bar-col i {
+	display: block;
+	width: 100%;
+	background: var(--sa-accent);
+	border-radius: 3px 3px 0 0;
+}
+.snn-a .snn-a-bar-col:hover i {
+	opacity: 0.75;
+}
+.snn-a .snn-a-bars-axis {
+	display: flex;
+	justify-content: space-between;
+	font-size: 11px;
+	color: var(--sa-muted);
+	margin-top: 6px;
+}
+.snn-a .snn-a-barlist {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+.snn-a .snn-a-barlist li {
+	padding: 9px 0 10px;
+	border-bottom: 1px solid var(--sa-line-soft);
+}
+.snn-a .snn-a-barlist li:last-child {
+	border-bottom: 0;
+}
+.snn-a .snn-a-barlist-row {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	font-size: 13px;
+	margin-bottom: 6px;
+}
+.snn-a .snn-a-barlist-label {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.snn-a .snn-a-barlist-row strong {
+	font-variant-numeric: tabular-nums;
+	flex: none;
+}
+.snn-a .snn-a-barlist .snn-a-bar-track {
+	height: 4px;
+}
+.snn-a .snn-a-live-summary {
+	margin-bottom: 18px;
+}
+.snn-a .snn-a-live-summary p {
+	margin: 2px 0 0;
+}
+.snn-a .snn-a-live-summary .snn-a-live-count {
+	font-size: 40px;
+	line-height: 1.1;
 }
 
 /* -------------------------------------------------------- responsive */

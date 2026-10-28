@@ -375,6 +375,7 @@
 		opts = opts || {};
 		var section = h('section', { class: 'snn-a-card' + (opts.wide ? ' is-wide' : ''), 'aria-label': title }, [
 			h('header', { class: 'snn-a-card-head' }, [
+				opts.grip ? h('span', { class: 'snn-a-grip', 'aria-hidden': 'true', title: 'Drag to move', text: '⠿' }) : null,
 				h('div', { class: 'snn-a-card-title' }, [
 					h('h2', { text: title }),
 					opts.sub ? h('p', { class: 'snn-a-card-sub', text: opts.sub }) : null
@@ -560,6 +561,62 @@
 
 	// ------------------------------------------------------------- views
 
+	/** Last 30 one-minute slots, oldest first. The API returns only minutes that had views, so the gaps are filled with 0. */
+	function minuteSlots(perMinute) {
+		var end = Math.floor(Date.now() / 1000 / 60) * 60;
+		var byMinute = {};
+		(perMinute || []).forEach(function (m) {
+			byMinute[m.minute] = m.views;
+		});
+		var slots = [];
+		for (var i = 29; i >= 0; i--) {
+			var at = end - i * 60;
+			slots.push({ at: at, views: byMinute[at] || 0 });
+		}
+		return slots;
+	}
+
+	/** Column chart of views for the last 30 minutes. Each column is one minute. */
+	function minuteBars(perMinute, height) {
+		var slots = minuteSlots(perMinute);
+		var max = Math.max(1, Math.max.apply(null, slots.map(function (s) { return s.views; })));
+		return h('div', { class: 'snn-a-bars-wrap' }, [
+			h('div', { class: 'snn-a-bars', style: 'height:' + (height || 120) + 'px', role: 'img', 'aria-label': 'Views per minute, last 30 minutes' }, slots.map(function (s) {
+				var share = s.views ? Math.max(4, Math.round(100 * s.views / max)) : 0;
+				return h('span', { class: 'snn-a-bar-col', title: clock(s.at) + ': ' + n(s.views) + ' views' }, h('i', { style: 'height:' + share + '%' }));
+			})),
+			h('div', { class: 'snn-a-bars-axis' }, [h('span', { text: clock(slots[0].at) }), h('span', { text: 'now' })])
+		]);
+	}
+
+	/** Ranked list with a bar under each label. rows: [label, value]. */
+	function barList(rows, emptyText) {
+		if (!rows.length) {
+			return empty(emptyText);
+		}
+		var max = Math.max(1, Math.max.apply(null, rows.map(function (r) { return r[1]; })));
+		return h('ul', { class: 'snn-a-barlist' }, rows.map(function (r) {
+			return h('li', {}, [
+				h('div', { class: 'snn-a-barlist-row' }, [h('span', { class: 'snn-a-barlist-label', text: r[0] }), h('strong', { text: n(r[1]) })]),
+				h('div', { class: 'snn-a-bar-track' }, h('div', { class: 'snn-a-bar', style: 'width:' + Math.round(100 * r[1] / max) + '%' }))
+			]);
+		}));
+	}
+
+	function liveSummary(data) {
+		return h('div', { class: 'snn-a-live-summary' }, [
+			h('div', { class: 'snn-a-live' }, [
+				h('span', { class: 'snn-a-live-dot', 'aria-hidden': 'true' }),
+				h('strong', { class: 'snn-a-live-count', text: n(data.active) })
+			]),
+			h('p', { class: 'snn-a-muted', text: 'visitors active in the last 5 minutes' })
+		]);
+	}
+
+	function pageName(p) {
+		return p.title || p.path;
+	}
+
 	function renderDashboard(rp) {
 		var period = rangeLabel(rp);
 		var grid = h('div', { class: 'snn-a-grid' });
@@ -605,7 +662,7 @@
 
 		function mountCard(id, title, sub, link, load, wide) {
 			var content = h('div', {}, skeleton(4));
-			grid.appendChild(card(title, content, { id: id, sub: sub, link: link, wide: wide }));
+			grid.appendChild(card(title, content, { id: id, sub: sub, link: link, wide: wide, grip: true }));
 			load(content).catch(function (err) {
 				clear(content);
 				content.appendChild(failed(err));
@@ -687,13 +744,13 @@
 			});
 		});
 
-		mountCard('realtime', 'Realtime', 'Last 5 minutes', pageLink('snn-analytics-realtime'), function (content) {
+		mountCard('realtime', 'Realtime', 'Views per minute, last 30 minutes', pageLink('snn-analytics-realtime'), function (content) {
 			return api('stats/realtime').then(function (data) {
 				clear(content);
-				content.appendChild(liveCount(data.active));
-				content.appendChild(table(['Live page', numCol('Visitors')], data.pages.map(function (p) {
-					return [pageCell(p), n(p.visitors)];
-				}), 'Nobody is on the site right now.'));
+				content.appendChild(liveSummary(data));
+				content.appendChild(minuteBars(data.per_minute, 110));
+				content.appendChild(h('p', { class: 'snn-a-subhead', text: 'Live pages' }));
+				content.appendChild(barList(data.pages.slice(0, 5).map(function (p) { return [pageName(p), p.visitors]; }), 'Nobody is on the site right now.'));
 			});
 		});
 
@@ -774,20 +831,23 @@
 			customize.appendChild(h('p', { class: 'snn-a-muted snn-a-status' }, [status]));
 		}
 
-		// Drag cards to reorder. Only the card title starts a drag, so links and buttons still work.
+		// Drag any card to move it. A press on a link, button or input keeps its normal action.
 		var dragging = null;
 		grid.addEventListener('mousedown', function (event) {
+			Array.prototype.forEach.call(grid.children, function (c) { c.draggable = false; });
 			var box = event.target.closest('.snn-a-card');
-			if (box) {
-				box.draggable = !!event.target.closest('.snn-a-card-head') && !event.target.closest('a, button, input');
+			if (box && !event.target.closest('a, button, input, select, label')) {
+				box.draggable = true;
 			}
 		});
 		grid.addEventListener('dragstart', function (event) {
 			dragging = event.target.closest('.snn-a-card');
-			if (dragging) {
-				event.dataTransfer.effectAllowed = 'move';
-				dragging.classList.add('is-dragging');
+			if (!dragging) {
+				return;
 			}
+			event.dataTransfer.effectAllowed = 'move';
+			event.dataTransfer.setData('text/plain', dragging.getAttribute('data-card'));
+			dragging.classList.add('is-dragging');
 		});
 		grid.addEventListener('dragover', function (event) {
 			if (!dragging) {
@@ -795,10 +855,14 @@
 			}
 			event.preventDefault();
 			var over = event.target.closest('.snn-a-card');
-			if (over && over !== dragging) {
-				var rect = over.getBoundingClientRect();
-				var after = event.clientY > rect.top + rect.height / 2;
-				grid.insertBefore(dragging, after ? over.nextSibling : over);
+			if (!over || over === dragging) {
+				return;
+			}
+			var rect = over.getBoundingClientRect();
+			var before = event.clientY < rect.top + rect.height / 2;
+			var target = before ? over : over.nextElementSibling;
+			if (target !== dragging && target !== dragging.nextElementSibling) {
+				grid.insertBefore(dragging, target);
 			}
 		});
 		grid.addEventListener('dragend', function () {
@@ -818,8 +882,6 @@
 	function renderRealtime() {
 		var updated = h('span', { class: 'snn-a-muted', role: 'status' });
 		var content = h('div', {}, skeleton(6));
-		var ui = null;
-		var chart = null;
 		var timer = null;
 
 		root.appendChild(h('div', { class: 'snn-a-toolbar snn-a-toolbar-between' }, [
@@ -828,64 +890,25 @@
 		]));
 		root.appendChild(content);
 
-		function build() {
-			clear(content);
-			var count = h('strong', { class: 'snn-a-live-count' });
-			var canvas = chartBox(220);
-			var pages = h('div', {});
-			var referrers = h('div', {});
-			var countries = h('div', {});
-			content.appendChild(h('div', { class: 'snn-a-live' }, [
-				h('span', { class: 'snn-a-live-dot', 'aria-hidden': 'true' }),
-				count,
-				h('span', { text: ' visitors active in the last 5 minutes' })
-			]));
-			content.appendChild(card('Views per minute', canvas, { sub: 'Last 30 minutes', wide: true }));
-			content.appendChild(h('div', { class: 'snn-a-split' }, [
-				card('Live pages', pages),
-				card('Live referrers', referrers),
-				card('Live countries', countries)
-			]));
-			ui = { count: count, canvas: canvas.querySelector('canvas'), pages: pages, referrers: referrers, countries: countries };
-		}
-
+		// Rebuilt in one step each refresh, so nothing visibly flickers.
 		function paint(data) {
-			if (!ui) {
-				build();
-			}
-			ui.count.textContent = n(data.active);
-			clear(ui.pages);
-			ui.pages.appendChild(table(['Page', numCol('Visitors')], data.pages.map(function (p) {
-				return [pageCell(p), n(p.visitors)];
-			}), 'Nobody is on the site right now.'));
-			clear(ui.referrers);
-			ui.referrers.appendChild(table(['Source', numCol('Visitors')], data.referrers.map(function (r) {
-				return [r.domain, n(r.visitors)];
-			}), 'No visitors.'));
-			clear(ui.countries);
-			ui.countries.appendChild(table(['Country', numCol('Visitors')], data.countries.map(function (c) {
-				return [countryName(c.code), n(c.visitors)];
-			}), 'No visitors.'));
-
-			var labels = data.per_minute.map(function (m) { return clock(m.minute); });
-			var views = data.per_minute.map(function (m) { return m.views; });
-			// Update the existing chart in place, so the chart does not flicker every 10 seconds.
-			if (!chart) {
-				chart = lineChart(ui.canvas, labels, [{ label: 'Views', color: ACCENT, data: views, fill: true }]);
-			} else {
-				chart.data.labels = labels;
-				chart.data.datasets[0].data = views;
-				chart.update('none');
-			}
+			clear(content);
+			content.appendChild(card('Active now', [liveSummary(data), minuteBars(data.per_minute, 200)], {
+				sub: 'Views per minute, last 30 minutes',
+				wide: true
+			}));
+			content.appendChild(h('div', { class: 'snn-a-split' }, [
+				card('Live pages', barList(data.pages.map(function (p) { return [pageName(p), p.visitors]; }), 'Nobody is on the site right now.'), { sub: 'Visitors in the last 5 minutes' }),
+				card('Live countries', barList(data.countries.map(function (c) { return [countryName(c.code), c.visitors]; }), 'No visitors.'), { sub: 'Visitors in the last 5 minutes' }),
+				card('Live referrers', barList(data.referrers.map(function (r) { return [r.domain, r.visitors]; }), 'No visitors.'), { sub: 'Visitors in the last 5 minutes' })
+			]));
 			updated.textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 		}
 
 		function tick() {
 			api('stats/realtime').then(paint).catch(function (err) {
-				if (!ui) {
-					clear(content);
-					content.appendChild(failed(err, tick));
-				}
+				clear(content);
+				content.appendChild(failed(err, tick));
 			});
 		}
 
