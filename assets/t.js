@@ -103,6 +103,7 @@
 	// Activity waits until the page view is stored, or the server could not find its view and would
 	// drop it (a scroll restored on reload, a quick click). A hidden page sends at once: it may not come back.
 	var viewStored = false;
+	var viewSent = false;
 	var waiting = [];
 
 	function flush(key) {
@@ -117,7 +118,10 @@
 	}
 
 	function send(body) {
-		if (viewStored || document.visibilityState === 'hidden') {
+		// Nothing leaves before the page view, and the page view waits for a sign of a person (see human()).
+		if (!viewSent) {
+			waiting.push(body);
+		} else if (viewStored || document.visibilityState === 'hidden') {
 			flush(vk);
 			deliver(body);
 		} else {
@@ -411,6 +415,8 @@
 	 * The server reads only the referrer's host and the UTM values, so only those are sent. Long referrers
 	 * and click ids (fbclid, gclid) could otherwise push the hit past the server's 4 KB limit and lose it.
 	 */
+	var pending = null;
+
 	function pageview() {
 		var ref = '';
 		try {
@@ -422,10 +428,8 @@
 			return pair.slice(0, 300);
 		}).join('&');
 
-		var key = vk;
-		deliver({ e: 'pv', vk: vk, pg: cfg.pg, r: ref, q: utm ? '?' + utm : '' }).then(function () {
-			flush(key);
-		});
+		pending = { e: 'pv', vk: vk, pg: cfg.pg, r: ref, q: utm ? '?' + utm : '' };
+		arm();
 		// Before images load, a page can look shorter than the window and count as fully read.
 		if (document.readyState === 'complete') {
 			windowScrolled();
@@ -434,11 +438,48 @@
 		}
 	}
 
+	/**
+	 * Vulnerability scanners and AI crawlers run real browsers: they load a page, never touch it and leave.
+	 * So the view is sent on a pointer, touch, wheel or key, or once the tab has been visible for 3 seconds,
+	 * so a reader who never touches the page still counts. A 404 needs a real interaction: that is where
+	 * scanners probe, and a person on a broken link moves or taps to leave it. Then the view they landed on
+	 * is sent with everything that waited for it. Scroll does not count, because the browser restores it
+	 * by itself on reload. A prerendered tab is hidden, so its clock starts only when it is shown.
+	 */
+	var gateTimer = 0;
+	function arm() {
+		window.clearTimeout(gateTimer);
+		if (!viewSent && cfg.pg && cfg.pg.k !== '404' && document.visibilityState === 'visible') {
+			gateTimer = window.setTimeout(human, 3000);
+		}
+	}
+
+	function human() {
+		if (viewSent || !pending) {
+			return;
+		}
+		viewSent = true;
+		window.clearTimeout(gateTimer);
+		var key = vk;
+		deliver(pending).then(function () {
+			flush(key);
+		});
+		// Activity that waited for the page view. It is held again until the server has stored the view.
+		var held = waiting.splice(0);
+		held.forEach(send);
+	}
+
+	['pointerdown', 'pointermove', 'touchstart', 'wheel', 'keydown'].forEach(function (type) {
+		document.addEventListener(type, human, { capture: true, passive: true });
+	});
+	document.addEventListener('visibilitychange', arm);
+
 	// A page restored from the back/forward cache is a new view, but the script does not run again.
 	window.addEventListener('pageshow', function (event) {
 		if (event.persisted) {
 			vk = viewKey();
 			viewStored = false;
+			viewSent = false;
 			waiting = [];
 			reached = {};
 			recent = {};
