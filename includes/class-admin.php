@@ -194,9 +194,9 @@ final class Admin {
 			return;
 		}
 
-		wp_enqueue_style( 'snn-a-admin', plugins_url( 'assets/admin/app.css', SNN_A_FILE ), [], SNN_A_VERSION );
+		wp_enqueue_style( 'snn-a-admin', plugins_url( 'assets/admin/app.css', SNN_A_FILE ), [], SNN_A_VERSION . '-' . (int) @filemtime( dirname( SNN_A_FILE ) . '/assets/admin/app.css' ) );
 		wp_enqueue_script( 'snn-a-chart', plugins_url( 'assets/vendor/chart.umd.min.js', SNN_A_FILE ), [], '4.4.1', true );
-		wp_enqueue_script( 'snn-a-admin', plugins_url( 'assets/admin/app.js', SNN_A_FILE ), [ 'snn-a-chart' ], SNN_A_VERSION, true );
+		wp_enqueue_script( 'snn-a-admin', plugins_url( 'assets/admin/app.js', SNN_A_FILE ), [ 'snn-a-chart' ], SNN_A_VERSION . '-' . (int) @filemtime( dirname( SNN_A_FILE ) . '/assets/admin/app.js' ), true );
 
 		wp_localize_script( 'snn-a-admin', 'SNNA', [
 			'rest'      => esc_url_raw( rest_url( API::NS . '/' ) ),

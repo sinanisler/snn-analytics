@@ -60,7 +60,9 @@ final class Frontend {
 			return;
 		}
 
-		wp_enqueue_script( 'snn-a-tracker', plugins_url( 'assets/t.js', SNN_A_FILE ), [], SNN_A_VERSION, true );
+		// The file's modified time is part of the version. A CDN keeps a script for months under one URL, so a
+		// changed t.js would otherwise never reach visitors until the plugin version is bumped.
+		wp_enqueue_script( 'snn-a-tracker', plugins_url( 'assets/t.js', SNN_A_FILE ), [], SNN_A_VERSION . '-' . (int) @filemtime( dirname( SNN_A_FILE ) . '/assets/t.js' ), true );
 		wp_script_add_data( 'snn-a-tracker', 'strategy', 'defer' );
 
 		self::$config = [
