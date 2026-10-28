@@ -2196,7 +2196,27 @@
 		});
 		build();
 
+		// Quick start: fills in where the link will be shared, so only the destination and a campaign name are left.
+		var about = h('div', { class: 'snn-a-explain', 'aria-live': 'polite', hidden: true });
+		var presets = h('div', { class: 'snn-a-presets' }, CAMPAIGN_PRESETS.map(function (p) {
+			return h('button', { type: 'button', class: 'button', 'data-tip': 'Sets source “' + p[1] + '” and medium “' + p[2] + '”.', onclick: function () {
+				inputs.utm_source.value = p[1];
+				inputs.utm_medium.value = p[2];
+				build();
+				explain(about, {
+					what: 'Tags ' + p[3] + ' with source “' + p[1] + '” and medium “' + p[2] + '”. Visits from it appear under that name in the results table.',
+					how: 'Enter your destination page, give the campaign a name such as spring-sale, then copy the finished link and paste it where you share it.',
+					why: 'Without a tag, these visits are mixed in with everyone else. With it you can see how many came from here and how many converted.'
+				});
+				about.hidden = false;
+				(inputs.url.value.trim() ? inputs.utm_campaign : inputs.url).focus();
+			} }, p[0]);
+		}));
+
 		return h('div', { class: 'snn-a-builder' }, [
+			h('p', { class: 'snn-a-presets-label' }, ['Quick start: where will you share the link?', tip('Pick a place and the source and medium are filled in for you.')]),
+			presets,
+			about,
 			grid,
 			h('div', { class: 'snn-a-output' }, [output, copy]),
 			hint
@@ -2443,27 +2463,282 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 	function funnelsPanel(goals, funnels, rp, reload, toGoals) {
 		var lead = h('p', { class: 'snn-a-lead', text: 'A funnel follows visitors through several goals in order, for example Viewed product, Added to cart, Paid. It shows how many make it to each step.' });
 		if (goals.length < 2) {
-			return card('Funnels', [lead, empty('You need at least two goals before you can build a funnel.', h('button', { type: 'button', class: 'button button-primary', onclick: toGoals }, 'Create goals'))]);
+			return card('Funnels', [
+				lead,
+				funnelTemplates(goals, reload),
+				h('p', { class: 'snn-a-hint' }, [
+					'Prefer to choose your own steps? Funnels are built from goals, so you need at least two. ',
+					h('button', { type: 'button', class: 'button-link', onclick: toGoals }, 'Create goals'),
+					'.'
+				])
+			]);
 		}
-		return card('Funnels', [lead, funnelList(funnels, rp, reload), funnelForm(goals, reload, !funnels.length)], {
+		return card('Funnels', [lead, funnelList(funnels, rp, reload), funnelTemplates(goals, reload), funnelForm(goals, reload, false)], {
 			sub: 'Steps must happen in order, within the time window.'
 		});
 	}
 
+	/**
+	 * The ways a goal can be defined, in plain language. Each one maps onto the three rule types the
+	 * tracker understands (page path, click selector, custom event), so no server change is needed.
+	 * `fixed` kinds ship their own selector and ask the user for nothing.
+	 */
+	var DOWNLOAD_SELECTOR = ['pdf', 'zip', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'csv', 'mp3', 'mp4'].map(function (ext) {
+		return 'a[href$=".' + ext + '" i]';
+	}).join(', ');
+
+	var GOAL_KINDS = [
+		{
+			key: 'page_exact', group: 'Page visits', label: 'Someone visits one specific page', short: 'Visits a page',
+			type: 1, match: 1, valueLabel: 'Page address', placeholder: '/thank-you/',
+			what: 'Counts a visit when someone opens exactly the page you enter, for example /thank-you/.',
+			how: 'Type the part of the address after your domain. For https://example.com/thank-you/ enter /thank-you/.',
+			why: 'The simplest and most reliable goal. Pages like “thank you for your order” are only reached after someone finishes something.'
+		},
+		{
+			key: 'page_contains', group: 'Page visits', label: 'Someone visits any page whose address contains a word', short: 'Visits a page containing',
+			type: 1, match: 2, valueLabel: 'Word in the address', placeholder: '/thank',
+			what: 'Counts a visit when the page address contains your text anywhere. “/thank” covers /thank-you/, /thanks/ and /thank-you-order/.',
+			how: 'Enter a short piece that is the same on every page you want to count, such as /checkout or /product/.',
+			why: 'Good when the finish line has several addresses, or when you are not sure of the exact address.'
+		},
+		{
+			key: 'page_prefix', group: 'Page visits', label: 'Someone visits any page inside a section', short: 'Visits a section',
+			type: 1, match: 3, valueLabel: 'Section address', placeholder: '/blog/',
+			what: 'Counts a visit when the page address starts with your text, so every page inside that section counts.',
+			how: 'Enter the start of the address, such as /blog/ for all posts or /shop/ for all products.',
+			why: 'Shows how many visits reach a whole area of your site, for example “read at least one blog post”.'
+		},
+		{
+			key: 'click_button', group: 'Clicks', label: 'Someone clicks a specific button or link', short: 'Clicks an element',
+			type: 2, match: 1, valueLabel: 'Which element? (CSS selector)', placeholder: '.buy-button or a[href*="checkout"]',
+			what: 'Counts a visit when someone clicks an element that matches your CSS selector.',
+			how: 'Enter a class, an ID or a link pattern: .buy-button for a class, #signup for an ID, a[href*="pricing"] for any link to a pricing page. Not sure? Right-click the button, choose Inspect and look for its class.',
+			why: 'Use it for actions that do not load a new page, like “Add to cart” or “Open chat”.'
+		},
+		{
+			key: 'click_phone', group: 'Clicks', label: 'Someone clicks a phone number', short: 'Clicks a phone number',
+			type: 2, match: 1, fixed: 'a[href^="tel:"]',
+			what: 'Counts a visit when someone taps or clicks a phone number link on your site.',
+			how: 'Nothing to enter. It works for every phone link that starts with tel:, which most themes and page builders create.',
+			why: 'On mobile, a tap on your number is often a lead. This tells you which visits turn into calls.'
+		},
+		{
+			key: 'click_email', group: 'Clicks', label: 'Someone clicks an email address', short: 'Clicks an email address',
+			type: 2, match: 1, fixed: 'a[href^="mailto:"]',
+			what: 'Counts a visit when someone clicks an email address link that opens their mail app.',
+			how: 'Nothing to enter. It works for every link that starts with mailto:.',
+			why: 'Shows how many visitors reach out by email without filling in a form.'
+		},
+		{
+			key: 'click_download', group: 'Clicks', label: 'Someone downloads a file', short: 'Downloads a file',
+			type: 2, match: 1, fixed: DOWNLOAD_SELECTOR,
+			what: 'Counts a visit when someone clicks a link to a file: PDF, Word, Excel, PowerPoint, ZIP, CSV, MP3 or MP4.',
+			how: 'Nothing to enter. Any link ending in one of those file types counts.',
+			why: 'See which visits grab your brochures, price lists or guides.'
+		},
+		{
+			key: 'click_outbound', group: 'Clicks', label: 'Someone clicks a link to another website', short: 'Clicks an outbound link',
+			type: 2, match: 1, fixed: 'a[href^="http"]:not([href*="' + window.location.hostname + '"])',
+			what: 'Counts a visit when someone clicks a link that leads away from your own site.',
+			how: 'Nothing to enter. Links to this site (' + window.location.hostname + ') are ignored.',
+			why: 'Useful when sending people to a partner, a booking system or a shop is the whole point of your page.'
+		},
+		{
+			key: 'click_submit', group: 'Clicks', label: 'Someone submits a form', short: 'Submits a form',
+			type: 2, match: 1, fixed: 'form [type="submit"], form button:not([type="button"]):not([type="reset"])',
+			what: 'Counts a visit when someone clicks the submit button of any form on your site.',
+			how: 'Nothing to enter. It counts the click on the button, so a form that fails validation can still count. For an exact count, use a thank-you page goal instead.',
+			why: 'A quick way to measure contact, sign-up and newsletter forms when you have no thank-you page.'
+		},
+		{
+			key: 'event', group: 'Advanced', label: 'My site sends a custom event', short: 'Custom event',
+			type: 3, match: 1, valueLabel: 'Event name', placeholder: 'signup',
+			what: 'Counts a visit when your own code sends an event with this exact name.',
+			how: 'Add window.snnA.track("signup") to your code at the moment the action succeeds, then enter the same name here: signup.',
+			why: 'The most precise option, for things the tracker cannot see by itself, such as a payment that went through.'
+		}
+	];
+
+	/** Quick start buttons: [button label, kind key, value (for kinds that need one), goal name]. */
+	var GOAL_PRESETS = [
+		['Pages', [
+			['Thank-you page', 'page_contains', '/thank', 'Thank-you page visited'],
+			['Shop page', 'page_prefix', '/shop', 'Shop visited'],
+			['Order received (WooCommerce)', 'page_contains', '/order-received', 'Order completed'],
+			['Checkout page', 'page_contains', '/checkout', 'Checkout visited'],
+			['Cart page', 'page_contains', '/cart', 'Cart visited'],
+			['Contact page', 'page_contains', '/contact', 'Contact page visited'],
+			['Pricing page', 'page_contains', '/pricing', 'Pricing viewed'],
+			['Sign-up or register page', 'page_contains', '/regist', 'Sign-up page visited'],
+			['Booking page', 'page_contains', '/book', 'Booking page visited'],
+			['Any blog post', 'page_prefix', '/blog/', 'Read a blog post']
+		]],
+		['Clicks and actions', [
+			['Phone number', 'click_phone', '', 'Phone number clicked'],
+			['Email address', 'click_email', '', 'Email address clicked'],
+			['File download', 'click_download', '', 'File downloaded'],
+			['Link to another site', 'click_outbound', '', 'Outbound link clicked'],
+			['Form submit', 'click_submit', '', 'Form submitted'],
+			['Add to cart (WooCommerce)', 'click_button', '.add_to_cart_button, .single_add_to_cart_button', 'Added to cart'],
+			['WhatsApp link', 'click_button', 'a[href*="wa.me"], a[href*="whatsapp.com"]', 'WhatsApp clicked'],
+			['Social media link', 'click_button', 'a[href*="facebook.com"], a[href*="instagram.com"], a[href*="linkedin.com"], a[href*="twitter.com"], a[href*="youtube.com"]', 'Social link clicked']
+		]]
+	];
+
+	/** Ready-made funnels. Steps name entries in GOAL_PRESETS; missing goals are created with the funnel. */
+	var FUNNEL_TEMPLATES = [
+		{
+			label: 'Online purchase', name: 'Purchase',
+			steps: ['Shop page', 'Add to cart (WooCommerce)', 'Checkout page', 'Order received (WooCommerce)'],
+			what: 'Follows shoppers from browsing the shop to a finished order.',
+			how: 'Works as is for WooCommerce. For another shop, change the page addresses afterwards by deleting and re-adding a goal.',
+			why: 'Shows exactly where shoppers give up: before adding to the cart, at checkout, or while paying.'
+		},
+		{
+			label: 'Contact request', name: 'Contact request',
+			steps: ['Contact page', 'Thank-you page'],
+			what: 'Follows visitors from the contact page to the thank-you page shown after sending the form.',
+			how: 'Your form needs to send people to a page whose address contains “thank”.',
+			why: 'Tells you how many people who open the contact page actually send a message.'
+		},
+		{
+			label: 'Sign-up', name: 'Sign-up',
+			steps: ['Sign-up or register page', 'Thank-you page'],
+			what: 'Follows visitors from the sign-up page to the page they see once they are registered.',
+			how: 'Registration should end on a page whose address contains “thank”.',
+			why: 'A low rate here means the sign-up form is too long or confusing.'
+		},
+		{
+			label: 'Blog reader to enquiry', name: 'Blog to enquiry',
+			steps: ['Any blog post', 'Pricing page', 'Contact page'],
+			what: 'Follows visitors from reading a blog post to the pricing page and then the contact page.',
+			how: 'Works if your posts live under /blog/. Otherwise create your own goals first.',
+			why: 'Shows whether your content brings in people who go on to become customers.'
+		}
+	];
+
+	function presetSpec(label) {
+		var found = null;
+		GOAL_PRESETS.forEach(function (group) {
+			group[1].forEach(function (p) {
+				if (p[0] === label) { found = { label: p[0], kind: p[1], value: p[2], name: p[3] }; }
+			});
+		});
+		return found;
+	}
+
+	/** The saved goal that already does what a preset does, if any. */
+	function findGoalFor(goals, spec) {
+		var k = kindByKey(spec.kind);
+		return goals.filter(function (g) {
+			return kindOf(g).key === spec.kind && (k.fixed || g.value === spec.value);
+		})[0] || null;
+	}
+
+	function funnelTemplates(goals, onSaved) {
+		var detail = h('div');
+		var buttons = h('div', { class: 'snn-a-presets' }, FUNNEL_TEMPLATES.map(function (t) {
+			return h('button', { type: 'button', class: 'button', 'data-tip': t.what, onclick: function () { choose(t); } }, t.label);
+		}));
+
+		function choose(t) {
+			var error = formMessage();
+			var go = h('button', { type: 'button', class: 'button button-primary' }, 'Create this funnel');
+			var specs = t.steps.map(presetSpec);
+			var box = h('div', { class: 'snn-a-explain' });
+			explain(box, t);
+			box.appendChild(h('p', {}, h('strong', { text: 'Steps, in order:' })));
+			box.appendChild(h('ol', {}, specs.map(function (spec) {
+				var have = findGoalFor(goals, spec);
+				return h('li', {}, [spec.name, h('span', { class: 'snn-a-muted', text: have ? ' (goal already exists)' : ' (goal will be created)' })]);
+			})));
+			go.addEventListener('click', function () {
+				go.disabled = true;
+				error.textContent = '';
+				var ids = [];
+				var chain = specs.reduce(function (p, spec) {
+					return p.then(function () {
+						var have = findGoalFor(goals, spec);
+						if (have) {
+							ids.push(have.id);
+							return null;
+						}
+						var k = kindByKey(spec.kind);
+						return send('goals', { name: spec.name, type: k.type, match: k.match, value: k.fixed || spec.value }).then(function (res) { ids.push(res.id); });
+					});
+				}, Promise.resolve());
+				chain.then(function () {
+					return send('funnels', { name: t.name, window_days: 7, steps: ids });
+				}).then(onSaved).catch(function (err) {
+					go.disabled = false;
+					error.textContent = err.message;
+				});
+			});
+			clear(detail);
+			detail.appendChild(box);
+			detail.appendChild(error);
+			detail.appendChild(h('p', {}, go));
+		}
+
+		return h('div', {}, [
+			h('p', { class: 'snn-a-presets-label' }, ['Quick start: pick a funnel', tip('Each button builds a typical funnel for you, creating any goals it needs. You get a preview first.')]),
+			buttons,
+			detail
+		]);
+	}
+
+	var CAMPAIGN_PRESETS = [
+		['Newsletter', 'newsletter', 'email', 'a link inside an email newsletter'],
+		['Email signature', 'email-signature', 'email', 'a link in your email signature'],
+		['Facebook post', 'facebook', 'social', 'a link in an unpaid Facebook post'],
+		['Instagram bio or story', 'instagram', 'social', 'the link in your Instagram bio or a story'],
+		['LinkedIn post', 'linkedin', 'social', 'a link in a LinkedIn post or profile'],
+		['X (Twitter) post', 'twitter', 'social', 'a link in a post on X'],
+		['YouTube description', 'youtube', 'video', 'a link in a YouTube video description'],
+		['Google Ads', 'google', 'cpc', 'the destination link of a Google Ads advertisement'],
+		['Facebook or Instagram ads', 'facebook', 'paid-social', 'the link of a paid ad on Facebook or Instagram'],
+		['QR code on print', 'qr-code', 'print', 'a link behind a QR code on a flyer, poster or business card'],
+		['Partner website', 'partner', 'referral', 'a link you give to a partner or sponsor']
+	];
+
+	function kindByKey(key) {
+		return GOAL_KINDS.filter(function (k) { return k.key === key; })[0];
+	}
+
+	/** Works out which kind a saved goal was created with. */
+	function kindOf(g) {
+		if (g.type === 1) {
+			return kindByKey({ 1: 'page_exact', 2: 'page_contains', 3: 'page_prefix' }[g.match] || 'page_exact');
+		}
+		if (g.type === 3) {
+			return kindByKey('event');
+		}
+		return GOAL_KINDS.filter(function (k) { return k.fixed && k.fixed === g.value; })[0] || kindByKey('click_button');
+	}
+
+	/** One plain sentence about what a saved goal watches for. */
+	function describeGoal(g) {
+		var kind = kindOf(g);
+		if (kind.key === 'page_exact') { return 'Visits ' + g.value; }
+		if (kind.key === 'page_contains') { return 'Visits a page containing ' + g.value; }
+		if (kind.key === 'page_prefix') { return 'Visits a page starting with ' + g.value; }
+		if (kind.key === 'event') { return 'Custom event “' + g.value + '”'; }
+		if (kind.key === 'click_button') { return 'Clicks ' + g.value; }
+		return kind.short;
+	}
+
 	function goalsTable(goals, reload) {
-		var types = { 1: 'Visits a page', 2: 'Clicks something', 3: 'Custom event' };
-		var matches = { 1: 'is', 2: 'contains', 3: 'starts with' };
 		if (!goals.length) {
 			return null;
 		}
 		return table(['Goal', 'Type', 'Rule', numCol('Conversions'), ''], goals.map(function (g) {
-			var rule = g.type === 1 ? (matches[g.match] || '') + ' ' + g.value : g.value;
 			var del = h('button', { type: 'button', class: 'button-link-delete', onclick: function () {
 				if (window.confirm('Delete this goal and its conversions? This cannot be undone.')) {
 					send('goals/delete', { id: g.id }).then(reload).catch(function (err) { window.alert(err.message); });
 				}
 			} }, 'Delete');
-			return [g.name || 'Untitled goal', types[g.type] || '', rule, n(g.conversions), del];
+			return [g.name || 'Untitled goal', kindOf(g).short, describeGoal(g), n(g.conversions), del];
 		}));
 	}
 
@@ -2471,59 +2746,71 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 		return h('p', { class: 'snn-a-hint is-error', role: 'alert' });
 	}
 
+	/** Three short paragraphs under a choice: what it does, how to set it up, why you would use it. */
+	function explain(box, info) {
+		clear(box);
+		[['What it counts', info.what], ['How to set it up', info.how], ['Why use it', info.why]].forEach(function (row) {
+			if (row[1]) {
+				box.appendChild(h('p', {}, [h('strong', { text: row[0] + ': ' }), row[1]]));
+			}
+		});
+		if (info.technical) {
+			box.appendChild(h('p', { class: 'snn-a-muted' }, ['Behind the scenes it watches for ', h('code', { text: info.technical }), '.']));
+		}
+	}
+
 	function goalForm(onSaved, open) {
 		var name = h('input', { type: 'text', placeholder: 'For example: Signed up' });
 		var value = h('input', { type: 'text', placeholder: '/thank-you/', class: 'regular-text' });
-		var type = h('select', {}, [
-			h('option', { value: '1' }, 'Someone visits a page'),
-			h('option', { value: '2' }, 'Someone clicks a button or link'),
-			h('option', { value: '3' }, 'My site sends a custom event (advanced)')
-		]);
-		var match = h('select', {}, [
-			h('option', { value: '1' }, 'is exactly'),
-			h('option', { value: '2' }, 'contains'),
-			h('option', { value: '3' }, 'starts with')
-		]);
+		var kind = h('select', {}, ['Page visits', 'Clicks', 'Advanced'].map(function (group) {
+			return h('optgroup', { label: group }, GOAL_KINDS.filter(function (k) { return k.group === group; }).map(function (k) {
+				return h('option', { value: k.key }, k.label);
+			}));
+		}));
 		var error = formMessage();
-		var hints = {
-			1: { label: 'Page address', placeholder: '/thank-you/', text: 'Use the part of the address after your domain. A thank-you page after a purchase or sign-up works well. Choose “contains” to cover a group of pages.' },
-			2: { label: 'Which element? (CSS selector)', placeholder: '.buy-button or a[href*="checkout"]', text: 'A CSS selector that points at the button or link. Not sure? Ask your developer, or use a page visit goal instead.' },
-			3: { label: 'Event name', placeholder: 'signup', text: 'Your site sends this with window.snnA.track("signup"). Needs a little code.' }
-		};
-		var valueLabel = h('span', { text: hints[1].label });
-		var matchField = h('label', { class: 'snn-a-field' }, [h('span', {}, ['The address', tip('How the page address is compared with what you type next. “Contains” also catches /thank-you/, /thanks/ and similar pages.')]), match]);
-		var hint = h('p', { class: 'snn-a-hint' }, hints[1].text);
+		var valueLabel = h('span');
+		var valueField = h('label', { class: 'snn-a-field is-full' }, [h('span', {}, [valueLabel, tip('What the goal looks for: a page address, an element on the page, or an event name.')]), value]);
+		var explanation = h('div', { class: 'snn-a-explain', 'aria-live': 'polite' });
 
-		type.addEventListener('change', function () {
-			var current = hints[type.value];
-			value.placeholder = current.placeholder;
-			valueLabel.textContent = current.label;
-			hint.textContent = current.text;
-			matchField.hidden = type.value !== '1';
+		function current() {
+			return kindByKey(kind.value);
+		}
+
+		function refresh() {
+			var k = current();
+			valueField.hidden = !!k.fixed;
+			if (!k.fixed) {
+				valueLabel.textContent = k.valueLabel;
+				value.placeholder = k.placeholder;
+			}
+			explain(explanation, { what: k.what, how: k.how, why: k.why, technical: k.fixed || null });
+		}
+
+		kind.addEventListener('change', function () {
+			value.value = '';
+			refresh();
 		});
 
-		// One-click starting points. They fill in the form; the user only has to check it and save.
-		var presets = [
-			['Visited a thank-you page', 1, 2, '/thank', 'Thank-you page visited'],
-			['Visited the checkout page', 1, 2, '/checkout', 'Checkout visited'],
-			['Visited the contact page', 1, 2, '/contact', 'Contact page visited'],
-			['Clicked a phone number', 2, 1, 'a[href^="tel:"]', 'Phone number clicked'],
-			['Clicked an email address', 2, 1, 'a[href^="mailto:"]', 'Email address clicked']
-		];
 		var form = h('details', { class: 'snn-a-add', open: open ? true : null });
 
 		function usePreset(p) {
-			type.value = String(p[1]);
-			type.dispatchEvent(new Event('change'));
-			match.value = String(p[2]);
-			value.value = p[3];
-			name.value = p[4];
+			kind.value = p[1];
+			refresh();
+			value.value = p[2];
+			name.value = p[3];
 			error.textContent = '';
 			form.open = true;
+			valueField.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 		}
 
-		var presetBox = h('div', { class: 'snn-a-presets' }, presets.map(function (p) {
-			return h('button', { type: 'button', class: 'button', onclick: function () { usePreset(p); } }, p[0]);
+		var presetBox = h('div', {}, GOAL_PRESETS.map(function (group) {
+			return h('div', {}, [
+				h('p', { class: 'snn-a-presets-sub', text: group[0] }),
+				h('div', { class: 'snn-a-presets' }, group[1].map(function (p) {
+					var k = kindByKey(p[1]);
+					return h('button', { type: 'button', class: 'button', 'data-tip': k.what, onclick: function () { usePreset(p); } }, p[0]);
+				}))
+			]);
 		}));
 
 		[
@@ -2531,27 +2818,30 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 			h('p', { class: 'snn-a-presets-label' }, ['Quick start: pick one, then press Save', tip('Each button fills in the form below with a common goal. You can change anything before you save.')]),
 			presetBox,
 			h('div', { class: 'snn-a-form-grid' }, [
-				h('label', { class: 'snn-a-field is-full' }, [h('span', {}, ['What counts as a conversion?', tip('Pick the kind of action. Visiting a page is the simplest and works for most sites.')]), type]),
-				matchField,
-				h('label', { class: 'snn-a-field' }, [h('span', {}, [valueLabel, tip('The page address, button selector or event name the goal looks for.')]), value]),
+				h('label', { class: 'snn-a-field is-full' }, [h('span', {}, ['What counts as a conversion?', tip('Pick the kind of action. Visiting a page is the simplest and works for most sites.')]), kind]),
+				h('div', { class: 'snn-a-field is-full' }, explanation),
+				valueField,
 				h('label', { class: 'snn-a-field is-full' }, [h('span', {}, ['Goal name (optional)', tip('A label for your reports. If you leave it empty the value above is used.')]), name])
 			]),
-			hint,
 			error,
 			h('p', {}, h('button', { type: 'button', class: 'button button-primary', onclick: function () {
 				error.textContent = '';
-				if (!value.value.trim()) {
+				var k = current();
+				var goalValue = k.fixed || value.value.trim();
+				if (!goalValue) {
 					error.textContent = 'Enter a value for this goal.';
 					return;
 				}
 				send('goals', {
-					name: name.value.trim(),
-					type: Number(type.value),
-					match: Number(match.value),
-					value: value.value.trim()
+					name: name.value.trim() || k.short,
+					type: k.type,
+					match: k.match,
+					value: goalValue
 				}).then(onSaved).catch(function (err) { error.textContent = err.message; });
 			} }, 'Save goal'))
 		].forEach(function (node) { form.appendChild(node); });
+
+		refresh();
 
 		return form;
 	}
@@ -2607,7 +2897,16 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 			if (goals[steps.length - 1]) {
 				select.value = String(goals[steps.length - 1].id);
 			}
-			stepBox.appendChild(h('label', { class: 'snn-a-field' }, [h('span', {}, ['Step ' + steps.length, steps.length === 1 ? tip('The first goal visitors reach. Each later step has to come after the one before it.') : null]), select]));
+			var note = h('span', { class: 'snn-a-select-note' });
+			function describe() {
+				var picked = goals.filter(function (g) { return String(g.id) === select.value; })[0];
+				note.textContent = picked
+					? 'Counts visits that match: ' + describeGoal(picked) + '. The visitor must have done the earlier steps first.'
+					: 'Choose the goal a visitor reaches at this step.';
+			}
+			select.addEventListener('change', describe);
+			describe();
+			stepBox.appendChild(h('label', { class: 'snn-a-field' }, [h('span', {}, ['Step ' + steps.length, steps.length === 1 ? tip('The first goal visitors reach. Each later step has to come after the one before it.') : null]), select, note]));
 		}
 
 		function removeStep() {

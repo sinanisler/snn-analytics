@@ -1013,8 +1013,33 @@
 .snn-a .snn-a-subtabs {
 	margin: 16px 0;
 }
-.snn-a [hidden] {
-	display: none !important;
+.snn-a .snn-a-presets-sub {
+	margin: 10px 0 0;
+	font-size: 12px;
+	color: var(--sa-muted);
+	text-transform: uppercase;
+	letter-spacing: .04em;
+}
+.snn-a .snn-a-explain {
+	background: var(--sa-soft);
+	border-radius: 6px;
+	padding: 10px 14px;
+	margin-top: 10px;
+	font-size: 13px;
+}
+.snn-a .snn-a-explain p {
+	margin: 6px 0;
+}
+.snn-a .snn-a-explain ol {
+	margin: 4px 0 0 18px;
+}
+.snn-a .snn-a-explain code {
+	font-size: 12px;
+	word-break: break-all;
+}
+.snn-a .snn-a-select-note {
+	font-size: 12px;
+	color: var(--sa-muted);
 }
 .snn-a .snn-a-presets {
 	display: flex;
