@@ -71,7 +71,7 @@ final class API {
 		$get( '/stats/referrers', [ self::class, 'referrers' ], $range, $for( 'dashboard', 'referrers' ) );
 		$get( '/stats/geo', [ self::class, 'geo' ], $range, $for( 'dashboard', 'geo' ) );
 		$get( '/stats/devices', [ self::class, 'devices' ], $range, $for( 'dashboard', 'devices' ) );
-		$get( '/stats/campaigns', [ self::class, 'campaigns' ], $range, $for( 'dashboard', 'campaigns' ) );
+		$get( '/stats/campaigns', [ self::class, 'campaigns' ], $range, $for( 'dashboard', 'goals' ) );
 		$get( '/stats/interactions', [ self::class, 'interactions' ], $range, $for( 'journeys' ) );
 		$get( '/stats/realtime', [ self::class, 'realtime' ], [], $for( 'dashboard', 'realtime' ) );
 		$get( '/stats/recent', [ self::class, 'recent' ], [

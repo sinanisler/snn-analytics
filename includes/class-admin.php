@@ -28,9 +28,8 @@ final class Admin {
 		'snn-analytics-referrers' => [ 'referrers', 'Referrers', self::MENU_CAP ],
 		'snn-analytics-geo'       => [ 'geo', 'Geographic', self::MENU_CAP ],
 		'snn-analytics-devices'   => [ 'devices', 'Devices', self::MENU_CAP ],
-		'snn-analytics-campaigns' => [ 'campaigns', 'Campaigns', self::MENU_CAP ],
 		'snn-analytics-journeys'  => [ 'journeys', 'Journeys', self::MENU_CAP ],
-		'snn-analytics-goals'     => [ 'goals', 'Goals & Funnels', self::MENU_CAP ],
+		'snn-analytics-goals'     => [ 'goals', 'Conversion Tracking', self::MENU_CAP ],
 		'snn-analytics-import'    => [ 'import', 'Import', self::MANAGE_CAP ],
 		'snn-analytics-settings'  => [ 'settings', 'Settings', self::MANAGE_CAP ],
 	];
@@ -50,7 +49,6 @@ final class Admin {
 		'snn-analytics-referrers',
 		'snn-analytics-geo',
 		'snn-analytics-devices',
-		'snn-analytics-campaigns',
 		'snn-analytics-goals',
 		'snn-analytics-settings',
 	];

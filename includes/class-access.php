@@ -30,8 +30,7 @@ final class Access {
 		'referrers' => 'Referrers',
 		'geo'       => 'Geographic',
 		'devices'   => 'Devices',
-		'campaigns' => 'Campaigns',
-		'goals'     => 'Goals & Funnels',
+		'goals'     => 'Conversion Tracking',
 		'widget'    => 'WordPress dashboard widget',
 	];
 

@@ -872,12 +872,12 @@
 			});
 		});
 
-		mountCard('campaigns', 'Campaigns', period, pageLink('snn-analytics-campaigns'), function (content) {
+		mountCard('campaigns', 'Campaigns', period, pageLink('snn-analytics-goals') + '&tab=campaigns', function (content) {
 			return api('stats/campaigns', rp).then(function (rows) {
 				clear(content);
 				content.appendChild(table(['Campaign', numCol('Sessions')], rows.filter(isTagged).slice(0, 5).map(function (c) {
 					return [campaignName(c), n(c.sessions)];
-				}), 'No tagged campaign visits in this range. Build tagged links on the Campaigns screen.'));
+				}), 'No tagged campaign visits in this range. Build tagged links under Conversion Tracking.'));
 			});
 		});
 
@@ -886,7 +886,7 @@
 				clear(content);
 				content.appendChild(table(['Goal', numCol('Conversions')], data.map(function (g) {
 					return [g.name, n(g.conversions)];
-				}), 'No goals yet. Add one on the Goals & Funnels screen.'));
+				}), 'No goals yet. Add one under Conversion Tracking.'));
 			});
 		});
 
@@ -1992,14 +1992,13 @@
 		});
 	}
 
-	function renderCampaigns(rp) {
-		var body = h('div', {}, skeleton(6));
-		root.appendChild(h('div', { class: 'snn-a-toolbar' }, rangeControl()));
-		root.appendChild(body);
-
-		api('stats/campaigns', rp).then(function (rows) {
-			clear(body);
-			body.appendChild(card('Campaigns', table(['Source', 'Medium', 'Campaign', 'Term', 'Content', numCol('Sessions'), numCol('Visitors'), numCol('Conversions')], rows.map(function (r) {
+	function campaignsPanel(rows, rp) {
+		return h('div', {}, [
+			h('p', { class: 'snn-a-lead', text: 'Add a few tags to the links you share (emails, social posts, ads) and this table shows which ones bring visitors and conversions. Start with the link builder below.' }),
+			card('Link builder', urlBuilder(), {
+				sub: 'Fill in the form, copy the link, and use it wherever you share your page.'
+			}),
+			card('Campaign results', table(['Source', 'Medium', 'Campaign', 'Term', 'Content', numCol('Sessions'), numCol('Visitors'), numCol('Conversions')], rows.map(function (r) {
 				return [
 					isTagged(r) ? (r.source || '–') : h('span', { class: 'snn-a-muted', text: 'Untagged visits' }),
 					r.medium,
@@ -2010,23 +2009,16 @@
 					n(r.visitors),
 					n(r.conversions)
 				];
-			}), 'No visits in this range.'), { sub: rangeLabel(rp) }));
-		}).catch(function (err) {
-			clear(body);
-			body.appendChild(failed(err, render));
-		});
-
-		root.appendChild(card('Campaign URL builder', urlBuilder(), {
-			sub: 'Tag a link so its visits are counted as a campaign. Source and campaign are required.'
-		}));
+			}), 'No visits in this range.'), { sub: rangeLabel(rp) })
+		]);
 	}
 
 	function urlBuilder() {
 		var fields = [
 			['url', 'Destination URL', 'url', 'https://example.com/landing/', true],
-			['utm_source', 'Source', 'text', 'newsletter', false],
-			['utm_medium', 'Medium', 'text', 'email', false],
-			['utm_campaign', 'Campaign', 'text', 'spring-sale', false],
+			['utm_source', 'Source (required): where you share it', 'text', 'newsletter', false],
+			['utm_medium', 'Medium: the kind of channel', 'text', 'email', false],
+			['utm_campaign', 'Campaign (required): a name for it', 'text', 'spring-sale', false],
 			['utm_term', 'Term (optional)', 'text', '', false],
 			['utm_content', 'Content (optional)', 'text', '', false]
 		];
@@ -2256,34 +2248,120 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 		load();
 	}
 
-	function renderGoals(rp) {
-		var body = h('div', {}, skeleton(6));
-		root.appendChild(h('div', { class: 'snn-a-toolbar' }, rangeControl()));
-		root.appendChild(body);
+	/**
+	 * Conversion Tracking: goals, funnels and campaigns on one screen. A conversion is a visit
+	 * that did something you care about. The tabs share one data load and a short setup list
+	 * walks new users through the order to do things in.
+	 */
+	function renderConversions(rp) {
+		var TABS = [['goals', 'Goals'], ['funnels', 'Funnels'], ['campaigns', 'Campaigns']];
+		var tab = new URLSearchParams(window.location.search).get('tab');
+		if (!TABS.some(function (t) { return t[0] === tab; })) {
+			tab = 'goals';
+		}
 
-		function load() {
-			Promise.all([api('goals', rp), api('funnels', rp)]).then(function (results) {
-				clear(body);
-				body.appendChild(card('Goals', [goalsTable(results[0], load), goalForm(load)], {
-					sub: 'A goal counts once per visit. Add a rule, then review its conversions here.'
-				}));
-				body.appendChild(card('Funnels', [funnelList(results[1], rp, load), funnelForm(results[0], load)], {
-					sub: 'Steps must happen in order, within the time window.'
-				}));
-			}).catch(function (err) {
-				clear(body);
-				body.appendChild(failed(err, load));
+		var data = null;
+		var intro = h('div');
+		var nav = h('div', { class: 'snn-a-segment snn-a-tabs', role: 'group', 'aria-label': 'Conversion tracking sections' });
+		var panel = h('div', {}, skeleton(6));
+
+		root.appendChild(h('div', { class: 'snn-a-toolbar' }, rangeControl()));
+		root.appendChild(intro);
+		root.appendChild(nav);
+		root.appendChild(panel);
+
+		function pick(next) {
+			tab = next;
+			var url = new URL(window.location.href);
+			url.searchParams.set('tab', next);
+			window.history.replaceState(null, '', url.toString());
+			draw();
+		}
+
+		function drawIntro() {
+			clear(intro);
+			var steps = [
+				['Create a goal', 'Choose the action that counts as a win, like reaching a thank-you page or clicking a buy button.', data.goals.length > 0, 'goals'],
+				['Tag your links (optional)', 'See which emails, posts and ads bring people who convert.', data.campaigns.some(isTagged), 'campaigns'],
+				['Build a funnel (optional)', 'Follow visitors through several goals in order and see where they drop off.', data.funnels.length > 0, 'funnels']
+			];
+			if (steps.every(function (s) { return s[2]; })) {
+				return;
+			}
+			intro.appendChild(card('Get started in three steps', h('ol', { class: 'snn-a-checklist' }, steps.map(function (s) {
+				return h('li', { class: s[2] ? 'is-done' : '' }, [
+					h('span', { class: 'snn-a-check', 'aria-hidden': 'true', text: s[2] ? '✓' : '' }),
+					h('div', {}, [
+						h('strong', {}, h('a', { href: '#', onclick: function (event) { event.preventDefault(); pick(s[3]); } }, s[0])),
+						h('span', { class: 'snn-a-muted', text: ' ' + s[1] })
+					])
+				]);
+			})), { sub: 'A conversion is a visit that did something you care about. Nothing is counted until you create a goal.' }));
+		}
+
+		function drawNav() {
+			clear(nav);
+			TABS.forEach(function (t) {
+				var active = tab === t[0];
+				nav.appendChild(h('button', {
+					type: 'button',
+					class: 'snn-a-seg' + (active ? ' is-active' : ''),
+					'aria-pressed': active ? 'true' : 'false',
+					onclick: function () { pick(t[0]); }
+				}, t[1]));
 			});
 		}
 
+		function draw() {
+			drawNav();
+			clear(panel);
+			if (tab === 'funnels') {
+				panel.appendChild(funnelsPanel(data.goals, data.funnels, rp, load, function () { pick('goals'); }));
+			} else if (tab === 'campaigns') {
+				panel.appendChild(campaignsPanel(data.campaigns, rp));
+			} else {
+				panel.appendChild(goalsPanel(data.goals, load));
+			}
+		}
+
+		function load() {
+			Promise.all([api('goals', rp), api('funnels', rp), api('stats/campaigns', rp)]).then(function (results) {
+				data = { goals: results[0], funnels: results[1], campaigns: results[2] };
+				drawIntro();
+				draw();
+			}).catch(function (err) {
+				clear(panel);
+				panel.appendChild(failed(err, load));
+			});
+		}
+
+		drawNav();
 		load();
 	}
 
+	function goalsPanel(goals, reload) {
+		return card('Goals', [
+			h('p', { class: 'snn-a-lead', text: 'A goal is something you want visitors to do. Each visit counts once per goal, no matter how often it happens.' }),
+			goalsTable(goals, reload),
+			goalForm(reload, !goals.length)
+		], { sub: goals.length ? null : 'Add your first goal below.' });
+	}
+
+	function funnelsPanel(goals, funnels, rp, reload, toGoals) {
+		var lead = h('p', { class: 'snn-a-lead', text: 'A funnel follows visitors through several goals in order, for example Viewed product, Added to cart, Paid. It shows how many make it to each step.' });
+		if (goals.length < 2) {
+			return card('Funnels', [lead, empty('You need at least two goals before you can build a funnel.', h('button', { type: 'button', class: 'button button-primary', onclick: toGoals }, 'Create goals'))]);
+		}
+		return card('Funnels', [lead, funnelList(funnels, rp, reload), funnelForm(goals, reload, !funnels.length)], {
+			sub: 'Steps must happen in order, within the time window.'
+		});
+	}
+
 	function goalsTable(goals, reload) {
-		var types = { 1: 'Page visited', 2: 'Click', 3: 'Custom event' };
-		var matches = { 1: 'equals', 2: 'contains', 3: 'starts with' };
+		var types = { 1: 'Visits a page', 2: 'Clicks something', 3: 'Custom event' };
+		var matches = { 1: 'is', 2: 'contains', 3: 'starts with' };
 		if (!goals.length) {
-			return empty('No goals yet. Add one below.');
+			return null;
 		}
 		return table(['Goal', 'Type', 'Rule', numCol('Conversions'), ''], goals.map(function (g) {
 			var rule = g.type === 1 ? (matches[g.match] || '') + ' ' + g.value : g.value;
@@ -2300,41 +2378,44 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 		return h('p', { class: 'snn-a-hint is-error', role: 'alert' });
 	}
 
-	function goalForm(onSaved) {
-		var name = h('input', { type: 'text', placeholder: 'Name, for example Signed up' });
+	function goalForm(onSaved, open) {
+		var name = h('input', { type: 'text', placeholder: 'For example: Signed up' });
 		var value = h('input', { type: 'text', placeholder: '/thank-you/', class: 'regular-text' });
 		var type = h('select', {}, [
-			h('option', { value: '1' }, 'Page visited'),
-			h('option', { value: '2' }, 'Click (CSS selector)'),
-			h('option', { value: '3' }, 'Custom event')
+			h('option', { value: '1' }, 'Someone visits a page'),
+			h('option', { value: '2' }, 'Someone clicks a button or link'),
+			h('option', { value: '3' }, 'My site sends a custom event (advanced)')
 		]);
 		var match = h('select', {}, [
-			h('option', { value: '1' }, 'equals'),
+			h('option', { value: '1' }, 'is exactly'),
 			h('option', { value: '2' }, 'contains'),
 			h('option', { value: '3' }, 'starts with')
 		]);
 		var error = formMessage();
 		var hints = {
-			1: { placeholder: '/thank-you/', text: 'Matches the page path. Use “contains” to match a group of pages.' },
-			2: { placeholder: '.buy-button or a[href*="checkout"]', text: 'A CSS selector for the element a visitor clicks.' },
-			3: { placeholder: 'signup', text: 'Sent from your site with window.snnA.track("signup").' }
+			1: { label: 'Page address', placeholder: '/thank-you/', text: 'Use the part of the address after your domain. A thank-you page after a purchase or sign-up works well. Choose “contains” to cover a group of pages.' },
+			2: { label: 'Which element? (CSS selector)', placeholder: '.buy-button or a[href*="checkout"]', text: 'A CSS selector that points at the button or link. Not sure? Ask your developer, or use a page visit goal instead.' },
+			3: { label: 'Event name', placeholder: 'signup', text: 'Your site sends this with window.snnA.track("signup"). Needs a little code.' }
 		};
+		var valueLabel = h('span', { text: hints[1].label });
+		var matchField = h('label', { class: 'snn-a-field' }, [h('span', { text: 'The address' }), match]);
 		var hint = h('p', { class: 'snn-a-hint' }, hints[1].text);
 
 		type.addEventListener('change', function () {
 			var current = hints[type.value];
 			value.placeholder = current.placeholder;
+			valueLabel.textContent = current.label;
 			hint.textContent = current.text;
-			match.disabled = type.value !== '1';
+			matchField.hidden = type.value !== '1';
 		});
 
-		return h('details', { class: 'snn-a-add' }, [
+		return h('details', { class: 'snn-a-add', open: open ? true : null }, [
 			h('summary', {}, 'Add a goal'),
 			h('div', { class: 'snn-a-form-grid' }, [
-				h('label', { class: 'snn-a-field' }, [h('span', { text: 'Name' }), name]),
-				h('label', { class: 'snn-a-field' }, [h('span', { text: 'Type' }), type]),
-				h('label', { class: 'snn-a-field' }, [h('span', { text: 'Match' }), match]),
-				h('label', { class: 'snn-a-field is-full' }, [h('span', { text: 'Value' }), value])
+				h('label', { class: 'snn-a-field is-full' }, [h('span', { text: 'What counts as a conversion?' }), type]),
+				matchField,
+				h('label', { class: 'snn-a-field' }, [valueLabel, value]),
+				h('label', { class: 'snn-a-field is-full' }, [h('span', { text: 'Goal name (optional)' }), name])
 			]),
 			hint,
 			error,
@@ -2356,7 +2437,7 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 
 	function funnelList(funnels, rp, reload) {
 		if (!funnels.length) {
-			return empty('No funnels yet. A funnel shows how many visits reach each step, in order.');
+			return null;
 		}
 		return h('div', { class: 'snn-a-funnels' }, funnels.map(function (f) {
 			var holder = h('div', { class: 'snn-a-funnel' }, skeleton(3));
@@ -2389,7 +2470,7 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 		}));
 	}
 
-	function funnelForm(goals, onSaved) {
+	function funnelForm(goals, onSaved, open) {
 		var name = h('input', { type: 'text', placeholder: 'Funnel name, for example Purchase' });
 		var days = h('input', { type: 'number', min: 1, max: 365, value: 7, 'aria-label': 'Window in days' });
 		var error = formMessage();
@@ -2411,14 +2492,10 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 			}
 		}
 
-		if (!goals.length) {
-			return empty('Create at least two goals before you build a funnel.');
-		}
-
 		addStep();
 		addStep();
 
-		return h('details', { class: 'snn-a-add' }, [
+		return h('details', { class: 'snn-a-add', open: open ? true : null }, [
 			h('summary', {}, 'Add a funnel'),
 			h('div', { class: 'snn-a-form-grid' }, [
 				h('label', { class: 'snn-a-field' }, [h('span', { text: 'Name' }), name]),
@@ -2950,9 +3027,8 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 		referrers: renderReferrers,
 		geo: renderGeo,
 		devices: renderDevices,
-		campaigns: renderCampaigns,
 		journeys: renderJourneys,
-		goals: renderGoals,
+		goals: renderConversions,
 		import: renderImport,
 		settings: function () { if (tools) { renderTools(); } }
 	};

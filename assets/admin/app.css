@@ -1003,6 +1003,47 @@
 	font-weight: 600;
 }
 
+/* ------------------------------------------------- conversion tracking */
+
+.snn-a .snn-a-lead {
+	margin: 0 0 14px;
+	color: var(--sa-muted);
+	max-width: 70ch;
+}
+.snn-a .snn-a-tabs {
+	margin: 16px 0;
+}
+.snn-a .snn-a-checklist {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	gap: 12px;
+}
+.snn-a .snn-a-checklist li {
+	display: flex;
+	gap: 10px;
+	align-items: flex-start;
+}
+.snn-a .snn-a-check {
+	flex: none;
+	width: 20px;
+	height: 20px;
+	border: 2px solid var(--sa-line);
+	border-radius: 50%;
+	box-sizing: border-box;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 12px;
+	line-height: 1;
+	color: #fff;
+}
+.snn-a .snn-a-checklist .is-done .snn-a-check {
+	background: var(--sa-accent);
+	border-color: var(--sa-accent);
+}
+
 /* ------------------------------------------------------------ funnels */
 
 .snn-a .snn-a-funnels {
