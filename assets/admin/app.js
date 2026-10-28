@@ -88,7 +88,8 @@
 			return current ? { text: 'new', cls: 'up' } : { text: '–', cls: '' };
 		}
 		var diff = Math.round((current - previous) / previous * 1000) / 10;
-		return { text: (diff > 0 ? '+' : '') + diff + '%', cls: diff > 0 ? 'up' : diff < 0 ? 'down' : '' };
+		var arrow = diff > 0 ? '↗ +' : diff < 0 ? '↘ −' : '→ ';
+		return { text: arrow + Math.abs(diff) + '%', cls: diff > 0 ? 'up' : diff < 0 ? 'down' : '' };
 	}
 
 	function ago(ts) {
@@ -218,10 +219,13 @@
 
 	// -------------------------------------------------------- components
 
-	function card(title, body, link) {
+	function card(title, body, link, subtitle) {
 		return h('section', { class: 'snn-a-card' }, [
 			h('header', { class: 'snn-a-card-head' }, [
-				h('h2', { text: title }),
+				h('div', {}, [
+					h('h2', { text: title }),
+					subtitle ? h('span', { class: 'snn-a-card-sub', text: subtitle }) : null
+				]),
 				link ? h('a', { href: link }, 'See more →') : null
 			]),
 			h('div', { class: 'snn-a-card-body' }, body)
@@ -249,9 +253,12 @@
 
 	function kpi(label, value, delta) {
 		return h('div', { class: 'snn-a-kpi' }, [
-			h('div', { class: 'snn-a-kpi-label', text: label }),
+			h('div', { class: 'snn-a-kpi-label' }, h('span', { text: label })),
 			h('div', { class: 'snn-a-kpi-value', text: value }),
-			delta ? h('div', { class: 'snn-a-kpi-delta ' + delta.cls, text: delta.text + ' vs previous' }) : null
+			delta ? h('div', { class: 'snn-a-kpi-delta ' + delta.cls }, [
+				h('span', { text: delta.text }),
+				h('span', { class: 'snn-a-kpi-vs', text: ' vs previous period' })
+			]) : null
 		]);
 	}
 
@@ -307,13 +314,68 @@
 
 	// ------------------------------------------------------------- views
 
+	var SVG_NS = 'http://www.w3.org/2000/svg';
+	var worldPromise = null;
+
+	function loadWorld() {
+		if (!worldPromise) {
+			worldPromise = fetch(cfg.world, { credentials: 'same-origin' }).then(function (r) { return r.json(); });
+		}
+		return worldPromise;
+	}
+
+	function rangeLabel(rp) {
+		var labels = { today: 'Today', '7d': 'Last 7 days', '30d': 'Last 30 days', '90d': 'Last 90 days', '12m': 'Last 12 months' };
+		return rp.range === 'custom' ? (rp.from || '') + ' – ' + (rp.to || '') : (labels[rp.range] || 'Last 30 days');
+	}
+
+	function empty() {
+		return h('p', { class: 'snn-a-empty', text: 'No data for this range yet.' });
+	}
+
+	/** One path per country, shaded by sessions. Used by the dashboard and the Geographic screen. */
+	function worldMap(countries, world) {
+		var sessionsBy = {};
+		var max = 0;
+		countries.forEach(function (c) {
+			if (c.code) {
+				sessionsBy[c.code] = c.sessions;
+				max = Math.max(max, c.sessions);
+			}
+		});
+
+		var svg = document.createElementNS(SVG_NS, 'svg');
+		svg.setAttribute('viewBox', '0 0 ' + world.width + ' ' + world.height);
+		svg.setAttribute('class', 'snn-a-map');
+		svg.setAttribute('role', 'img');
+		svg.setAttribute('aria-label', 'World map of sessions by country');
+
+		Object.keys(world.countries).forEach(function (code) {
+			var count = sessionsBy[code] || 0;
+			var strength = max ? count / max : 0;
+			var path = document.createElementNS(SVG_NS, 'path');
+			var title = document.createElementNS(SVG_NS, 'title');
+			path.setAttribute('d', world.countries[code]);
+			path.setAttribute('fill', count ? 'rgba(34,113,177,' + (0.25 + 0.75 * strength).toFixed(2) + ')' : '#e5e7eb');
+			path.setAttribute('stroke', '#ffffff');
+			path.setAttribute('stroke-width', '0.5');
+			title.textContent = countryName(code) + ': ' + n(count) + ' sessions';
+			path.appendChild(title);
+			svg.appendChild(path);
+		});
+
+		return svg;
+	}
+
 	function renderDashboard(rp) {
 		var grid = h('div', { class: 'snn-a-grid' });
-		var kpis = h('div', { class: 'snn-a-kpis' }, loading());
+		var metrics = h('div', { class: 'snn-a-kpis' }, loading());
 		var customize = h('div', { class: 'snn-a-customize', style: 'display:none' });
+		var overview = api('stats/overview', rp);
+		var period = rangeLabel(rp);
 
 		root.appendChild(rangeControl());
-		root.appendChild(kpis);
+		root.appendChild(metrics);
 		root.appendChild(h('p', {}, [
 			h('button', { type: 'button', class: 'button', onclick: function () {
 				customize.style.display = customize.style.display === 'none' ? '' : 'none';
@@ -322,36 +384,34 @@
 		root.appendChild(customize);
 		root.appendChild(grid);
 
-		api('stats/overview', rp).then(function (data) {
-			clear(kpis);
+		overview.then(function (data) {
 			var c = data.current;
 			var p = data.previous;
-			kpis.appendChild(kpi('Visitors', n(c.visitors), change(c.visitors, p.visitors)));
-			kpis.appendChild(kpi('Sessions', n(c.sessions), change(c.sessions, p.sessions)));
-			kpis.appendChild(kpi('Views', n(c.views), change(c.views, p.views)));
-			kpis.appendChild(kpi('Bounce rate', pct(c.bounce_rate), change(c.bounce_rate, p.bounce_rate)));
-			kpis.appendChild(kpi('Avg. time', duration(c.avg_duration), change(c.avg_duration, p.avg_duration)));
-			kpis.appendChild(kpi('Views / session', String(c.views_per_session), change(c.views_per_session, p.views_per_session)));
-
-			var canvas = chartBox(300);
-			var chartCard = card('Traffic', [canvas], null);
-			chartCard.dataset.card = 'chart';
-			grid.appendChild(chartCard);
-			lineChart(canvas.querySelector('canvas'), data.series.map(function (d) { return d.date; }), [
-				{ label: 'Sessions', color: '#2271b1', data: data.series.map(function (d) { return d.sessions; }) },
-				{ label: 'Views', color: '#00a32a', data: data.series.map(function (d) { return d.views; }) },
-				{ label: 'Visitors', color: '#dba617', data: data.series.map(function (d) { return d.visitors; }) }
-			]);
-			placeCards();
+			clear(metrics);
+			[
+				['Visitors', n(c.visitors), c.visitors, p.visitors],
+				['New visitors', n(c.new_visitors), c.new_visitors, p.new_visitors],
+				['Sessions', n(c.sessions), c.sessions, p.sessions],
+				['Views', n(c.views), c.views, p.views],
+				['Bounce rate', pct(c.bounce_rate), c.bounce_rate, p.bounce_rate],
+				['Avg. time', duration(c.avg_duration), c.avg_duration, p.avg_duration],
+				['Views / session', String(c.views_per_session), c.views_per_session, p.views_per_session],
+				['Events', n(c.events), c.events, p.events]
+			].forEach(function (m) {
+				metrics.appendChild(kpi(m[0], m[1], change(m[2], m[3])));
+			});
 		}).catch(function (err) {
-			clear(kpis);
-			kpis.appendChild(failed(err));
+			clear(metrics);
+			metrics.appendChild(failed(err));
 		});
 
-		function mountCard(id, title, link, load) {
+		function mountCard(id, title, subtitle, link, load, wide) {
 			var body = h('div', {}, loading());
-			var box = card(title, [body], link);
+			var box = card(title, [body], link, subtitle);
 			box.dataset.card = id;
+			if (wide) {
+				box.classList.add('wide');
+			}
 			grid.appendChild(box);
 			load(body).catch(function (err) {
 				clear(body);
@@ -359,53 +419,101 @@
 			});
 		}
 
-		mountCard('realtime', 'Realtime', pageLink('snn-analytics-realtime'), function (body) {
+		mountCard('chart', 'Site traffic', period, null, function (body) {
+			return overview.then(function (data) {
+				clear(body);
+				var box = chartBox(300);
+				body.appendChild(box);
+				lineChart(box.querySelector('canvas'), data.series.map(function (d) { return d.date; }), [
+					{ label: 'Views', color: '#f59e0b', data: data.series.map(function (d) { return d.views; }) },
+					{ label: 'Visitors', color: '#6d4fc2', data: data.series.map(function (d) { return d.visitors; }) }
+				]);
+			});
+		}, true);
+
+		mountCard('pages', 'Top pages', period, pageLink('snn-analytics-pages'), function (body) {
+			return api('stats/pages', Object.assign({}, rp, { orderby: 'views', per_page: 10 })).then(function (data) {
+				clear(body);
+				body.appendChild(table(['Page', 'Views', 'Visitors'], data.rows.map(function (r) {
+					return [r.title || r.path, n(r.views), n(r.visitors)];
+				})));
+			});
+		});
+
+		mountCard('geo', 'Geographic traffic', period, pageLink('snn-analytics-geo'), function (body) {
+			return Promise.all([api('stats/geo', rp), loadWorld()]).then(function (results) {
+				clear(body);
+				body.appendChild(worldMap(results[0].countries, results[1]));
+			});
+		});
+
+		mountCard('newreturning', 'New vs. returning sessions', period, null, function (body) {
+			return overview.then(function (data) {
+				clear(body);
+				var c = data.current;
+				if (!c.sessions) {
+					body.appendChild(empty());
+					return;
+				}
+				var box = chartBox(260);
+				body.appendChild(box);
+				doughnut(box.querySelector('canvas'), ['New sessions', 'Returning sessions'], [c.new_visitors, Math.max(0, c.sessions - c.new_visitors)]);
+			});
+		});
+
+		mountCard('devices', 'Devices', period, pageLink('snn-analytics-devices'), function (body) {
+			return api('stats/devices', rp).then(function (data) {
+				clear(body);
+				if (!data.devices.length) {
+					body.appendChild(empty());
+					return;
+				}
+				var box = chartBox(260);
+				body.appendChild(box);
+				doughnut(box.querySelector('canvas'), data.devices.map(function (d) { return d.label; }), data.devices.map(function (d) { return d.sessions; }));
+			});
+		});
+
+		mountCard('sources', 'Traffic sources', period, pageLink('snn-analytics-referrers'), function (body) {
+			return api('stats/referrers', rp).then(function (data) {
+				clear(body);
+				var types = Object.keys(data.types);
+				if (!types.length) {
+					body.appendChild(empty());
+					return;
+				}
+				var box = chartBox(260);
+				body.appendChild(box);
+				doughnut(box.querySelector('canvas'), types.map(function (t) { return CHANNEL_TYPES[t] || 'Other'; }), types.map(function (t) { return data.types[t]; }));
+			});
+		});
+
+		mountCard('recent', 'Recent views', 'Most recent 10', pageLink('snn-analytics-journeys'), function (body) {
+			return api('stats/recent', { limit: 10 }).then(function (rows) {
+				clear(body);
+				body.appendChild(table(['Time', 'Page', 'Country', 'Device', 'Browser'], rows.map(function (r) {
+					return [
+						new Date(r.time * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+						r.title,
+						countryName(r.country),
+						r.device,
+						r.browser || r.os
+					];
+				}), 'No views yet.'));
+			});
+		});
+
+		mountCard('realtime', 'Realtime', 'Last 5 minutes', pageLink('snn-analytics-realtime'), function (body) {
 			return api('stats/realtime').then(function (data) {
 				clear(body);
-				body.appendChild(h('p', {}, [h('strong', { text: n(data.active) }), ' visitors in the last 5 minutes']));
+				body.appendChild(h('p', {}, [h('strong', { text: n(data.active) }), ' visitors right now']));
 				body.appendChild(table(['Live page', 'Visitors'], data.pages.map(function (p) {
 					return [p.title || p.path, n(p.visitors)];
 				}), 'Nobody is on the site right now.'));
 			});
 		});
 
-		mountCard('pages', 'Top pages', pageLink('snn-analytics-pages'), function (body) {
-			return api('stats/pages', Object.assign({}, rp, { orderby: 'views', per_page: 5 })).then(function (data) {
-				clear(body);
-				body.appendChild(table(['Page', 'Views'], data.rows.map(function (r) {
-					return [r.title || r.path, n(r.views)];
-				})));
-			});
-		});
-
-		mountCard('referrers', 'Referrers', pageLink('snn-analytics-referrers'), function (body) {
-			return api('stats/referrers', rp).then(function (data) {
-				clear(body);
-				body.appendChild(table(['Source', 'Sessions'], data.domains.slice(0, 5).map(function (d) {
-					return [d.domain, n(d.sessions)];
-				})));
-			});
-		});
-
-		mountCard('countries', 'Countries', pageLink('snn-analytics-geo'), function (body) {
-			return api('stats/geo', rp).then(function (data) {
-				clear(body);
-				body.appendChild(table(['Country', 'Sessions'], data.countries.slice(0, 5).map(function (c) {
-					return [countryName(c.code), n(c.sessions)];
-				})));
-			});
-		});
-
-		mountCard('devices', 'Devices', pageLink('snn-analytics-devices'), function (body) {
-			return api('stats/devices', rp).then(function (data) {
-				clear(body);
-				body.appendChild(table(['Device', 'Sessions'], data.devices.map(function (d) {
-					return [d.label, n(d.sessions)];
-				})));
-			});
-		});
-
-		mountCard('campaigns', 'Campaigns', pageLink('snn-analytics-campaigns'), function (body) {
+		mountCard('campaigns', 'Campaigns', period, pageLink('snn-analytics-campaigns'), function (body) {
 			return api('stats/campaigns', rp).then(function (data) {
 				clear(body);
 				body.appendChild(table(['Campaign', 'Sessions'], data.slice(0, 5).map(function (c) {
@@ -414,7 +522,7 @@
 			});
 		});
 
-		mountCard('goals', 'Goals', pageLink('snn-analytics-goals'), function (body) {
+		mountCard('goals', 'Goals', period, pageLink('snn-analytics-goals'), function (body) {
 			return api('goals', rp).then(function (data) {
 				clear(body);
 				body.appendChild(table(['Goal', 'Conversions'], data.map(function (g) {
@@ -423,18 +531,17 @@
 			});
 		});
 
-		// Order and visibility, from the user's saved layout.
+		// Order and visibility, from the user's saved layout. Cards missing from it go to the end.
 		function placeCards() {
 			api('prefs/dashboard').then(function (layout) {
 				var order = layout.order || [];
 				var hidden = layout.hidden || [];
-				var cards = Array.prototype.slice.call(grid.children);
-
-				// Cards missing from the saved order go to the end.
 				var rank = function (id) {
 					var i = order.indexOf(id);
 					return i < 0 ? 999 : i;
 				};
+				var cards = Array.prototype.slice.call(grid.children);
+
 				cards.sort(function (a, b) {
 					return rank(a.dataset.card) - rank(b.dataset.card);
 				});
@@ -447,11 +554,11 @@
 		}
 
 		function saveLayout() {
-			var order = Array.prototype.slice.call(grid.children).map(function (c) { return c.dataset.card; });
-			var hidden = Array.prototype.slice.call(grid.children).filter(function (c) {
-				return c.style.display === 'none';
-			}).map(function (c) { return c.dataset.card; });
-			send('prefs/dashboard', { order: order, hidden: hidden }).catch(function () {});
+			var all = Array.prototype.slice.call(grid.children);
+			send('prefs/dashboard', {
+				order: all.map(function (c) { return c.dataset.card; }),
+				hidden: all.filter(function (c) { return c.style.display === 'none'; }).map(function (c) { return c.dataset.card; })
+			}).catch(function () {});
 		}
 
 		function buildCustomize(layout) {
@@ -497,10 +604,35 @@
 			saveLayout();
 		});
 		grid.addEventListener('mousedown', function (event) {
-			var card = event.target.closest('.snn-a-card');
-			if (card) {
-				card.setAttribute('draggable', event.target.closest('a, button, input, select') ? 'false' : 'true');
+			var box = event.target.closest('.snn-a-card');
+			if (box) {
+				box.setAttribute('draggable', event.target.closest('a, button, input, select') ? 'false' : 'true');
 			}
+		});
+
+		placeCards();
+	}
+
+	function renderGeo(rp) {
+		var body = h('div', {}, loading());
+		root.appendChild(rangeControl());
+		root.appendChild(body);
+
+		Promise.all([api('stats/geo', rp), loadWorld()]).then(function (results) {
+			var data = results[0];
+			clear(body);
+			body.appendChild(card('Sessions by country', [worldMap(data.countries, results[1])]));
+			body.appendChild(h('div', { class: 'snn-a-split' }, [
+				card('Countries', [table(['Country', 'Sessions', 'Visitors', 'Views'], data.countries.map(function (c) {
+					return [countryName(c.code), n(c.sessions), n(c.visitors), n(c.views)];
+				}))]),
+				card('Cities', [table(['City', 'Region', 'Country', 'Sessions', 'Visitors'], data.cities.map(function (c) {
+					return [c.name, c.region, countryName(c.code), n(c.sessions), n(c.visitors)];
+				}), 'City data appears after the city database is installed in Settings.')])
+			]));
+		}).catch(function (err) {
+			clear(body);
+			body.appendChild(failed(err));
 		});
 	}
 
@@ -673,57 +805,6 @@
 		});
 	}
 
-	function renderGeo(rp) {
-		var body = h('div', {}, loading());
-		root.appendChild(rangeControl());
-		root.appendChild(body);
-
-		Promise.all([api('stats/geo', rp), fetch(cfg.world, { credentials: 'same-origin' }).then(function (r) { return r.json(); })])
-			.then(function (results) {
-				var data = results[0];
-				var world = results[1];
-				clear(body);
-
-				var max = 0;
-				data.countries.forEach(function (c) { if (c.code && c.sessions > max) { max = c.sessions; } });
-
-				var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-				svg.setAttribute('viewBox', '0 0 ' + world.width + ' ' + world.height);
-				svg.setAttribute('class', 'snn-a-map');
-				svg.setAttribute('role', 'img');
-				svg.setAttribute('aria-label', 'World map of sessions by country');
-
-				var sessionsBy = {};
-				data.countries.forEach(function (c) { if (c.code) { sessionsBy[c.code] = c.sessions; } });
-
-				Object.keys(world.countries).forEach(function (code) {
-					var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-					var count = sessionsBy[code] || 0;
-					var strength = max ? count / max : 0;
-					path.setAttribute('d', world.countries[code]);
-					path.setAttribute('fill', count ? 'rgba(34,113,177,' + (0.2 + 0.8 * strength).toFixed(2) + ')' : '#e5e7eb');
-					path.setAttribute('stroke', '#ffffff');
-					path.setAttribute('stroke-width', '0.5');
-					var title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-					title.textContent = countryName(code) + ': ' + n(count) + ' sessions';
-					path.appendChild(title);
-					svg.appendChild(path);
-				});
-
-				body.appendChild(card('Sessions by country', [svg]));
-				body.appendChild(h('div', { class: 'snn-a-split' }, [
-					card('Countries', [table(['Country', 'Sessions', 'Visitors', 'Views'], data.countries.map(function (c) {
-						return [countryName(c.code), n(c.sessions), n(c.visitors), n(c.views)];
-					}))]),
-					card('Cities', [table(['City', 'Region', 'Country', 'Sessions', 'Visitors'], data.cities.map(function (c) {
-						return [c.name, c.region, countryName(c.code), n(c.sessions), n(c.visitors)];
-					}), 'City data appears after the city database is installed in Settings.')])
-				]));
-			}).catch(function (err) {
-				clear(body);
-				body.appendChild(failed(err));
-			});
-	}
 
 	function renderDevices(rp) {
 		var body = h('div', {}, loading());

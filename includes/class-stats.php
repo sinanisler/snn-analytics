@@ -62,7 +62,8 @@ final class Stats {
 	public static function unique_visitors( int $from, int $to ): int {
 		global $wpdb;
 
-		$key    = 'snn_a_uv_' . md5( $from . '-' . $to . '-' . Ranges::day_of( time() ) );
+		// The key changes whenever the daily totals are rebuilt, so a count can never outlive the data it was taken from.
+		$key    = 'snn_a_uv_' . md5( $from . '-' . $to . '-' . (int) get_option( Rollup::MARK, 0 ) );
 		$cached = get_transient( $key );
 		if ( $cached !== false ) {
 			return (int) $cached;
@@ -451,6 +452,43 @@ final class Stats {
 				'visitors' => (int) $row['visitors'],
 			], $live_countries ),
 		];
+	}
+
+	// ---------------------------------------------------------- recent views
+
+	/** The latest page views, newest first, with who viewed them (country, device, browser). */
+	public static function recent( int $limit ): array {
+		global $wpdb;
+
+		$views    = DB::table( 'views' );
+		$sessions = DB::table( 'sessions' );
+		$pages    = DB::table( 'pages' );
+		$countries = DB::table( 'countries' );
+		$ua       = DB::table( 'ua' );
+		$limit    = min( 50, max( 1, $limit ) );
+
+		$rows = $wpdb->get_results( $wpdb->prepare(
+			"SELECT v.created_at, p.title, p.path, c.code AS country, s.device, b.name AS browser, o.name AS os
+			 FROM {$views} v
+			 JOIN {$sessions} s ON s.id = v.session_id
+			 JOIN {$pages} p ON p.id = v.page_id
+			 LEFT JOIN {$countries} c ON c.id = s.country_id
+			 LEFT JOIN {$ua} b ON b.id = s.browser_id
+			 LEFT JOIN {$ua} o ON o.id = s.os_id
+			 ORDER BY v.created_at DESC, v.id DESC LIMIT %d",
+			$limit
+		), ARRAY_A );
+
+		$labels = [ 1 => 'Desktop', 2 => 'Mobile', 3 => 'Tablet' ];
+
+		return array_map( static fn( $row ) => [
+			'time'    => (int) $row['created_at'],
+			'title'   => (string) ( $row['title'] !== '' ? $row['title'] : $row['path'] ),
+			'country' => (string) ( $row['country'] ?? '' ),
+			'device'  => $labels[ (int) $row['device'] ] ?? 'Unknown',
+			'browser' => (string) ( $row['browser'] ?? '' ),
+			'os'      => (string) ( $row['os'] ?? '' ),
+		], $rows );
 	}
 
 	// ------------------------------------------------------------- journeys

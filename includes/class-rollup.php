@@ -19,6 +19,7 @@ defined( 'ABSPATH' ) || exit;
 final class Rollup {
 
 	const HOOK = 'snn_a_rollup';
+	const MARK = 'snn_a_rolled_at'; // option holding the time of the last rebuild
 
 	/** Cron: rebuild today and yesterday. Older days are final. */
 	public static function refresh_recent(): void {
@@ -58,6 +59,7 @@ final class Rollup {
 		self::goals( $day, $start, $end );
 
 		$wpdb->query( 'COMMIT' );
+		update_option( self::MARK, time(), false );
 	}
 
 	private static function site( int $day, int $s, int $e ): void {

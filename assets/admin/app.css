@@ -13,15 +13,17 @@
 
 .snn-a .snn-a-kpis {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-	gap: 12px;
-	margin-bottom: 16px;
-}
-.snn-a .snn-a-kpi {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
 	background: #fff;
 	border: 1px solid #c3c4c7;
 	border-radius: 4px;
-	padding: 12px 14px;
+	margin-bottom: 16px;
+}
+.snn-a .snn-a-kpi {
+	padding: 14px 16px;
+	border-right: 1px solid #f0f0f1;
+	border-bottom: 1px solid #f0f0f1;
+	min-width: 0;
 }
 .snn-a .snn-a-kpi-label {
 	color: #50575e;
@@ -48,19 +50,23 @@
 
 .snn-a .snn-a-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: 16px;
-	align-items: start;
 }
-.snn-a .snn-a-grid > .snn-a-card:first-child {
+.snn-a .snn-a-grid > .snn-a-card.wide {
 	grid-column: 1 / -1;
 }
 .snn-a .snn-a-card {
 	background: #fff;
 	border: 1px solid #c3c4c7;
-	border-radius: 4px;
-	padding: 0 16px 16px;
+	border-radius: 6px;
+	padding: 0 18px 18px;
 	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+.snn-a .snn-a-card > .snn-a-card-body {
+	flex: 1;
 }
 .snn-a .snn-a-card[draggable="true"] {
 	cursor: move;
@@ -78,7 +84,13 @@
 }
 .snn-a .snn-a-card-head h2 {
 	font-size: 15px;
-	margin: 0 0 8px;
+	margin: 0;
+}
+.snn-a .snn-a-card-sub {
+	display: block;
+	color: #646970;
+	font-size: 12px;
+	margin-top: 2px;
 }
 .snn-a .snn-a-card-body {
 	overflow-x: auto;
@@ -201,13 +213,49 @@
 	min-width: 220px;
 }
 
-/* Phone width: stack everything. */
+/* Metric tiles: label pill, value and arrow change, as on the reference dashboards. */
+.snn-a .snn-a-kpi-label span {
+	display: inline-block;
+	background: #f6f7f7;
+	color: #50575e;
+	border-radius: 4px;
+	padding: 2px 8px;
+	font-size: 12px;
+}
+.snn-a .snn-a-kpi-value {
+	font-size: 26px;
+	font-weight: 500;
+	margin-top: 8px;
+	line-height: 1.2;
+}
+.snn-a .snn-a-kpi-delta {
+	font-size: 12px;
+	margin-top: 4px;
+	font-weight: 600;
+}
+.snn-a .snn-a-kpi-delta.up {
+	color: #16a34a;
+}
+.snn-a .snn-a-kpi-delta.down {
+	color: #dc2626;
+}
+.snn-a .snn-a-kpi-vs {
+	color: #8c8f94;
+	font-weight: 400;
+}
+
+/* Tablet: 2 tiles per row, phone: one column. */
+@media (max-width: 1280px) {
+	.snn-a .snn-a-kpis {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
 @media (max-width: 782px) {
 	.snn-a .snn-a-grid,
 	.snn-a .snn-a-split {
 		grid-template-columns: 1fr;
 	}
 	.snn-a .snn-a-kpi-value {
-		font-size: 20px;
+		font-size: 22px;
 	}
 }

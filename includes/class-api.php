@@ -59,6 +59,9 @@ final class API {
 		$get( '/stats/devices', [ self::class, 'devices' ], $range, $view );
 		$get( '/stats/campaigns', [ self::class, 'campaigns' ], $range, $view );
 		$get( '/stats/realtime', [ self::class, 'realtime' ], [], $view );
+		$get( '/stats/recent', [ self::class, 'recent' ], [
+			'limit' => [ 'type' => 'integer', 'default' => 10 ],
+		], $view );
 		$get( '/stats/journeys', [ self::class, 'journeys' ], $range + [
 			'page'     => [ 'type' => 'integer', 'default' => 1 ],
 			'per_page' => [ 'type' => 'integer', 'default' => 25 ],
@@ -152,6 +155,10 @@ final class API {
 
 	public static function campaigns( \WP_REST_Request $req ): \WP_REST_Response {
 		return self::ok( Stats::campaigns( self::range( $req ) ) );
+	}
+
+	public static function recent( \WP_REST_Request $req ): \WP_REST_Response {
+		return self::ok( Stats::recent( (int) $req->get_param( 'limit' ) ) );
 	}
 
 	public static function realtime(): \WP_REST_Response {
