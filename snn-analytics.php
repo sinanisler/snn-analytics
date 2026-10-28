@@ -1,5 +1,5 @@
 <?php
-/** 
+/**  
  * Plugin Name:       SNN Analytics
  * Description:       Fast, privacy-friendly, self-hosted analytics. No cookies.
  * Version:           0.1.2
