@@ -100,6 +100,7 @@ final class API {
 		$get( '/admin/db-stats', [ self::class, 'db_stats' ], [], $admin );
 		$post( '/admin/rebuild', [ self::class, 'rebuild' ], $admin );
 		$post( '/admin/delete-data', [ self::class, 'delete_data' ], $admin );
+		$post( '/visitors/delete', [ self::class, 'delete_visitor' ], $admin );
 		$get( '/geo', [ self::class, 'geo_status' ], [], $admin );
 		$post( '/geo/download', [ self::class, 'geo_download' ], $admin );
 		$post( '/geo/remove', [ self::class, 'geo_remove' ], $admin );
@@ -309,6 +310,15 @@ final class API {
 		Maintenance::delete_all_data();
 
 		return self::ok( [ 'deleted' => true ] );
+	}
+
+	public static function delete_visitor( \WP_REST_Request $req ): \WP_REST_Response|\WP_Error {
+		$id = (int) ( self::body( $req )['id'] ?? 0 );
+		if ( $id < 1 ) {
+			return self::error( 'Visitor not found.', 404 );
+		}
+
+		return self::ok( Maintenance::delete_visitor( $id ) );
 	}
 
 	public static function geo_status(): \WP_REST_Response {

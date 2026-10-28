@@ -2243,9 +2243,11 @@
 	function renderJourneys(rp) {
 		var state = { page: 1 };
 		var results = h('div', {}, skeleton(6));
+		var note = h('div', {});
 		var selected = null;
 
 		root.appendChild(h('div', { class: 'snn-a-toolbar' }, rangeControl()));
+		root.appendChild(note);
 		root.appendChild(results);
 
 		function load() {
@@ -2334,6 +2336,17 @@
 				var v = data.visitor;
 				var close = h('span', { class: 'snn-a-linkrow' }, [
 					h('a', { class: 'button', href: pageLink('snn-analytics-replay') + '&session=' + s.id }, 'Replay visit'),
+					h('button', { type: 'button', class: 'button-link-delete', onclick: function () {
+						var visits = 1 + data.others.length;
+						if (!window.confirm('Delete visitor #' + s.visitor + ' and all ' + visits + (visits === 1 ? ' visit' : ' visits') + '? Their views, events and cursor trails are removed and the totals are rebuilt. Heatmap click counts stay. This cannot be undone.')) {
+							return;
+						}
+						send('visitors/delete', { id: s.visitor }).then(function (r) {
+							clear(note);
+							note.appendChild(notice('Deleted visitor #' + s.visitor + ': ' + n(r.sessions) + (r.sessions === 1 ? ' session' : ' sessions') + ', ' + n(r.views) + ' views.', 'success'));
+							load();
+						}).catch(function (err) { window.alert(err.message); });
+					} }, 'Delete this visitor'),
 					h('button', { type: 'button', class: 'button-link', onclick: clearSelection }, 'Close')
 				]);
 				var place = [s.city, s.region].filter(Boolean).join(', ');

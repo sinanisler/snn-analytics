@@ -80,7 +80,69 @@ final class Maintenance {
 		// A finished import would otherwise refuse to run again, and its maps are gone.
 		delete_option( Importer::OPTION );
 
-		// Cached unique-visitor counts would describe data that no longer exists.
+		self::clear_visitor_counts();
+	}
+
+	/**
+	 * Removes one visitor and everything they did: sessions, views, events, conversions and cursor trails.
+	 * The daily totals of the days they were active are rebuilt, so the dashboard stops counting them.
+	 *
+	 * Heatmap clicks stay: they are anonymous per-cell counters with no link to a visitor.
+	 *
+	 * @return array{sessions:int, views:int}
+	 */
+	public static function delete_visitor( int $visitor_id ): array {
+		global $wpdb;
+
+		$t        = static fn( string $name ): string => DB::table( $name );
+		$sessions = $wpdb->get_results( $wpdb->prepare(
+			'SELECT id, started_at, last_seen FROM ' . $t( 'sessions' ) . ' WHERE visitor_id = %d',
+			$visitor_id
+		), ARRAY_A );
+
+		$ids  = array_map( static fn( $row ) => (int) $row['id'], (array) $sessions );
+		$days = [];
+		foreach ( (array) $sessions as $row ) {
+			for ( $day = Ranges::day_of( (int) $row['started_at'] ), $last = Ranges::day_of( (int) $row['last_seen'] ); $day <= $last && count( $days ) < 400; $day++ ) {
+				$days[ $day ] = true;
+			}
+		}
+
+		$view_count = 0;
+		foreach ( array_chunk( $ids, 500 ) as $chunk ) {
+			$list  = implode( ',', $chunk );
+			$views = array_map( 'intval', (array) $wpdb->get_col( 'SELECT id FROM ' . $t( 'views' ) . " WHERE session_id IN ({$list})" ) );
+			foreach ( array_chunk( $views, 500 ) as $view_chunk ) {
+				$wpdb->query( 'DELETE FROM ' . $t( 'trails' ) . ' WHERE view_id IN (' . implode( ',', $view_chunk ) . ')' );
+			}
+			$view_count += count( $views );
+
+			foreach ( [ 'events', 'conversions', 'views' ] as $table ) {
+				$wpdb->query( 'DELETE FROM ' . $t( $table ) . " WHERE session_id IN ({$list})" );
+			}
+			$wpdb->query( 'DELETE FROM ' . $t( 'sessions' ) . " WHERE id IN ({$list})" );
+		}
+		$wpdb->query( $wpdb->prepare( 'DELETE FROM ' . $t( 'visitors' ) . ' WHERE id = %d', $visitor_id ) );
+
+		// Days older than the retention window have lost part of their raw rows already, so rebuilding them
+		// from what is left would shrink their totals. Those days keep their numbers.
+		$months = (int) Settings::get()['retention_months'];
+		$cutoff = $months > 0 ? time() - (int) round( $months * 30.44 * 86400 ) : 0;
+		foreach ( array_keys( $days ) as $day ) {
+			if ( Ranges::day_start( $day ) >= $cutoff ) {
+				Rollup::refresh_day( $day );
+			}
+		}
+
+		self::clear_visitor_counts();
+
+		return [ 'sessions' => count( $ids ), 'views' => $view_count ];
+	}
+
+	/** Cached unique-visitor counts would still include a deleted visitor. */
+	private static function clear_visitor_counts(): void {
+		global $wpdb;
+
 		$wpdb->query( $wpdb->prepare(
 			"DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
 			$wpdb->esc_like( '_transient_snn_a_uv_' ) . '%'
