@@ -59,12 +59,61 @@ final class Importer {
 			$found[ $table ] = $rows === null ? null : (int) $rows;
 		}
 
+		$missing = self::missing_columns();
+
 		return [
-			'available' => $found['sessions'] !== null && $found['views'] !== null,
+			'available' => $found['sessions'] !== null && $found['views'] !== null && $missing === [],
 			'sessions'  => $found['sessions'] ?? 0,
 			'views'     => $found['views'] ?? 0,
 			'clicks'    => $found['clicks'] ?? 0,
+			'missing'   => $missing,
 		];
+	}
+
+	/** Columns the importer reads, per IAWP table. Anything absent means a different IAWP version. */
+	const REQUIRED_COLUMNS = [
+		'sessions'        => [ 'session_id', 'visitor_id', 'initial_view_id', 'final_view_id', 'referrer_id', 'campaign_id', 'created_at', 'ended_at', 'total_views', 'country_id', 'city_id', 'device_type_id', 'device_os_id', 'device_browser_id', 'is_first_session' ],
+		'views'           => [ 'id', 'resource_id', 'viewed_at', 'session_id', 'next_viewed_at' ],
+		'resources'       => [ 'id', 'resource', 'singular_id', 'author_id', 'term_id', 'post_type', 'cached_title', 'cached_url' ],
+		'visitors'        => [ 'visitor_id', 'hash' ],
+		'referrers'       => [ 'id', 'domain', 'referrer_type_id' ],
+		'referrer_types'  => [ 'id', 'referrer_type' ],
+		'campaigns'       => [ 'campaign_id', 'utm_term', 'utm_content', 'utm_source_id', 'utm_medium_id', 'utm_campaign_id' ],
+		'utm_sources'     => [ 'id', 'utm_source' ],
+		'utm_mediums'     => [ 'id', 'utm_medium' ],
+		'utm_campaigns'   => [ 'id', 'utm_campaign' ],
+		'countries'       => [ 'country_id', 'country_code' ],
+		'cities'          => [ 'city_id', 'country_id', 'subdivision', 'city' ],
+		'device_types'    => [ 'device_type_id', 'device_type' ],
+		'device_oss'      => [ 'device_os_id', 'device_os' ],
+		'device_browsers' => [ 'device_browser_id', 'device_browser' ],
+		'clicks'          => [ 'click_id', 'view_id', 'created_at' ],
+		'clicked_links'   => [ 'click_id', 'link_id' ],
+		'links'           => [ 'id', 'click_target_id' ],
+		'click_targets'   => [ 'click_target_id', 'target', 'protocol' ],
+	];
+
+	/** "table.column" entries that are missing from the IAWP tables on this site. */
+	public static function missing_columns(): array {
+		global $wpdb;
+
+		$missing = [];
+		foreach ( self::REQUIRED_COLUMNS as $table => $columns ) {
+			$present = $wpdb->get_col( $wpdb->prepare(
+				'SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s',
+				self::old( $table )
+			) );
+
+			if ( $present === [] ) {
+				$missing[] = $table . ' (table)';
+				continue;
+			}
+			foreach ( array_diff( $columns, $present ) as $column ) {
+				$missing[] = $table . '.' . $column;
+			}
+		}
+
+		return $missing;
 	}
 
 	public static function status(): array {
@@ -83,6 +132,18 @@ final class Importer {
 
 		if ( $state === 'running' || $state === 'done' ) {
 			return $current;
+		}
+
+		// Refuse before touching anything when the IAWP tables do not match what the importer reads.
+		$detect = self::detect();
+		if ( ! $detect['available'] ) {
+			return self::save( [
+				'state'   => 'error',
+				'stage'   => '',
+				'message' => $detect['sessions'] === 0 && $detect['missing'] === []
+					? 'No Independent Analytics data was found.'
+					: 'This Independent Analytics version has a different layout. Missing: ' . implode( ', ', $detect['missing'] ) . '.',
+			] );
 		}
 
 		self::create_maps();
