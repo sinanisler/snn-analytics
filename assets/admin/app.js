@@ -2368,6 +2368,7 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 					]),
 					h('h3', { class: 'snn-a-subhead', text: 'Visitor' }),
 						facts([
+						['Visitor ID', '#' + s.visitor],
 						['Visitor', (s.new ? 'New visitor' : 'Returning visitor') + ' · ' + v.sessions + (v.sessions === 1 ? ' session' : ' sessions')],
 						['Came from', s.referrer + (campaign ? ' · ' + campaign : '')],
 							['First seen', v.first_seen ? when(v.first_seen) : '–'],
