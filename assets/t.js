@@ -101,6 +101,18 @@
 		}
 	}
 
+	// A double click or a fast repeat of the same action within 600 ms is one event.
+	var recent = {};
+	function sendOnce(body) {
+		var id = body.t + '|' + (body.v || '');
+		var now = Date.now();
+		if (recent[id] && now - recent[id] < 600) {
+			return;
+		}
+		recent[id] = now;
+		send(body);
+	}
+
 	// Active time: counts only while the tab is visible.
 	var active = 0;
 	var since = document.visibilityState === 'visible' ? Date.now() : 0;
@@ -108,10 +120,18 @@
 	function ping() {
 		if (since) {
 			active += Date.now() - since;
-			since = 0;
+			since = document.visibilityState === 'visible' ? Date.now() : 0;
 		}
 		send({ e: 'ping', vk: vk, d: Math.round(active / 1000) });
 	}
+
+	// Heartbeat while the tab is visible, so time on page and the live count survive a tab that dies
+	// without a hide event (crash, killed browser, lost power).
+	window.setInterval(function () {
+		if (document.visibilityState === 'visible') {
+			ping();
+		}
+	}, 30000);
 
 	document.addEventListener('visibilitychange', function () {
 		if (document.visibilityState === 'hidden') {
@@ -179,13 +199,15 @@
 
 		var button = target.closest('button, input[type="button"], input[type="submit"], [role="button"]');
 		if (button) {
-			send({ e: 'ev', vk: vk, t: 8, v: label(button) });
+			sendOnce({ e: 'ev', vk: vk, t: 8, v: label(button) });
 		}
 
 		var link = target.closest('a[href]');
 		if (!link) {
 			return;
 		}
+		// A link styled as a button is one click, and the button event already names it.
+		var linkIsButton = button && (button === link || link.contains(button) || button.contains(link));
 
 		var proto = link.protocol;
 		if (proto === 'mailto:' || proto === 'tel:') {
@@ -194,11 +216,11 @@
 			// Origin, path and a plain anchor only, so query strings with tokens never leave the browser.
 			var url = link.origin + link.pathname + anchor(link.hash);
 			if (link.host !== location.host) {
-				send({ e: 'ev', vk: vk, t: 1, v: url });
+				sendOnce({ e: 'ev', vk: vk, t: 1, v: url });
 			} else if (/\.(pdf|zip|docx?|xlsx?|pptx?|csv|rar|7z|dmg|exe|mp3|mp4)$/i.test(link.pathname)) {
-				send({ e: 'ev', vk: vk, t: 2, v: url });
-			} else {
-				send({ e: 'ev', vk: vk, t: 7, v: url });
+				sendOnce({ e: 'ev', vk: vk, t: 2, v: url });
+			} else if (!linkIsButton) {
+				sendOnce({ e: 'ev', vk: vk, t: 7, v: url });
 			}
 		}
 	});
@@ -312,6 +334,10 @@
 	function finishTrail() {
 		if (trailDone) {
 			return;
+		}
+		if (trail && trailDirty && trail.length < 240) {
+			trail.push([pointer[0], pointer[1], clamp(Date.now() - trailStart, 0, 60000)]);
+			trailDirty = false;
 		}
 		trailDone = true;
 		window.clearInterval(trailTimer);

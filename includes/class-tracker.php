@@ -13,7 +13,8 @@ defined( 'ABSPATH' ) || exit;
 final class Tracker {
 
 	const MAX_BODY   = 4096;  // bytes accepted in one hit
-	const RATE_LIMIT = 120;   // hits per visitor per minute (APCu only)
+	const RATE_LIMIT       = 120; // activity hits per page view per minute (APCu only)
+	const RATE_LIMIT_VIEWS = 600; // page views per visitor hash per minute (APCu only)
 	const MAX_VIEWS  = 2000;  // views per session before it stops counting
 
 	/**
@@ -45,7 +46,12 @@ final class Tracker {
 		// The IP exists only in memory, never in a row.
 		$info = UA::classify( $ua );
 		$vh   = DB::key( Settings::salt() . '|' . self::hash_ip( self::client_ip( $server ) ) . '|' . $info['browser'] . '|' . $info['os'] . '|' . $info['device'] . '|' . $settings['site_host'] );
-		if ( ! self::within_rate_limit( $vh ) ) {
+		// Page views are limited per visitor hash, which many people can share (office, school or mobile carrier
+		// behind one IP), so that limit is high. Activity is limited per page view, whose key is random.
+		$limited = $hit['e'] === 'pv'
+			? ! self::within_rate_limit( $vh, self::RATE_LIMIT_VIEWS )
+			: ! self::within_rate_limit( $hit['vk'], self::RATE_LIMIT );
+		if ( $limited ) {
 			return;
 		}
 
@@ -66,6 +72,12 @@ final class Tracker {
 		$held = self::lock( $lock );
 
 		try {
+			// The browser retries on the next route when an answer is not 204, even if this route stored the view.
+			// The view key is random per page load, so a key that exists is a repeat and counts once.
+			if ( self::view_by_key( $hit['vk'] ) !== null ) {
+				return;
+			}
+
 			$visitor = self::visitor( $vh, $now );
 			$session = self::session_for_visitor( $visitor['id'], $now, $settings['session_timeout'] );
 
@@ -109,7 +121,13 @@ final class Tracker {
 
 		// The view key is random per page load, so it finds the view on its own. The visitor hash is not
 		// used here: the IP can change during a visit, and a page can stay open past the session timeout.
+		// A click right before leaving the page can arrive before the page view is stored (both are in flight at
+		// once), so wait up to one second for the view row instead of dropping the event.
 		$found = self::view_by_key( $hit['vk'] );
+		for ( $try = 0; $found === null && $try < 4; $try++ ) {
+			usleep( 250000 );
+			$found = self::view_by_key( $hit['vk'] );
+		}
 		if ( $found === null ) {
 			return;
 		}
@@ -416,16 +434,16 @@ final class Tracker {
 	/**
 	 * Limits hits per visitor when APCu is available. Without APCu, the session view cap still applies.
 	 */
-	private static function within_rate_limit( string $vh ): bool {
+	private static function within_rate_limit( string $id, int $max ): bool {
 		if ( ! function_exists( 'apcu_enabled' ) || ! apcu_enabled() ) {
 			return true;
 		}
 
-		$key = 'snn_a_rl_' . $vh;
+		$key = 'snn_a_rl_' . $id;
 		apcu_add( $key, 0, 60 );
 		$count = apcu_inc( $key );
 
-		return $count === false || $count <= self::RATE_LIMIT;
+		return $count === false || $count <= $max;
 	}
 
 	/**
