@@ -194,7 +194,7 @@
 
 .snn-a .snn-a-kpis {
 	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
+	grid-template-columns: repeat(8, minmax(0, 1fr));
 	background: var(--sa-surface);
 	border: 1px solid var(--sa-line);
 	border-radius: var(--sa-radius);
@@ -202,16 +202,37 @@
 	margin-bottom: 16px;
 }
 .snn-a .snn-a-kpi {
-	padding: 16px 20px 14px;
+	padding: 14px 16px 12px;
 	border-right: 1px solid var(--sa-line-soft);
 	border-bottom: 1px solid var(--sa-line-soft);
 	min-width: 0;
 }
-.snn-a .snn-a-kpi:nth-child(4n) {
+.snn-a .snn-a-kpi:nth-child(8n) {
 	border-right: 0;
 }
-.snn-a .snn-a-kpis > .snn-a-kpi:nth-last-child(-n + 4) {
+.snn-a .snn-a-kpis > .snn-a-kpi:nth-last-child(-n + 8) {
 	border-bottom: 0;
+}
+/* Eight in a row needs a wide screen. Narrower, the cards go back to two rows of four. */
+@media (max-width: 1280px) {
+	.snn-a .snn-a-kpis {
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+	}
+	.snn-a .snn-a-kpi {
+		padding: 16px 20px 14px;
+	}
+	.snn-a .snn-a-kpi:nth-child(8n) {
+		border-right: 1px solid var(--sa-line-soft);
+	}
+	.snn-a .snn-a-kpi:nth-child(4n) {
+		border-right: 0;
+	}
+	.snn-a .snn-a-kpis > .snn-a-kpi:nth-last-child(-n + 8) {
+		border-bottom: 1px solid var(--sa-line-soft);
+	}
+	.snn-a .snn-a-kpis > .snn-a-kpi:nth-last-child(-n + 4) {
+		border-bottom: 0;
+	}
 }
 .snn-a .snn-a-kpi-label {
 	color: var(--sa-muted);
@@ -229,6 +250,14 @@
 	line-height: 1.2;
 	margin-top: 6px;
 	font-variant-numeric: tabular-nums;
+}
+@media (min-width: 1281px) {
+	.snn-a .snn-a-kpi-label {
+		font-size: 11px;
+	}
+	.snn-a .snn-a-kpi-value {
+		font-size: 24px;
+	}
 }
 .snn-a .snn-a-kpi-delta {
 	font-size: 12px;

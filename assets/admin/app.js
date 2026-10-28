@@ -700,6 +700,28 @@
 				clear(content);
 				content.appendChild(failed(err));
 			});
+			return content;
+		}
+
+		// Live cards reload every 10 seconds while the tab is visible, and at once when it is shown again.
+		// A failed refresh keeps the last good content instead of replacing it with an error.
+		var live = [];
+		var liveTimer = null;
+		function refreshLive() {
+			live.forEach(function (item) {
+				item.load(item.content).catch(function () {});
+			});
+		}
+		function onLiveVisibility() {
+			window.clearInterval(liveTimer);
+			liveTimer = null;
+			if (document.visibilityState === 'visible') {
+				refreshLive();
+				liveTimer = window.setInterval(refreshLive, 10000);
+			}
+		}
+		function mountLiveCard(id, title, sub, link, load) {
+			live.push({ content: mountCard(id, title, sub, link, load), load: load });
 		}
 
 		/** Per-card controls. They only show in edit mode (.is-editing on the grid). */
@@ -831,7 +853,7 @@
 			});
 		});
 
-		mountCard('recent', 'Recent views', 'The last 10 page views', pageLink('snn-analytics-journeys'), function (content) {
+		mountLiveCard('recent', 'Recent views', 'The last 10 page views', pageLink('snn-analytics-journeys'), function (content) {
 			return api('stats/recent', { limit: 10 }).then(function (rows) {
 				clear(content);
 				content.appendChild(table(['Time', 'Page', 'Country', 'Device', 'Browser'], rows.map(function (r) {
@@ -840,7 +862,7 @@
 			});
 		});
 
-		mountCard('realtime', 'Realtime', 'Views per minute, last 30 minutes', pageLink('snn-analytics-realtime'), function (content) {
+		mountLiveCard('realtime', 'Realtime', 'Views per minute, last 30 minutes', pageLink('snn-analytics-realtime'), function (content) {
 			return api('stats/realtime').then(function (data) {
 				clear(content);
 				content.appendChild(liveSummary(data));
@@ -989,6 +1011,15 @@
 		api('prefs/dashboard').then(applyLayout).catch(function () {
 			applyLayout({ order: cfg.cards || [], hidden: [] });
 		});
+
+		if (document.visibilityState === 'visible') {
+			liveTimer = window.setInterval(refreshLive, 10000);
+		}
+		document.addEventListener('visibilitychange', onLiveVisibility);
+		teardown = function () {
+			window.clearInterval(liveTimer);
+			document.removeEventListener('visibilitychange', onLiveVisibility);
+		};
 	}
 
 	function renderRealtime() {
