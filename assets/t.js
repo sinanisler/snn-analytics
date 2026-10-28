@@ -23,6 +23,17 @@
 		return;
 	}
 
+	// Debug mode (Settings): every step is kept in window.snnADebug and printed to the console.
+	var trace = window.snnADebug = [];
+	function note(step, body, extra) {
+		if (!cfg.dbg) {
+			return;
+		}
+		var row = { at: Math.round(performance.now()), step: step, e: body && body.e, t: body && body.t, extra: extra };
+		trace.push(row);
+		console.debug('[snnA]', row);
+	}
+
 	// One random id per page view. Pings and events use it to find their view.
 	function viewKey() {
 		var bytes = new Uint8Array(8);
@@ -79,6 +90,7 @@
 			stage = route;
 		}
 		return post(stage, body).then(function (res) {
+			note('sent', body, { route: stage, status: res.status });
 			// Every route answers 204. Anything else (403, 404, 5xx, or a redirect to an HTML page) means this
 			// route is blocked, so move to the next one and remember it.
 			if (res.status !== 204 && stage < routes.length - 1) {
@@ -88,7 +100,8 @@
 				}
 				return deliver(body, stage + 1);
 			}
-		}, function () {
+		}, function (err) {
+			note('send-failed', body, { route: stage, error: String(err) });
 			// A network error can be a firewall that drops the connection, or the visitor being offline.
 			// Try the next route for this page, but do not remember it: offline is not a blocked route.
 			if (stage < routes.length - 1) {
@@ -121,11 +134,13 @@
 	function send(body) {
 		// Nothing leaves before the page view, and the page view waits for a sign of a person (see human()).
 		if (!viewSent) {
+			note('queued-no-view', body, { waiting: waiting.length + 1, leaving: leaving });
 			waiting.push(body);
 		} else if (viewStored || leaving || document.visibilityState === 'hidden') {
 			flush(vk);
 			deliver(body);
 		} else {
+			note('queued-view-not-stored', body, { waiting: waiting.length + 1 });
 			waiting.push(body);
 		}
 	}
@@ -172,6 +187,7 @@
 	// Safari can still report the tab as visible during pagehide, so leaving sends the queue on its own.
 	window.addEventListener('pagehide', function () {
 		leaving = true;
+		note('pagehide', null, { viewSent: viewSent, viewStored: viewStored, waiting: waiting.length });
 		ping();
 		finishTrail();
 	});
@@ -484,6 +500,7 @@
 			return;
 		}
 		viewSent = true;
+		note('view-released', pending, { held: waiting.length });
 		window.clearTimeout(gateTimer);
 		var key = vk;
 		deliver(pending).then(function () {

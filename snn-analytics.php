@@ -18,7 +18,7 @@ define( 'SNN_A_FILE', __FILE__ );
 
 foreach ( [
 	'class-store', 'class-settings', 'class-db', 'class-validator', 'class-ua', 'class-bot',
-	'class-mmdb', 'class-geo', 'class-ranges', 'class-goals', 'class-tracker', 'class-frontend',
+	'class-mmdb', 'class-geo', 'class-ranges', 'class-goals', 'class-debug', 'class-tracker', 'class-frontend',
 	'class-rest', 'class-rollup', 'class-stats', 'class-access', 'class-api', 'class-maintenance', 'class-importer',
 	'class-admin', 'class-widget',
 ] as $snn_a_file ) {
@@ -67,6 +67,7 @@ SNN_Analytics\Frontend::register();
 SNN_Analytics\REST::register();
 SNN_Analytics\Access::register();
 SNN_Analytics\API::register();
+SNN_Analytics\Debug::register();
 
 if ( is_admin() ) {
 	SNN_Analytics\Admin::register();

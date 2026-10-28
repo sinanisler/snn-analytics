@@ -30,6 +30,7 @@ final class Settings {
 			'cursor_trails'       => false,  // record pointer paths, one trail per view (off by default)
 			'cursor_retention_days' => 30,   // trails older than this are deleted: 14, 30, 365 or 3650
 			'tz_offset'           => 0,      // site UTC offset in seconds, kept current so the tracker can number days
+			'debug_until'         => 0,      // unix time debug mode switches itself off; 0 is off
 			'role_access'         => [],     // feature => roles allowed to see it (administrators always can)
 		];
 	}

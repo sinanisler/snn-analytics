@@ -223,7 +223,7 @@ final class Maintenance {
 	public static function uninstall(): void {
 		global $wpdb;
 
-		foreach ( [ 'views', 'events', 'event_targets', 'sessions', 'visitors', 'conversions', 'pages', 'referrers', 'campaigns', 'utm_values', 'countries', 'cities', 'ua', 'heat', 'trails', 'goals', 'funnels', 'funnel_steps', 'd_site', 'd_pages', 'd_refs', 'd_geo', 'd_devices', 'd_camps', 'd_goals' ] as $table ) {
+		foreach ( [ 'views', 'events', 'event_targets', 'sessions', 'visitors', 'conversions', 'pages', 'referrers', 'campaigns', 'utm_values', 'countries', 'cities', 'ua', 'heat', 'trails', 'goals', 'funnels', 'funnel_steps', 'd_site', 'd_pages', 'd_refs', 'd_geo', 'd_devices', 'd_camps', 'd_goals', 'debug_log' ] as $table ) {
 			$wpdb->query( 'DROP TABLE IF EXISTS ' . DB::table( $table ) );
 		}
 

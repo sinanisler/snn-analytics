@@ -42,6 +42,7 @@ require_once __DIR__ . '/includes/class-bot.php';
 require_once __DIR__ . '/includes/class-mmdb.php';
 require_once __DIR__ . '/includes/class-geo.php';
 require_once __DIR__ . '/includes/class-goals.php';
+require_once __DIR__ . '/includes/class-debug.php';
 require_once __DIR__ . '/includes/class-tracker.php';
 
 if ( ( $_SERVER['REQUEST_METHOD'] ?? '' ) !== 'POST' ) {

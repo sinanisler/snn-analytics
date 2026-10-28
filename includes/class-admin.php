@@ -352,6 +352,13 @@ final class Admin {
 				<?php self::row( 'Delete data on uninstall', 'Off by default, so your statistics survive a reinstall. Turn it on only if you want a clean removal.' ); ?>
 					<?php self::toggle( 'delete_on_uninstall', (bool) $s['delete_on_uninstall'], 'Delete all data and tables' ); ?>
 				<?php self::row_end(); ?>
+
+				<?php self::row( 'Debug mode', 'Off by default and switches itself off after one hour. While on, every hit the tracker receives is logged with the reason when it is dropped, and a secret address can read the log, inspect a session and run read-only SQL on any table. Anyone with that address can read all of your data, so share it with no one.' ); ?>
+					<?php self::toggle( 'debug_mode', Debug::on(), 'Log hits and open the debug address' ); ?>
+					<?php if ( Debug::on() ) : ?>
+						<p class="snn-a-row-help">Switches off at <?php echo esc_html( wp_date( 'H:i', (int) $s['debug_until'] ) ); ?>. Address:<br><code style="word-break:break-all"><?php echo esc_html( Debug::url() ); ?></code><br>Add <code>log</code>, <code>session</code>, <code>sql?q=SELECT ...</code> or <code>info</code> to the end.</p>
+					<?php endif; ?>
+				<?php self::row_end(); ?>
 			</section>
 
 			<?php self::section( 'Who can see what', 'Administrators always see everything. Tick the roles that may use each feature, which is useful on client sites. Settings and Import stay administrator-only.' ); ?>
@@ -422,6 +429,8 @@ final class Admin {
 
 		$timeout = (int) wp_unslash( $_POST['session_timeout'] ?? $defaults['session_timeout'] );
 		$timeout = min( 86400, max( 300, $timeout ) );
+
+		Debug::set( isset( $_POST['debug_mode'] ) );
 
 		Settings::update( [
 			'salt_rotation'         => $rotation,

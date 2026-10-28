@@ -25,12 +25,14 @@ final class Tracker {
 	 */
 	public static function process( string $raw, array $server ): void {
 		if ( $raw === '' || strlen( $raw ) > self::MAX_BODY ) {
+			Debug::log( $raw === '' ? 'empty-body' : 'body-too-big', $raw, $server, null );
 			return;
 		}
 
 		$in  = json_decode( $raw, true, 4 );
 		$hit = is_array( $in ) ? Validator::hit( $in ) : null;
 		if ( $hit === null ) {
+			Debug::log( 'invalid', $raw, $server, is_array( $in ) ? [ 'e' => $in['e'] ?? '', 'vk' => is_string( $in['vk'] ?? null ) ? $in['vk'] : '' ] : null );
 			return;
 		}
 
@@ -38,9 +40,11 @@ final class Tracker {
 		$ua       = Validator::text( $server['HTTP_USER_AGENT'] ?? null, 512 );
 
 		if ( Bot::is_bot( $ua, $server ) ) {
+			Debug::log( 'bot', $raw, $server, $hit );
 			return;
 		}
 		if ( $settings['respect_dnt'] && self::opted_out( $server ) ) {
+			Debug::log( 'dnt', $raw, $server, $hit );
 			return;
 		}
 
@@ -55,22 +59,22 @@ final class Tracker {
 			? ! self::within_rate_limit( $vh, self::RATE_LIMIT_VIEWS )
 			: ! self::within_rate_limit( $hit['vk'], self::RATE_LIMIT );
 		if ( $limited ) {
+			Debug::log( 'rate-limit', $raw, $server, $hit );
 			return;
 		}
 
-		$now = time();
-		if ( $hit['e'] === 'pv' ) {
-			self::pageview( $hit, $vh, $now, $info, $server, $settings );
-		} else {
-			self::activity( $hit, $now, $settings );
-		}
+		$now    = time();
+		$result = $hit['e'] === 'pv'
+			? self::pageview( $hit, $vh, $now, $info, $server, $settings )
+			: self::activity( $hit, $now, $settings );
+		Debug::log( $result[0], $raw, $server, $hit, $result[1] ?? '' );
 	}
 
 	/**
 	 * Page views of one visitor run one at a time. Tabs opened together (or a page with several
 	 * requests in flight) would otherwise each see "no session" and create one each.
 	 */
-	private static function pageview( array $hit, string $vh, int $now, array $info, array $server, array $settings ): void {
+	private static function pageview( array $hit, string $vh, int $now, array $info, array $server, array $settings ): array {
 		$lock = 'snn_a_' . $vh;
 		$held = self::lock( $lock );
 
@@ -78,14 +82,14 @@ final class Tracker {
 			// The browser retries on the next route when an answer is not 204, even if this route stored the view.
 			// The view key is random per page load, so a key that exists is a repeat and counts once.
 			if ( self::view_by_key( $hit['vk'] ) !== null ) {
-				return;
+				return [ 'dup-view' ];
 			}
 
 			$visitor = self::visitor( $vh, $now );
 			$session = self::session_for_visitor( $visitor['id'], $now, $settings['session_timeout'] );
 
 			if ( $session !== null && $session['views'] >= self::MAX_VIEWS ) {
-				return;
+				return [ 'session-cap', 'session ' . $session['id'] ];
 			}
 
 			// A visitor who comes back from another site or campaign while a session is open starts a new
@@ -102,12 +106,15 @@ final class Tracker {
 			}
 
 			$page_id = self::page_id( $hit['page'] );
-			if ( $session === null ) {
+			$fresh = $session === null;
+			if ( $fresh ) {
 				$session = self::new_session( $visitor, $referrer_id, $campaign_id, $page_id, $now, $info, $server, $hit );
 			}
 
 			self::add_view( $session, $hit['vk'], $page_id, $now );
 			Goals::check_page( $session['id'], $hit['page']['path'], $now );
+
+			return [ 'ok', ( $fresh ? 'new session ' : 'session ' ) . $session['id'] . ', visitor ' . $visitor['id'] . ', ' . $hit['page']['path'] ];
 		} finally {
 			if ( $held ) {
 				self::unlock( $lock );
@@ -132,7 +139,7 @@ final class Tracker {
 	 * Heartbeats, custom events, clicks, heatmap positions and cursor trails. They attach to the
 	 * view they were sent from, whatever the session's state is now.
 	 */
-	private static function activity( array $hit, int $now, array $settings ): void {
+	private static function activity( array $hit, int $now, array $settings ): array {
 		global $wpdb;
 
 		// The view key is random per page load, so it finds the view on its own. The visitor hash is not
@@ -145,9 +152,10 @@ final class Tracker {
 			$found = self::view_by_key( $hit['vk'] );
 		}
 		if ( $found === null ) {
-			return;
+			return [ 'no-view', 'waited ' . $try . ' retries' ];
 		}
 		[ $view, $session ] = $found;
+		$note = 'view ' . $view['id'] . ', session ' . $session['id'];
 
 		if ( $hit['e'] === 'ping' ) {
 			$wpdb->query( $wpdb->prepare(
@@ -156,13 +164,16 @@ final class Tracker {
 				$view['id']
 			) );
 		} elseif ( $hit['e'] === 'heat' ) {
-			if ( $settings['heatmap'] ) {
-				self::heat( $hit, $view, $session, $now, $settings );
+			if ( ! $settings['heatmap'] ) {
+				return [ 'setting-off', 'heatmap is off' ];
 			}
+			self::heat( $hit, $view, $session, $now, $settings );
 		} elseif ( $hit['e'] === 'trail' ) {
-			if ( $settings['cursor_trails'] ) {
-				self::trail( $hit, $view, $session, $now );
+			if ( ! $settings['cursor_trails'] ) {
+				return [ 'setting-off', 'cursor trails are off' ];
 			}
+			self::trail( $hit, $view, $session, $now );
+			$note .= ', ' . intdiv( strlen( $hit['s'] ), 12 ) . ' samples';
 		} elseif ( $hit['e'] === 'ev' ) {
 			$target = DB::upsert( DB::table( 'event_targets' ), [ 'hash' => DB::key( $hit['v'] ), 'value' => $hit['v'] ] );
 
@@ -183,9 +194,12 @@ final class Tracker {
 				) );
 			}
 			Goals::check_event( $session['id'], $hit['t'], $hit['v'], $now );
+			$note .= ', type ' . $hit['t'];
 		}
 
 		self::touch( $session, $now );
+
+		return [ 'ok', $note ];
 	}
 
 	/**

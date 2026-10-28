@@ -72,6 +72,7 @@ final class Frontend {
 			'goals' => Goals::click_rules(),
 			'hm'    => (bool) Settings::get()['heatmap'],
 			'cur'   => (bool) Settings::get()['cursor_trails'],
+			'dbg'   => Debug::on(),
 		];
 	}
 

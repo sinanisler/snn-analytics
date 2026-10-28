@@ -12,7 +12,7 @@ defined( 'ABSPATH' ) || exit;
 
 final class DB {
 
-	const VERSION = 4;
+	const VERSION = 5;
 	const OPTION  = 'snn_a_db_version';
 
 	/** Columns that hold 8 raw bytes. PHP passes them as hex, written into the SQL as a hex literal. */
@@ -367,6 +367,20 @@ CREATE TABLE {$p}trails (
   PRIMARY KEY  (view_id),
   KEY page_created (page_id, created_at),
   KEY created_at (created_at)
+) $c;
+CREATE TABLE {$p}debug_log (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  at INT UNSIGNED NOT NULL,
+  reason VARCHAR(40) NOT NULL,
+  route VARCHAR(8) NOT NULL,
+  ev VARCHAR(8) NOT NULL,
+  bytes INT UNSIGNED NOT NULL DEFAULT 0,
+  vk VARCHAR(16) NOT NULL,
+  ua VARCHAR(120) NOT NULL,
+  detail VARCHAR(255) NOT NULL,
+  body TEXT NOT NULL,
+  PRIMARY KEY  (id),
+  KEY vk (vk)
 ) $c;
 CREATE TABLE {$p}cities (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
