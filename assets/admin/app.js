@@ -12,6 +12,8 @@
 	var teardown = null;
 	var SVG_NS = 'http://www.w3.org/2000/svg';
 	var PER_PAGE = 25;
+	/** Default widths. Cards not listed here start as half width. */
+	var DEFAULT_SIZE = { chart: 'full' };
 
 	var ACCENT = '#2271b1';
 	var COLOR_VISITORS = ACCENT;
@@ -628,10 +630,13 @@
 		var overview = api('stats/overview', rp);
 
 		var toggle = h('button', { type: 'button', class: 'button', 'aria-expanded': 'false', onclick: function () {
-			customize.hidden = !customize.hidden;
-			toggle.setAttribute('aria-expanded', String(!customize.hidden));
-		} }, 'Customize cards');
-
+			var editing = !grid.classList.contains('is-editing');
+			grid.classList.toggle('is-editing', editing);
+			customize.hidden = !editing;
+			toggle.textContent = editing ? 'Done' : 'Edit layout';
+			toggle.classList.toggle('button-primary', editing);
+			toggle.setAttribute('aria-expanded', String(editing));
+		} }, 'Edit layout');
 		root.appendChild(h('div', { class: 'snn-a-toolbar' }, [rangeControl(), toggle]));
 		root.appendChild(h('p', { class: 'snn-a-caption', text: 'Compared with the previous period of the same length.' }));
 		root.appendChild(kpis);
@@ -660,12 +665,78 @@
 			kpis.appendChild(failed(err, render));
 		});
 
-		function mountCard(id, title, sub, link, load, wide) {
+		function mountCard(id, title, sub, link, load) {
 			var content = h('div', {}, skeleton(4));
-			grid.appendChild(card(title, content, { id: id, sub: sub, link: link, wide: wide, grip: true }));
+			var box = card(title, content, { id: id, sub: sub, link: link, grip: true });
+			box.setAttribute('data-size', DEFAULT_SIZE[id] || 'half');
+			box.appendChild(editTools(box));
+			grid.appendChild(box);
 			load(content).catch(function (err) {
 				clear(content);
 				content.appendChild(failed(err));
+			});
+		}
+
+		/** Per-card controls. They only show in edit mode (.is-editing on the grid). */
+		function editTools(box) {
+			function sizeButton(label, size) {
+				return h('button', { type: 'button', class: 'snn-a-seg', 'data-size': size, onclick: function () { setSize(box, size); } }, label);
+			}
+			return h('div', { class: 'snn-a-edit-tools' }, [
+				h('button', { type: 'button', class: 'button', 'aria-label': 'Move up', title: 'Move up', onclick: function () { move(box, -1); } }, '↑'),
+				h('button', { type: 'button', class: 'button', 'aria-label': 'Move down', title: 'Move down', onclick: function () { move(box, 1); } }, '↓'),
+				h('span', { class: 'snn-a-segment', role: 'group', 'aria-label': 'Card width' }, [sizeButton('Half', 'half'), sizeButton('Full width', 'full')]),
+				h('button', { type: 'button', class: 'button-link-delete', onclick: function () { hide(box); } }, 'Hide')
+			]);
+		}
+
+		function syncSizeButtons(box) {
+			Array.prototype.forEach.call(box.querySelectorAll('.snn-a-seg'), function (button) {
+				var active = button.getAttribute('data-size') === box.getAttribute('data-size');
+				button.classList.toggle('is-active', active);
+				button.setAttribute('aria-pressed', String(active));
+			});
+		}
+
+		function visibleCards() {
+			return Array.prototype.slice.call(grid.children).filter(function (c) { return !c.hidden; });
+		}
+
+		function setSize(box, size) {
+			box.setAttribute('data-size', size);
+			syncSizeButtons(box);
+			flashDrop(box);
+			saveLayout();
+		}
+
+		function move(box, direction) {
+			var list = visibleCards();
+			var target = list[list.indexOf(box) + direction];
+			if (!target) {
+				return;
+			}
+			grid.insertBefore(box, direction < 0 ? target : target.nextElementSibling);
+			flashDrop(box);
+			saveLayout();
+		}
+
+		function hide(box) {
+			box.hidden = true;
+			syncToggles();
+			saveLayout();
+		}
+
+		/** Briefly highlights a card that just moved, so the user can see where it landed. */
+		function flashDrop(box) {
+			box.classList.remove('is-dropped');
+			void box.offsetWidth;
+			box.classList.add('is-dropped');
+		}
+
+		function syncToggles() {
+			Array.prototype.forEach.call(customize.querySelectorAll('input[type="checkbox"]'), function (input) {
+				var target = grid.querySelector('[data-card="' + input.value + '"]');
+				input.checked = !!target && !target.hidden;
 			});
 		}
 
@@ -679,7 +750,7 @@
 					{ label: 'Views', color: COLOR_VIEWS, data: data.series.map(function (d) { return d.views; }), dash: [4, 3] }
 				]);
 			});
-		}, true);
+		});
 
 		mountCard('pages', 'Top pages', period, pageLink('snn-analytics-pages'), function (content) {
 			return api('stats/pages', Object.assign({}, rp, { orderby: 'views', per_page: 10 })).then(function (data) {
@@ -774,10 +845,11 @@
 
 		// ------------------------------------------------ layout and cards
 
-		/** Puts cards in the saved order and hides the ones the user turned off. */
+		/** Puts cards in the saved order, at their saved widths, and hides the ones turned off. */
 		function applyLayout(layout) {
 			var order = layout.order || [];
 			var hidden = layout.hidden || [];
+			var sizes = layout.sizes || {};
 			var cards = Array.prototype.slice.call(grid.children);
 			var rank = function (id) {
 				var i = order.indexOf(id);
@@ -787,18 +859,26 @@
 				return rank(a.getAttribute('data-card')) - rank(b.getAttribute('data-card'));
 			});
 			cards.forEach(function (c) {
+				var id = c.getAttribute('data-card');
 				grid.appendChild(c);
-				c.hidden = hidden.indexOf(c.getAttribute('data-card')) >= 0;
+				c.hidden = hidden.indexOf(id) >= 0;
+				c.setAttribute('data-size', sizes[id] || DEFAULT_SIZE[id] || 'half');
+				syncSizeButtons(c);
 			});
 			buildCustomize(hidden);
 		}
 
 		function saveLayout() {
 			var all = Array.prototype.slice.call(grid.children);
+			var sizes = {};
+			all.forEach(function (c) {
+				sizes[c.getAttribute('data-card')] = c.getAttribute('data-size');
+			});
 			status.textContent = 'Saving…';
 			send('prefs/dashboard', {
 				order: all.map(function (c) { return c.getAttribute('data-card'); }),
-				hidden: all.filter(function (c) { return c.hidden; }).map(function (c) { return c.getAttribute('data-card'); })
+				hidden: all.filter(function (c) { return c.hidden; }).map(function (c) { return c.getAttribute('data-card'); }),
+				sizes: sizes
 			}).then(function () {
 				status.textContent = 'Layout saved.';
 			}).catch(function (err) {
@@ -809,24 +889,24 @@
 		function buildCustomize(hidden) {
 			clear(customize);
 			var reset = h('button', { type: 'button', class: 'button-link', onclick: function () {
-				applyLayout({ order: cfg.cards || [], hidden: [] });
+				applyLayout({ order: cfg.cards || [], hidden: [], sizes: {} });
 				saveLayout();
 			} }, 'Reset layout');
 			customize.appendChild(h('div', { class: 'snn-a-customize-head' }, [
-				h('p', { class: 'snn-a-muted', text: 'Turn cards on or off. Drag a card by its title to move it. Changes save automatically.' }),
+				h('p', { class: 'snn-a-muted', text: 'Show or hide cards here. Move them with the arrows or by dragging, and pick Half or Full width on each card. Changes save automatically.' }),
 				reset
 			]));
 			customize.appendChild(h('div', { class: 'snn-a-toggles' }, (cfg.cards || []).map(function (id) {
-				var box = h('input', { type: 'checkbox', value: id });
-				box.checked = hidden.indexOf(id) < 0;
-				box.addEventListener('change', function () {
+				var input = h('input', { type: 'checkbox', value: id });
+				input.checked = hidden.indexOf(id) < 0;
+				input.addEventListener('change', function () {
 					var target = grid.querySelector('[data-card="' + id + '"]');
 					if (target) {
-						target.hidden = !box.checked;
+						target.hidden = !input.checked;
 					}
 					saveLayout();
 				});
-				return h('label', { class: 'snn-a-toggle' }, [box, h('span', { text: CARD_LABELS[id] || id })]);
+				return h('label', { class: 'snn-a-toggle' }, [input, h('span', { text: CARD_LABELS[id] || id })]);
 			})));
 			customize.appendChild(h('p', { class: 'snn-a-muted snn-a-status' }, [status]));
 		}
@@ -855,6 +935,9 @@
 			}
 			event.preventDefault();
 			var over = event.target.closest('.snn-a-card');
+			Array.prototype.forEach.call(grid.children, function (c) {
+				c.classList.toggle('is-drop-target', c === over && over !== dragging);
+			});
 			if (!over || over === dragging) {
 				return;
 			}
@@ -866,9 +949,13 @@
 			}
 		});
 		grid.addEventListener('dragend', function () {
+			Array.prototype.forEach.call(grid.children, function (c) {
+				c.classList.remove('is-drop-target');
+			});
 			if (dragging) {
 				dragging.classList.remove('is-dragging');
 				dragging.draggable = false;
+				flashDrop(dragging);
 			}
 			dragging = null;
 			saveLayout();

@@ -224,7 +224,15 @@ final class API {
 		$order  = array_values( array_filter( array_map( 'sanitize_key', (array) ( $body['order'] ?? [] ) ), static fn( $c ) => in_array( $c, $allowed, true ) ) );
 		$hidden = array_values( array_filter( array_map( 'sanitize_key', (array) ( $body['hidden'] ?? [] ) ), static fn( $c ) => in_array( $c, $allowed, true ) ) );
 
-		update_user_meta( get_current_user_id(), 'snn_a_dashboard_layout', [ 'order' => $order, 'hidden' => $hidden ] );
+		$sizes = [];
+		foreach ( (array) ( $body['sizes'] ?? [] ) as $card => $size ) {
+			$card = sanitize_key( (string) $card );
+			if ( in_array( $card, $allowed, true ) && in_array( $size, [ 'half', 'full' ], true ) ) {
+				$sizes[ $card ] = $size;
+			}
+		}
+
+		update_user_meta( get_current_user_id(), 'snn_a_dashboard_layout', [ 'order' => $order, 'hidden' => $hidden, 'sizes' => $sizes ] );
 
 		return self::ok( self::layout() );
 	}
@@ -235,6 +243,7 @@ final class API {
 		return [
 			'order'  => is_array( $saved ) && ! empty( $saved['order'] ) ? $saved['order'] : Admin::CARDS,
 			'hidden' => is_array( $saved ) ? ( $saved['hidden'] ?? [] ) : [],
+			'sizes'  => is_array( $saved ) ? ( $saved['sizes'] ?? [] ) : [],
 		];
 	}
 
