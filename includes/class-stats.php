@@ -912,6 +912,10 @@ final class Stats {
 				'region'     => (string) ( $session['region'] ?? '' ),
 				'browser'    => (string) ( $session['browser'] ?? '' ),
 				'os'         => (string) ( $session['os'] ?? '' ),
+				'browser_version' => $session['browser_ver'] === null ? null : (int) $session['browser_ver'],
+				'screen'     => $session['screen_w'] === null ? null : [ (int) $session['screen_w'], (int) $session['screen_h'] ],
+				'viewport'   => $session['view_w'] === null ? null : [ (int) $session['view_w'], (int) $session['view_h'] ],
+				'language'   => (string) ( $session['lang'] ?? '' ),
 				'referrer'   => (string) ( $session['referrer'] ?? '' ) !== '' ? (string) $session['referrer'] : 'Direct',
 				'campaign'   => [
 					'source'   => (string) ( $session['utm_source'] ?? '' ),

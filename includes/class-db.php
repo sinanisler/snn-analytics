@@ -12,7 +12,7 @@ defined( 'ABSPATH' ) || exit;
 
 final class DB {
 
-	const VERSION = 3;
+	const VERSION = 4;
 	const OPTION  = 'snn_a_db_version';
 
 	/** Columns that hold 8 raw bytes. PHP passes them as hex, written into the SQL as a hex literal. */
@@ -306,6 +306,12 @@ CREATE TABLE {$p}sessions (
   device TINYINT UNSIGNED NOT NULL DEFAULT 0,
   browser_id SMALLINT UNSIGNED NULL,
   os_id SMALLINT UNSIGNED NULL,
+  browser_ver SMALLINT UNSIGNED NULL,
+  screen_w SMALLINT UNSIGNED NULL,
+  screen_h SMALLINT UNSIGNED NULL,
+  view_w SMALLINT UNSIGNED NULL,
+  view_h SMALLINT UNSIGNED NULL,
+  lang VARCHAR(12) NULL,
   views SMALLINT UNSIGNED NOT NULL DEFAULT 0,
   events SMALLINT UNSIGNED NOT NULL DEFAULT 0,
   duration MEDIUMINT UNSIGNED NOT NULL DEFAULT 0,

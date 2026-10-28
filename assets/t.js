@@ -448,7 +448,12 @@
 			return pair.slice(0, 300);
 		}).join('&');
 
-		pending = { e: 'pv', vk: vk, pg: cfg.pg, r: ref, q: utm ? '?' + utm : '' };
+		// Screen and window size and the browser language describe the device, not the person, and stay out of the visitor hash.
+		var scr = window.screen || {};
+		pending = {
+			e: 'pv', vk: vk, pg: cfg.pg, r: ref, q: utm ? '?' + utm : '',
+			sw: scr.width, sh: scr.height, vw: window.innerWidth, vh: window.innerHeight, l: navigator.language
+		};
 		arm();
 		// Before images load, a page can look shorter than the window and count as fully read.
 		if (document.readyState === 'complete') {

@@ -42,6 +42,12 @@ final class Validator {
 					'page' => $page,
 					'ref'  => self::text( $in['r'] ?? null, 2048 ),
 					'q'    => self::text( $in['q'] ?? null, 2048 ),
+					// Optional device facts. A bad value becomes null; it never rejects the view.
+					'sw'   => self::int( $in['sw'] ?? null, 1, 20000 ),
+					'sh'   => self::int( $in['sh'] ?? null, 1, 20000 ),
+					'vw'   => self::int( $in['vw'] ?? null, 1, 20000 ),
+					'vh'   => self::int( $in['vh'] ?? null, 1, 20000 ),
+					'lang' => self::language( $in['l'] ?? null ),
 				];
 
 			case 'ping':
@@ -206,6 +212,13 @@ final class Validator {
 		$id = self::text( $value, 8 );
 
 		return preg_match( '/^[1-9][0-9]{0,5}$/', $id ) ? 'goal:' . $id : null;
+	}
+
+	/** A browser language tag such as "en-US" or "zh-Hant-TW". Anything else is dropped. */
+	private static function language( mixed $value ): ?string {
+		$tag = self::text( $value, 12 );
+
+		return preg_match( '/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,4}){0,2}$/', $tag ) ? $tag : null;
 	}
 
 	private static function name( mixed $value ): ?string {

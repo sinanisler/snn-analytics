@@ -103,7 +103,7 @@ final class Tracker {
 
 			$page_id = self::page_id( $hit['page'] );
 			if ( $session === null ) {
-				$session = self::new_session( $visitor, $referrer_id, $campaign_id, $page_id, $now, $info, $server );
+				$session = self::new_session( $visitor, $referrer_id, $campaign_id, $page_id, $now, $info, $server, $hit );
 			}
 
 			self::add_view( $session, $hit['vk'], $page_id, $now );
@@ -308,7 +308,7 @@ final class Tracker {
 		return (string) inet_ntop( substr( $packed, 0, 8 ) . str_repeat( "\0", 8 ) );
 	}
 
-	private static function new_session( array $visitor, ?int $referrer_id, ?int $campaign_id, int $page_id, int $now, array $info, array $server ): array {
+	private static function new_session( array $visitor, ?int $referrer_id, ?int $campaign_id, int $page_id, int $now, array $info, array $server, array $hit ): array {
 		global $wpdb;
 
 		$geo = Geo::locate( $server, self::client_ip( $server ) );
@@ -326,6 +326,12 @@ final class Tracker {
 			'device'        => $info['device'],
 			'browser_id'    => DB::upsert( DB::table( 'ua' ), [ 'kind' => 1, 'name' => $info['browser'] ] ),
 			'os_id'         => DB::upsert( DB::table( 'ua' ), [ 'kind' => 2, 'name' => $info['os'] ] ),
+			'browser_ver'   => $info['version'],
+			'screen_w'      => $hit['sw'],
+			'screen_h'      => $hit['sh'],
+			'view_w'        => $hit['vw'],
+			'view_h'        => $hit['vh'],
+			'lang'          => $hit['lang'],
 			'is_new'        => $visitor['new'] ? 1 : 0,
 		] );
 

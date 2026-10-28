@@ -19,6 +19,21 @@
 	var PALETTE = ['#2271b1', '#00a32a', '#dba617', '#8c5cd6', '#d63638', '#72aee6', '#8c8f94'];
 	var CHANNEL_TYPES = { 1: 'Direct', 2: 'Search', 3: 'Social', 4: 'Referral', 5: 'Ad', 6: 'Email' };
 	var DEVICE_LABELS = { 1: 'Desktop', 2: 'Mobile', 3: 'Tablet' };
+
+	/** "Desktop · Chrome 131 · Windows" for a session from stats/journey. */
+	function deviceLine(s) {
+		var browser = s.browser ? s.browser + (s.browser_version ? ' ' + s.browser_version : '') : '';
+		return [DEVICE_LABELS[s.device] || 'Other', browser, s.os].filter(Boolean).join(' · ');
+	}
+
+	/** "Screen 1920×1080 · Window 1536×730 · en-US". Empty for sessions stored before these were recorded. */
+	function screenLine(s) {
+		return [
+			s.screen ? 'Screen ' + s.screen[0] + '×' + s.screen[1] : '',
+			s.viewport ? 'Window ' + s.viewport[0] + '×' + s.viewport[1] : '',
+			s.language
+		].filter(Boolean).join(' · ');
+	}
 	var CARD_LABELS = {
 		chart: 'Traffic over time',
 		pages: 'Top pages',
@@ -1909,7 +1924,8 @@
 		}
 
 		var place = [s.city, countryName(s.country)].filter(Boolean).join(', ');
-		var device = [DEVICE_LABELS[s.device] || 'Other', s.browser, s.os].filter(Boolean).join(' · ');
+		var device = deviceLine(s);
+		var screens = screenLine(s);
 		var closeBtn = h('button', { type: 'button', class: 'button-link', onclick: function () { stopAll(); close(); } }, 'Close');
 
 		box.appendChild(card('Replay of the visit on ' + when(s.started_at), [
@@ -1918,6 +1934,7 @@
 				h('span', {}, [h('strong', { text: duration(s.duration) }), ' active time']),
 				h('span', { class: 'snn-a-country' }, [flag(s.country), place]),
 				h('span', { text: device }),
+				screens ? h('span', { text: screens }) : null,
 				h('span', { text: 'From ' + s.referrer })
 			]),
 			chips,
@@ -2289,7 +2306,7 @@
 
 		/** Label and value pairs in a compact grid, for the visitor facts at the top of a visit. */
 		function facts(items) {
-			return h('dl', { class: 'snn-a-facts' }, items.map(function (item) {
+			return h('dl', { class: 'snn-a-facts' }, items.filter(Boolean).map(function (item) {
 				return h('div', {}, [h('dt', { text: item[0] }), h('dd', {}, item[1])]);
 			}));
 		}
@@ -2321,7 +2338,7 @@
 				]);
 				var place = [s.city, s.region].filter(Boolean).join(', ');
 				var campaign = [s.campaign.source, s.campaign.medium, s.campaign.campaign].filter(Boolean).join(' / ');
-				var device = [DEVICE_LABELS[s.device] || 'Other', s.browser, s.os].filter(Boolean).join(' · ');
+				var device = deviceLine(s);
 				var steps = data.steps.map(function (step, index) {
 					return h('li', { class: 'snn-a-hist-step' }, [
 						h('div', { class: 'snn-a-hist-time' }, [
@@ -2356,6 +2373,9 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 							['First seen', v.first_seen ? when(v.first_seen) : '–'],
 						['Location', h('span', { class: 'snn-a-country' }, [flag(s.country), countryName(s.country) + (place ? ' · ' + place : '')])],
 						['Device', device],
+						s.screen ? ['Screen', s.screen[0] + ' × ' + s.screen[1] + ' px'] : null,
+						s.viewport ? ['Browser window', s.viewport[0] + ' × ' + s.viewport[1] + ' px'] : null,
+						s.language ? ['Language', s.language] : null,
 						['Entry page', s.entry],
 						['Exit page', s.exit]
 					]),

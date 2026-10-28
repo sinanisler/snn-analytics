@@ -14,14 +14,33 @@ final class UA {
 	const TABLET  = 3;
 
 	/**
-	 * @return array{device:int, browser:string, os:string}
+	 * @return array{device:int, browser:string, os:string, version:?int}
 	 */
 	public static function classify( string $ua ): array {
+		$browser = self::browser( $ua );
+
 		return [
 			'device'  => self::device( $ua ),
-			'browser' => self::browser( $ua ),
+			'browser' => $browser,
 			'os'      => self::os( $ua ),
+			'version' => self::version( $ua, $browser ),
 		];
+	}
+
+	/** Major version of the browser. It is kept on the session only, never in the visitor hash. */
+	private static function version( string $ua, string $browser ): ?int {
+		$pattern = match ( $browser ) {
+			'Edge'             => '/edg(?:e|a|ios)?\/(\d+)/i',
+			'Opera'            => '/(?:opr|opera)\/(\d+)/i',
+			'Samsung Internet' => '/samsungbrowser\/(\d+)/i',
+			'Firefox'          => '/(?:firefox|fxios)\/(\d+)/i',
+			'Chrome'           => '/(?:chrome|crios|chromium)\/(\d+)/i',
+			'Safari'           => '/version\/(\d+)/i',
+			'Internet Explorer' => '/(?:msie |rv:)(\d+)/i',
+			default            => '',
+		};
+
+		return $pattern !== '' && preg_match( $pattern, $ua, $m ) ? min( (int) $m[1], 65535 ) : null;
 	}
 
 	private static function device( string $ua ): int {
