@@ -39,7 +39,7 @@ final class Admin {
 		add_action( 'admin_menu', [ self::class, 'menu' ] );
 		add_action( 'admin_enqueue_scripts', [ self::class, 'assets' ] );
 		add_action( 'admin_post_snn_a_save_settings', [ self::class, 'save_settings' ] );
-		add_filter( 'parent_file', [ self::class, 'highlight' ] );
+		add_action( 'admin_init', [ self::class, 'prepare' ] );
 	}
 
 	public static function grant_capability(): void {
@@ -59,11 +59,20 @@ final class Admin {
 		}
 	}
 
-	/** A top-bar screen highlights the SNN Analytics entry in the sidebar, since it has no entry of its own. */
-	public static function highlight( string $parent_file ): string {
+	/**
+	 * Top-bar screens are not listed under a parent, so WordPress finds no title for them and
+	 * highlights nothing. Setting the globals here, before the header prints, fixes both.
+	 */
+	public static function prepare(): void {
 		$page = sanitize_key( wp_unslash( $_GET['page'] ?? '' ) );
+		if ( ! isset( self::SCREENS[ $page ] ) || in_array( $page, self::SIDEBAR, true ) ) {
+			return;
+		}
 
-		return isset( self::SCREENS[ $page ] ) && ! in_array( $page, self::SIDEBAR, true ) ? self::SLUG : $parent_file;
+		global $title, $parent_file, $submenu_file;
+		$title        = self::SCREENS[ $page ][1];
+		$parent_file  = self::SLUG;
+		$submenu_file = $page;
 	}
 
 	/** Shell for every screen. The page slug decides which view the app shows. */
@@ -77,7 +86,7 @@ final class Admin {
 
 		?>
 		<div class="wrap snn-a">
-			<h1>SNN Analytics<?php echo $title === 'Dashboard' ? '' : ' · ' . esc_html( $title ); ?></h1>
+			<h1 class="screen-reader-text"><?php echo esc_html( 'SNN Analytics · ' . $title ); ?></h1>
 			<?php self::tabs( $slug ); ?>
 			<div id="snn-a-app" data-view="<?php echo esc_attr( $view ); ?>">
 				<p class="snn-a-loading">Loading…</p>
