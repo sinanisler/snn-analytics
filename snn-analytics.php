@@ -5,6 +5,8 @@
  * Version:           0.1.3
  * Requires at least: 6.0
  * Requires PHP:      8.0
+ * Author:            SNN
+ * Author URI:        https://snn.is
  * License:           GPL-2.0-or-later
  * Text Domain:       snn-analytics
  */
