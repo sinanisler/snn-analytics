@@ -113,6 +113,72 @@ final class Stats {
 		return html_entity_decode( $title, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 	}
 
+	/** Event type labels, shared by the timeline and the interactions report. */
+	const EVENT_LABELS = [
+		1  => 'Outbound link',
+		2  => 'Download',
+		3  => 'Email link',
+		4  => 'Phone link',
+		5  => 'Custom event',
+		6  => 'Goal click',
+		7  => 'Internal link',
+		8  => 'Button click',
+		9  => 'Form submit',
+		10 => 'Text selection',
+		11 => 'Scroll depth',
+	];
+
+	/**
+	 * Interaction counts by type, plus the most common targets, for the Journeys screen.
+	 */
+	public static function interactions( array $r ): array {
+		global $wpdb;
+
+		$events  = DB::table( 'events' );
+		$targets = DB::table( 'event_targets' );
+		$from    = Ranges::day_start( $r['from'] );
+		$to      = Ranges::day_start( $r['to'] + 1 ) - 1;
+
+		$rows = $wpdb->get_results( $wpdb->prepare(
+			"SELECT e.type, t.value, COUNT(*) AS total
+			 FROM {$events} e
+			 INNER JOIN {$targets} t ON t.id = e.target_id
+			 WHERE e.created_at BETWEEN %d AND %d
+			 GROUP BY e.type, t.value
+			 ORDER BY total DESC
+			 LIMIT 500",
+			$from,
+			$to
+		), ARRAY_A );
+
+		$types   = [];
+		$top     = [];
+		foreach ( $rows as $row ) {
+			$type  = (int) $row['type'];
+			$total = (int) $row['total'];
+			$label = self::EVENT_LABELS[ $type ] ?? 'Event';
+
+			$types[ $type ] = [
+				'type'  => $type,
+				'label' => $label,
+				'total' => ( $types[ $type ]['total'] ?? 0 ) + $total,
+			];
+			$top[] = [
+				'type'  => $type,
+				'label' => $label,
+				'value' => self::clean_title( (string) $row['value'] ),
+				'total' => $total,
+			];
+		}
+
+		usort( $types, static fn( $a, $b ) => $b['total'] <=> $a['total'] );
+
+		return [
+			'types'   => array_values( $types ),
+			'targets' => array_slice( $top, 0, 25 ),
+		];
+	}
+
 	public static function pages( array $r, array $args ): array {
 		global $wpdb;
 
@@ -599,7 +665,7 @@ final class Stats {
 				'seq'      => (int) $v['seq'],
 			];
 		}
-		$types = [ 1 => 'Outbound link', 2 => 'Download', 3 => 'Email link', 4 => 'Phone link', 5 => 'Custom event', 6 => 'Goal click' ];
+		$types = self::EVENT_LABELS;
 		foreach ( $event_rows as $e ) {
 			$timeline[] = [
 				'type'  => 'event',

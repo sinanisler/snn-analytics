@@ -71,6 +71,25 @@
 	});
 	window.addEventListener('pagehide', ping);
 
+	/** Visible text of a button or link, cleaned and capped. Input values are never read. */
+	function label(el) {
+		var text = (el.getAttribute('aria-label') || el.textContent || el.value || '').replace(/\s+/g, ' ').trim();
+		return text.slice(0, 80) || 'Unlabeled button';
+	}
+
+	/** The nearest heading above an element, so a text selection can be placed on the page. */
+	function heading(node) {
+		var el = node && node.nodeType === 1 ? node : node && node.parentElement;
+		for (var step = el; step && step !== document.body; step = step.parentElement) {
+			for (var prev = step; prev; prev = prev.previousElementSibling) {
+				if (/^H[1-6]$/.test(prev.tagName)) {
+					return label(prev);
+				}
+			}
+		}
+		return 'top of page';
+	}
+
 	document.addEventListener('click', function (event) {
 		var target = event.target;
 		if (!target || !target.closest) {
@@ -88,6 +107,11 @@
 			}
 		});
 
+		var button = target.closest('button, input[type="button"], input[type="submit"], [role="button"]');
+		if (button) {
+			send({ e: 'ev', vk: vk, t: 8, v: label(button) });
+		}
+
 		var link = target.closest('a[href]');
 		if (!link) {
 			return;
@@ -103,9 +127,70 @@
 				send({ e: 'ev', vk: vk, t: 1, v: url });
 			} else if (/\.(pdf|zip|docx?|xlsx?|pptx?|csv|rar|7z|dmg|exe|mp3|mp4)$/i.test(link.pathname)) {
 				send({ e: 'ev', vk: vk, t: 2, v: url });
+			} else {
+				send({ e: 'ev', vk: vk, t: 7, v: url });
 			}
 		}
 	});
+
+	// Form submits: the form's name or id, or where it sends the visitor. Field values are never read.
+	document.addEventListener('submit', function (event) {
+		var form = event.target;
+		if (!form || !form.getAttribute) {
+			return;
+		}
+		var name = form.getAttribute('aria-label') || form.id || form.getAttribute('name');
+		if (!name) {
+			try {
+				var action = new URL(form.getAttribute('action') || location.href, location.href);
+				name = 'Form to ' + action.host + action.pathname;
+			} catch (e) {
+				name = 'Form';
+			}
+		}
+		send({ e: 'ev', vk: vk, t: 9, v: String(name).replace(/\s+/g, ' ').trim().slice(0, 80) });
+	}, true);
+
+	// Text selections: that a selection happened, and under which heading. The selected text is never sent.
+	var lastSelection = '';
+	var selections = 0;
+	document.addEventListener('mouseup', function () {
+		window.setTimeout(function () {
+			var sel = window.getSelection ? window.getSelection() : null;
+			var text = sel ? sel.toString().trim() : '';
+			if (text.length < 3 || text === lastSelection || selections >= 20) {
+				return;
+			}
+			lastSelection = text;
+			selections++;
+			var size = text.length <= 20 ? 'short' : text.length <= 100 ? 'medium' : 'long';
+			send({ e: 'ev', vk: vk, t: 10, v: 'Under “' + heading(sel.anchorNode) + '”, ' + size + ' selection' });
+		}, 0);
+	});
+
+	// Scroll depth: 25, 50, 75 and 100 percent. Each mark is sent once per page view.
+	var reached = {};
+	var scrollQueued = false;
+	function scrolled() {
+		scrollQueued = false;
+		var room = document.documentElement.scrollHeight - window.innerHeight;
+		if (room <= 0) {
+			return;
+		}
+		var pct = Math.min(100, Math.round(100 * window.scrollY / room));
+		[25, 50, 75, 100].forEach(function (mark) {
+			if (pct >= mark && !reached[mark]) {
+				reached[mark] = true;
+				send({ e: 'ev', vk: vk, t: 11, v: mark + '%' });
+			}
+		});
+	}
+	window.addEventListener('scroll', function () {
+		if (!scrollQueued) {
+			scrollQueued = true;
+			window.requestAnimationFrame(scrolled);
+		}
+	}, { passive: true });
 
 	window.snnA = {
 		track: function (name) {

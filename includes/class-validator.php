@@ -49,7 +49,7 @@ final class Validator {
 				return [ 'e' => 'ping', 'vk' => $vk, 'd' => min( $active, 14400 ) ];
 
 			case 'ev':
-				$kind = self::int( $in['t'] ?? null, 1, 6 );
+				$kind = self::int( $in['t'] ?? null, 1, 11 );
 				if ( $kind === null ) {
 					return null;
 				}
@@ -58,7 +58,9 @@ final class Validator {
 					4       => 'tel',
 					5       => self::name( $in['v'] ?? null ),
 					6       => self::goal_id( $in['v'] ?? null ),
-					default => self::url( $in['v'] ?? null ),
+					8, 9, 10 => self::label( $in['v'] ?? null, 120 ),
+					11       => self::scroll_mark( $in['v'] ?? null ),
+					default  => self::url( $in['v'] ?? null ),
 				};
 				if ( $value === null ) {
 					return null;
@@ -158,6 +160,20 @@ final class Validator {
 		$url  = $scheme . '://' . strtolower( $parts['host'] ) . $port . ( $parts['path'] ?? '/' );
 
 		return mb_substr( $url, 0, 512 );
+	}
+
+	/** Visible text from the page (button labels, form names, headings). Empty values are rejected. */
+	private static function label( mixed $value, int $max ): ?string {
+		$text = self::text( $value, $max );
+
+		return $text === '' ? null : $text;
+	}
+
+	/** Scroll depth accepts only the four marks, so the value cannot be used to fill the table. */
+	private static function scroll_mark( mixed $value ): ?string {
+		$mark = self::text( $value, 4 );
+
+		return in_array( $mark, [ '25%', '50%', '75%', '100%' ], true ) ? $mark : null;
 	}
 
 	/** Goal clicks carry the goal id, stored as "goal:ID" so the timeline can show it. */

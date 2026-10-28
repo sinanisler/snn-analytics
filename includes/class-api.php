@@ -58,6 +58,7 @@ final class API {
 		$get( '/stats/geo', [ self::class, 'geo' ], $range, $view );
 		$get( '/stats/devices', [ self::class, 'devices' ], $range, $view );
 		$get( '/stats/campaigns', [ self::class, 'campaigns' ], $range, $view );
+		$get( '/stats/interactions', [ self::class, 'interactions' ], $range, $view );
 		$get( '/stats/realtime', [ self::class, 'realtime' ], [], $view );
 		$get( '/stats/recent', [ self::class, 'recent' ], [
 			'limit' => [ 'type' => 'integer', 'default' => 10 ],
@@ -155,6 +156,10 @@ final class API {
 
 	public static function campaigns( \WP_REST_Request $req ): \WP_REST_Response {
 		return self::ok( Stats::campaigns( self::range( $req ) ) );
+	}
+
+	public static function interactions( \WP_REST_Request $req ): \WP_REST_Response {
+		return self::ok( Stats::interactions( self::range( $req ) ) );
 	}
 
 	public static function recent( \WP_REST_Request $req ): \WP_REST_Response {

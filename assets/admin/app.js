@@ -1329,9 +1329,37 @@
 		var detail = h('div', { class: 'snn-a-detail' });
 		var results = h('div', {}, skeleton(6));
 
+		var interactions = h('div', {}, skeleton(4));
 		root.appendChild(h('div', { class: 'snn-a-toolbar' }, rangeControl()));
+		root.appendChild(card('Interactions', interactions, {
+			sub: 'Clicks, form submits, text selections and scroll depth in this range.'
+		}));
 		root.appendChild(detail);
 		root.appendChild(results);
+
+		api('stats/interactions', rp).then(function (data) {
+			clear(interactions);
+			if (!data.types.length) {
+				interactions.appendChild(empty('No interactions in this range yet.'));
+				return;
+			}
+			interactions.appendChild(h('div', { class: 'snn-a-split' }, [
+				h('div', {}, [
+					h('h3', { class: 'snn-a-subhead', text: 'By type' }),
+					barList(data.types.map(function (t) { return [t.label, t.total]; }), 'No interactions.')
+				]),
+				h('div', {}, [
+					h('h3', { class: 'snn-a-subhead', text: 'Most common targets' }),
+					table(['Interaction', 'Target', numCol('Count')], data.targets.map(function (t) {
+						return [t.label, t.value, n(t.total)];
+					}), 'No targets yet.')
+				])
+			]));
+		}).catch(function (err) {
+			clear(interactions);
+			interactions.appendChild(failed(err, render));
+		});
+
 
 		function load() {
 			clear(results);
