@@ -636,6 +636,7 @@ final class Stats {
 
 		$sessions  = DB::table( 'sessions' );
 		$pages     = DB::table( 'pages' );
+		$views     = DB::table( 'views' );
 		$refs      = DB::table( 'referrers' );
 		$countries = DB::table( 'countries' );
 		$from      = Ranges::day_start( $r['from'] );
@@ -651,7 +652,7 @@ final class Stats {
 		) );
 
 		$rows = $wpdb->get_results( $wpdb->prepare(
-			"SELECT s.id, s.visitor_id, s.started_at, s.last_seen, s.views, s.events, s.duration, s.is_bounce, s.is_new, s.device,
+			"SELECT s.id, s.visitor_id, s.started_at, s.last_seen, s.views, s.events, s.duration, (SELECT COALESCE(SUM(v.duration), 0) FROM {$views} v WHERE v.session_id = s.id) AS active, s.is_bounce, s.is_new, s.device,
 			        entry.title AS entry_title, entry.path AS entry_path,
 			        xp.title AS exit_title, xp.path AS exit_path,
 			        r.domain AS referrer, c.code AS country
@@ -674,7 +675,8 @@ final class Stats {
 				'id'          => (int) $row['id'],
 				'visitor'     => (int) $row['visitor_id'],
 				'started_at'  => (int) $row['started_at'],
-				'duration'    => (int) $row['duration'],
+				'duration'    => (int) $row['active'],
+				'length'      => (int) $row['duration'],
 				'views'       => (int) $row['views'],
 				'events'      => (int) $row['events'],
 				'bounce'      => (bool) $row['is_bounce'],
@@ -752,7 +754,8 @@ final class Stats {
 			$session_id
 		), ARRAY_A );
 
-		$steps = [];
+		$active = (int) array_sum( array_column( $view_rows, 'duration' ) );
+		$steps  = [];
 		foreach ( $view_rows as $v ) {
 			$steps[ (int) $v['id'] ] = [
 				'id'        => (int) $v['id'],
@@ -795,7 +798,8 @@ final class Stats {
 				'visitor'    => (int) $session['visitor_id'],
 				'started_at' => (int) $session['started_at'],
 				'last_seen'  => (int) $session['last_seen'],
-				'duration'   => (int) $session['duration'],
+				'duration'   => $active,
+				'length'     => (int) $session['duration'],
 				'views'      => (int) $session['views'],
 				'events'     => (int) $session['events'],
 				'bounce'     => (bool) $session['is_bounce'],

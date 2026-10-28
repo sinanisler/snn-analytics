@@ -776,6 +776,12 @@
 .snn-a .snn-a-country {
 	white-space: nowrap;
 }
+.snn-a .snn-a-facts > div {
+	min-width: 0;
+}
+.snn-a .snn-a-facts .snn-a-country {
+	white-space: normal;
+}
 .snn-a .snn-a-facts {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -794,34 +800,89 @@
 	font-size: 13px;
 	overflow-wrap: anywhere;
 }
-.snn-a .snn-a-step-head {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: baseline;
-	gap: 2px 10px;
+.snn-a .snn-a-hist {
+	list-style: none;
+	margin: 0;
+	padding: 0;
 }
-.snn-a .snn-a-step-meta {
+.snn-a .snn-a-hist > li {
+	position: relative;
+	display: grid;
+	grid-template-columns: 96px minmax(0, 1fr);
+	gap: 0 16px;
+	padding: 0 0 18px 20px;
+	border-left: 2px solid var(--sa-line);
+}
+.snn-a .snn-a-hist > li:last-child {
+	padding-bottom: 0;
+	border-left-color: transparent;
+}
+.snn-a .snn-a-hist > li::before {
+	content: "";
+	position: absolute;
+	left: -7px;
+	top: 3px;
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	background: var(--sa-accent);
+	box-shadow: 0 0 0 3px var(--sa-surface);
+}
+.snn-a .snn-a-hist-time {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	font-size: 13px;
+}
+.snn-a .snn-a-hist-time .snn-a-time {
+	min-width: 0;
+	color: var(--sa-text);
+}
+.snn-a .snn-a-hist-offset {
+	color: var(--sa-muted);
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+}
+.snn-a .snn-a-hist-body {
+	min-width: 0;
+}
+.snn-a .snn-a-hist-title {
+	font-size: 14px;
+	font-weight: 600;
+	line-height: 1.35;
+	overflow-wrap: anywhere;
+}
+.snn-a .snn-a-hist-path {
+	margin-top: 2px;
+	color: var(--sa-muted);
+	font-size: 12px;
+	overflow-wrap: anywhere;
+}
+.snn-a .snn-a-hist-meta {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: 6px;
-	margin-top: 3px;
+	gap: 6px 8px;
+	margin-top: 8px;
 	color: var(--sa-muted);
 	font-size: 12px;
 }
-.snn-a .snn-a-step-events {
-	margin: 6px 0 0;
-	padding: 0;
+.snn-a .snn-a-hist-events {
+	margin: 10px 0 0;
+	padding: 0 0 0 12px;
+	border-left: 1px solid var(--sa-line-soft);
 	list-style: none;
 	font-size: 12px;
 }
-.snn-a .snn-a-step-events li {
-	position: static;
+.snn-a .snn-a-hist-events li {
 	margin: 0 0 4px;
-	font-size: 12px;
+	overflow-wrap: anywhere;
 }
-.snn-a .snn-a-step-events li::before {
-	display: none;
+@media (max-width: 600px) {
+	.snn-a .snn-a-hist > li {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 4px;
+	}
 }
 
 /* -------------------------------------------------------------- forms */

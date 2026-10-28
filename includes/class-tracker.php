@@ -44,7 +44,7 @@ final class Tracker {
 		// the device type and the site. No version numbers, so a browser update does not split a visitor.
 		// The IP exists only in memory, never in a row.
 		$info = UA::classify( $ua );
-		$vh   = DB::key( Settings::salt() . '|' . self::client_ip( $server ) . '|' . $info['browser'] . '|' . $info['os'] . '|' . $info['device'] . '|' . $settings['site_host'] );
+		$vh   = DB::key( Settings::salt() . '|' . self::hash_ip( self::client_ip( $server ) ) . '|' . $info['browser'] . '|' . $info['os'] . '|' . $info['device'] . '|' . $settings['site_host'] );
 		if ( ! self::within_rate_limit( $vh ) ) {
 			return;
 		}
@@ -53,7 +53,7 @@ final class Tracker {
 		if ( $hit['e'] === 'pv' ) {
 			self::pageview( $hit, $vh, $now, $info, $server, $settings );
 		} else {
-			self::activity( $hit, $vh, $now, $settings );
+			self::activity( $hit, $now, $settings );
 		}
 	}
 
@@ -75,21 +75,19 @@ final class Tracker {
 	}
 
 	/**
-	 * Heartbeats, custom events, clicks, heatmap positions and cursor trails. They attach to an
-	 * existing view of a live session.
+	 * Heartbeats, custom events, clicks, heatmap positions and cursor trails. They attach to the
+	 * view they were sent from, whatever the session's state is now.
 	 */
-	private static function activity( array $hit, string $vh, int $now, array $settings ): void {
+	private static function activity( array $hit, int $now, array $settings ): void {
 		global $wpdb;
 
-		$session = self::session_for_hash( $vh, $now, $settings['session_timeout'] );
-		if ( $session === null ) {
+		// The view key is random per page load, so it finds the view on its own. The visitor hash is not
+		// used here: the IP can change during a visit, and a page can stay open past the session timeout.
+		$found = self::view_by_key( $hit['vk'] );
+		if ( $found === null ) {
 			return;
 		}
-
-		$view = self::view_row( $hit['vk'], $session['id'] );
-		if ( $view === null ) {
-			return;
-		}
+		[ $view, $session ] = $found;
 
 		if ( $hit['e'] === 'ping' ) {
 			$wpdb->query( $wpdb->prepare(
@@ -182,7 +180,7 @@ final class Tracker {
 			'first_seen' => $now,
 			'last_seen'  => $now,
 			'sessions'   => 0,
-		] );
+		], [ 'last_seen' => $now ] );
 
 		return [ 'id' => $id, 'new' => $wpdb->rows_affected === 1 ];
 	}
@@ -199,34 +197,46 @@ final class Tracker {
 		return $row ? array_map( 'intval', $row ) : null;
 	}
 
-	private static function session_for_hash( string $vh, int $now, int $timeout ): ?array {
+	/**
+	 * The view that a heartbeat, event, heatmap or trail belongs to, with its session. Null when the key is unknown.
+	 */
+	private static function view_by_key( string $vk ): ?array {
 		global $wpdb;
 
 		$row = $wpdb->get_row( $wpdb->prepare(
-			'SELECT s.id, s.views, s.started_at, s.device FROM ' . DB::table( 'visitors' ) . ' v
-			 JOIN ' . DB::table( 'sessions' ) . ' s ON s.visitor_id = v.id
-			 WHERE v.hash = UNHEX(%s) AND s.last_seen >= %d
-			 ORDER BY s.last_seen DESC LIMIT 1',
-			$vh,
-			$now - $timeout
+			'SELECT v.id AS view_id, v.page_id, s.id AS session_id, s.started_at, s.device
+			 FROM ' . DB::table( 'views' ) . ' v
+			 JOIN ' . DB::table( 'sessions' ) . ' s ON s.id = v.session_id
+			 WHERE v.view_key = UNHEX(%s)
+			 ORDER BY v.id DESC LIMIT 1',
+			$vk
 		), 'ARRAY_A' );
 
-		return $row ? array_map( 'intval', $row ) : null;
+		if ( ! $row ) {
+			return null;
+		}
+
+		return [
+			[ 'id' => (int) $row['view_id'], 'page_id' => (int) $row['page_id'] ],
+			[ 'id' => (int) $row['session_id'], 'started_at' => (int) $row['started_at'], 'device' => (int) $row['device'] ],
+		];
 	}
 
 	/**
-	 * The view that a heartbeat, event, heatmap or trail belongs to, or null when it is unknown.
+	 * The part of the IP that goes into the visitor hash. IPv6 keeps the first 64 bits only: browsers rotate
+	 * the lower half (privacy addresses), and that would split one visitor into several.
 	 */
-	private static function view_row( string $vk, int $session_id ): ?array {
-		global $wpdb;
+	private static function hash_ip( string $ip ): string {
+		if ( strpos( $ip, ':' ) === false ) {
+			return $ip;
+		}
 
-		$row = $wpdb->get_row( $wpdb->prepare(
-			'SELECT id, page_id FROM ' . DB::table( 'views' ) . ' WHERE view_key = UNHEX(%s) AND session_id = %d ORDER BY id DESC LIMIT 1',
-			$vk,
-			$session_id
-		), 'ARRAY_A' );
+		$packed = inet_pton( $ip );
+		if ( $packed === false || strlen( $packed ) !== 16 ) {
+			return $ip;
+		}
 
-		return $row ? array_map( 'intval', $row ) : null;
+		return (string) inet_ntop( substr( $packed, 0, 8 ) . str_repeat( "\0", 8 ) );
 	}
 
 	private static function new_session( array $visitor, array $hit, int $page_id, int $now, array $info, array $server, string $site_host ): array {

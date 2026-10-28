@@ -1480,7 +1480,7 @@
 					return;
 				}
 				results.appendChild(table(
-					['Started', 'Visitor', 'Entry page', 'Exit page', 'Source', 'Country', 'Device', numCol('Views'), numCol('Time')],
+					['Started', 'Visitor', 'Entry page', 'Exit page', 'Source', 'Country', 'Device', numCol('Views'), numCol('Active time')],
 					data.rows.map(function (s) {
 						return [
 							when(s.started_at),
@@ -1556,42 +1556,46 @@
 				var campaign = [s.campaign.source, s.campaign.medium, s.campaign.campaign].filter(Boolean).join(' / ');
 				var device = [DEVICE_LABELS[s.device] || 'Other', s.browser, s.os].filter(Boolean).join(' · ');
 				var steps = data.steps.map(function (step, index) {
-					return h('li', {}, [
-						h('div', { class: 'snn-a-step-head' }, [
+					return h('li', { class: 'snn-a-hist-step' }, [
+						h('div', { class: 'snn-a-hist-time' }, [
 							h('span', { class: 'snn-a-time', text: clock(step.at) }),
-							h('span', { class: 'snn-a-muted', text: '+' + duration(step.at - s.started_at) }),
-							h('strong', { text: step.title || step.path }),
-							h('span', { class: 'snn-a-muted', text: step.path })
+							h('span', { class: 'snn-a-hist-offset', text: '+' + duration(step.at - s.started_at) })
 						]),
-						h('div', { class: 'snn-a-step-meta' }, [
-							h('span', { text: 'On page ' + duration(step.duration) }),
-							index === 0 ? h('span', { class: 'snn-a-badge', text: 'Entry' }) : null,
-							index === data.steps.length - 1 ? h('span', { class: 'snn-a-badge', text: 'Exit' }) : null,
-							step.has_trail ? h('span', { class: 'snn-a-badge', text: 'Cursor trail' }) : null
-						]),
-						step.events.length ? h('ul', { class: 'snn-a-step-events' }, step.events.map(action)) : null
+						h('div', { class: 'snn-a-hist-body' }, [
+							h('div', { class: 'snn-a-hist-title', text: step.title || step.path }),
+							h('div', { class: 'snn-a-hist-path', text: step.path }),
+							h('div', { class: 'snn-a-hist-meta' }, [
+								h('span', { text: 'On page ' + duration(step.duration) }),
+								index === 0 ? h('span', { class: 'snn-a-badge', text: 'Entry' }) : null,
+								index === data.steps.length - 1 ? h('span', { class: 'snn-a-badge', text: 'Exit' }) : null,
+								step.has_trail ? h('span', { class: 'snn-a-badge', text: 'Cursor trail' }) : null
+							]),
+							step.events.length ? h('ul', { class: 'snn-a-hist-events' }, step.events.map(action)) : null
+						])
 					]);
 				});
-				cell.appendChild(card('Visit on ' + when(s.started_at), [
+cell.appendChild(card('Visit on ' + when(s.started_at), [
 					h('p', { class: 'snn-a-stat-row' }, [
-						h('span', {}, [h('strong', { text: duration(s.duration) }), ' duration']),
+						h('span', {}, [h('strong', { text: duration(s.duration) }), ' active time']),
+						h('span', {}, [h('strong', { text: duration(s.length) }), ' session length']),
 						h('span', {}, [h('strong', { text: String(s.views) }), ' views']),
 						h('span', {}, [h('strong', { text: String(s.events) }), ' events']),
 						s.bounce ? h('span', { class: 'snn-a-badge', text: 'Bounced' }) : null
 					]),
-					facts([
+					h('h3', { class: 'snn-a-subhead', text: 'Visitor' }),
+						facts([
 						['Visitor', (s.new ? 'New visitor' : 'Returning visitor') + ' · ' + v.sessions + (v.sessions === 1 ? ' session' : ' sessions')],
-						['First seen', v.first_seen ? when(v.first_seen) : '–'],
+						['Came from', s.referrer + (campaign ? ' · ' + campaign : '')],
+							['First seen', v.first_seen ? when(v.first_seen) : '–'],
 						['Location', h('span', { class: 'snn-a-country' }, [flag(s.country), countryName(s.country) + (place ? ' · ' + place : '')])],
 						['Device', device],
-						['Came from', s.referrer + (campaign ? ' · ' + campaign : '')],
 						['Entry page', s.entry],
 						['Exit page', s.exit]
 					]),
 					h('h3', { class: 'snn-a-subhead', text: 'History' }),
-					h('ol', { class: 'snn-a-timeline' }, steps),
+					h('ol', { class: 'snn-a-hist' }, steps),
 					data.unattached.length ? h('h3', { class: 'snn-a-subhead', text: 'Actions without a page view' }) : null,
-					data.unattached.length ? h('ul', { class: 'snn-a-step-events' }, data.unattached.map(action)) : null,
+					data.unattached.length ? h('ul', { class: 'snn-a-hist-events' }, data.unattached.map(action)) : null,
 					data.others.length ? h('h3', { class: 'snn-a-subhead', text: 'Other visits from this visitor' }) : null,
 					data.others.length ? h('ul', { class: 'snn-a-plain' }, data.others.map(function (o) {
 						return h('li', {}, [
