@@ -46,11 +46,9 @@ if ( ( $_SERVER['REQUEST_METHOD'] ?? '' ) !== 'POST' ) {
 
 $snn_a_raw = (string) file_get_contents( 'php://input', false, null, 0, SNN_Analytics\Tracker::MAX_BODY + 1 );
 
-// Answer first, then write. The browser never waits for the database.
+// Write first, then answer. The tracker holds its pings and events until the page view's answer
+// arrives, so the answer must mean the view row exists. The request is async, so no visitor waits on it.
+SNN_Analytics\Tracker::process( $snn_a_raw, $_SERVER );
+
 http_response_code( 204 );
 header( 'Cache-Control: no-store' );
-if ( function_exists( 'fastcgi_finish_request' ) ) {
-	fastcgi_finish_request();
-}
-
-SNN_Analytics\Tracker::process( $snn_a_raw, $_SERVER );

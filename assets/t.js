@@ -13,13 +13,17 @@
 		return;
 	}
 
-	// One random id per page load. Pings and events use it to find their view.
-	var bytes = new Uint8Array(8);
-	crypto.getRandomValues(bytes);
-	var vk = '';
-	for (var i = 0; i < 8; i++) {
-		vk += ('0' + bytes[i].toString(16)).slice(-2);
+	// One random id per page view. Pings and events use it to find their view.
+	function viewKey() {
+		var bytes = new Uint8Array(8);
+		crypto.getRandomValues(bytes);
+		var key = '';
+		for (var i = 0; i < 8; i++) {
+			key += ('0' + bytes[i].toString(16)).slice(-2);
+		}
+		return key;
 	}
+	var vk = viewKey();
 
 	var endpoint = cfg.u;
 	try {
@@ -37,17 +41,37 @@
 		});
 	}
 
-	function send(body) {
-		post(endpoint, body).then(function (res) {
-			// Only a refusal (403, 404, 405, 5xx) switches to REST. A network error does not.
-			if (!res.ok && endpoint === cfg.u) {
+	function deliver(body) {
+		return post(endpoint, body).then(function (res) {
+			// Both endpoints answer 204. Anything else (403, 404, 5xx, or a redirect to an HTML page)
+			// means t.php is blocked, so switch to REST. A network error does not switch.
+			if (res.status !== 204 && endpoint === cfg.u) {
 				endpoint = cfg.f;
 				try {
 					localStorage.setItem('snnAFallback', String(Date.now()));
 				} catch (e) {}
-				post(endpoint, body);
+				return post(endpoint, body);
 			}
-		}, function () {});
+		}).then(null, function () {});
+	}
+
+	// Activity waits until the page view is stored, or the server could not find its view and would
+	// drop it (a scroll restored on reload, a quick click). A hidden page sends at once: it may not come back.
+	var viewStored = false;
+	var waiting = [];
+
+	function flush() {
+		viewStored = true;
+		waiting.splice(0).forEach(deliver);
+	}
+
+	function send(body) {
+		if (viewStored || document.visibilityState === 'hidden') {
+			flush();
+			deliver(body);
+		} else {
+			waiting.push(body);
+		}
 	}
 
 	// Active time: counts only while the tab is visible.
@@ -277,5 +301,37 @@
 		}
 	};
 
-	send({ e: 'pv', vk: vk, pg: cfg.pg, r: document.referrer, q: location.search });
+	/**
+	 * The server reads only the referrer's host and the UTM values, so only those are sent. Long referrers
+	 * and click ids (fbclid, gclid) could otherwise push the hit past the server's 4 KB limit and lose it.
+	 */
+	function pageview() {
+		var ref = '';
+		try {
+			ref = document.referrer ? new URL(document.referrer).origin + '/' : '';
+		} catch (e) {}
+		var utm = location.search.slice(1).split('&').filter(function (pair) {
+			return /^utm_(source|medium|campaign|term|content)=/.test(pair);
+		}).map(function (pair) {
+			return pair.slice(0, 300);
+		}).join('&');
+
+		deliver({ e: 'pv', vk: vk, pg: cfg.pg, r: ref, q: utm ? '?' + utm : '' }).then(flush);
+	}
+
+	// A page restored from the back/forward cache is a new view, but the script does not run again.
+	window.addEventListener('pageshow', function (event) {
+		if (event.persisted) {
+			vk = viewKey();
+			viewStored = false;
+			waiting = [];
+			reached = {};
+			selections = 0;
+			active = 0;
+			since = document.visibilityState === 'visible' ? Date.now() : 0;
+			pageview();
+		}
+	});
+
+	pageview();
 })();
