@@ -4,6 +4,10 @@
  * so a hit skips plugins, the theme and the REST stack.
  */
 
+// Anything printed by accident (a PHP notice, a BOM in wp-config.php) would turn the 204 into a 200,
+// and the browser would send the hit again on the next route. The buffer is discarded before answering.
+ob_start();
+
 if ( ! defined( 'ABSPATH' ) ) {
 	define( 'SHORTINIT', true );
 
@@ -24,6 +28,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! defined( 'ABSPATH' ) ) {
+	ob_end_clean();
 	http_response_code( 503 ); // WordPress could not be loaded. The browser falls back to REST.
 	exit;
 }
@@ -40,6 +45,7 @@ require_once __DIR__ . '/includes/class-goals.php';
 require_once __DIR__ . '/includes/class-tracker.php';
 
 if ( ( $_SERVER['REQUEST_METHOD'] ?? '' ) !== 'POST' ) {
+	ob_end_clean();
 	http_response_code( 405 );
 	exit;
 }
@@ -49,6 +55,10 @@ $snn_a_raw = (string) file_get_contents( 'php://input', false, null, 0, SNN_Anal
 // Write first, then answer. The tracker holds its pings and events until the page view's answer
 // arrives, so the answer must mean the view row exists. The request is async, so no visitor waits on it.
 SNN_Analytics\Tracker::process( $snn_a_raw, $_SERVER );
+
+while ( ob_get_level() > 0 ) {
+	ob_end_clean();
+}
 
 http_response_code( 204 );
 header( 'Cache-Control: no-store' );

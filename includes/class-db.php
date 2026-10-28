@@ -15,8 +15,16 @@ final class DB {
 	const VERSION = 3;
 	const OPTION  = 'snn_a_db_version';
 
-	/** Columns that hold 8 raw bytes. PHP passes them as hex, SQL converts with UNHEX(). */
+	/** Columns that hold 8 raw bytes. PHP passes them as hex, written into the SQL as a hex literal. */
 	private const BINARY_COLUMNS = [ 'hash', 'view_key' ];
+
+	/**
+	 * Hex as an SQL binary literal, X'0a1b'. Works on MySQL and on the SQLite driver, whose UNHEX() returns
+	 * text that never equals a stored binary value. Anything that is not hex becomes NULL, so it cannot reach the SQL.
+	 */
+	public static function hex( string $hex ): string {
+		return preg_match( '/^(?:[0-9a-fA-F]{2})+$/', $hex ) ? "X'" . $hex . "'" : 'NULL';
+	}
 
 	public static function table( string $name ): string {
 		global $wpdb;
@@ -84,7 +92,11 @@ final class DB {
 					$marks[] = 'NULL';
 					continue;
 				}
-				$marks[] = in_array( $col, self::BINARY_COLUMNS, true ) ? 'UNHEX(%s)' : ( is_int( $value ) ? '%d' : '%s' );
+				if ( in_array( $col, self::BINARY_COLUMNS, true ) ) {
+					$marks[] = self::hex( $value );
+					continue;
+				}
+				$marks[] = is_int( $value ) ? '%d' : '%s';
 				$args[]  = $value;
 			}
 			$groups[] = '(' . implode( ', ', $marks ) . ')';
@@ -99,10 +111,14 @@ final class DB {
 	/**
 	 * Insert-or-find a dimension row and return its id, in one query.
 	 * $refresh lists columns to overwrite when the row already exists.
-	 * Check $wpdb->rows_affected right after the call: 1 means a new row was inserted.
+	 * DB::$inserted is true right after the call when a new row was inserted.
 	 */
 	public static function upsert( string $table, array $row, array $refresh = [] ): int {
 		global $wpdb;
+
+		if ( $wpdb instanceof \WP_SQLite_DB ) {
+			return self::upsert_sqlite( $table, $row, $refresh );
+		}
 
 		[ $cols, $marks, $args ] = self::values( $row );
 
@@ -114,8 +130,64 @@ final class DB {
 
 		$sql = "INSERT INTO {$table} ({$cols}) VALUES ({$marks}) ON DUPLICATE KEY UPDATE " . implode( ', ', $sets );
 		$wpdb->query( $wpdb->prepare( $sql, ...$args ) );
+		self::$inserted = $wpdb->rows_affected === 1;
 
 		return (int) $wpdb->insert_id;
+	}
+
+	/** Set by upsert(): true when the last call inserted a new row. */
+	public static bool $inserted = false;
+
+	/**
+	 * The SQLite driver (WordPress Studio, Playground) has no LAST_INSERT_ID(expr), and its insert_id and
+	 * rows_affected stay stale on a duplicate. So the row is looked up by its unique key instead.
+	 */
+	private static function upsert_sqlite( string $table, array $row, array $refresh ): int {
+		global $wpdb;
+
+		$id = self::find( $table, $row, $refresh );
+		if ( $id === 0 ) {
+			[ $cols, $marks, $args ] = self::values( $row );
+			$wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO {$table} ({$cols}) VALUES ({$marks})", ...$args ) );
+			if ( $wpdb->rows_affected === 1 ) {
+				self::$inserted = true;
+				return (int) $wpdb->insert_id;
+			}
+			// Another request inserted the same row a moment ago.
+			$id = self::find( $table, $row, $refresh );
+		}
+
+		self::$inserted = false;
+		if ( $id !== 0 && $refresh !== [] ) {
+			$sets = [];
+			foreach ( $refresh as $col => $value ) {
+				$sets[] = $col . ' = ' . ( is_int( $value ) ? '%d' : '%s' );
+			}
+			$wpdb->query( $wpdb->prepare( "UPDATE {$table} SET " . implode( ', ', $sets ) . ' WHERE id = %d', ...array_values( $refresh ), ...[ $id ] ) );
+		}
+
+		return $id;
+	}
+
+	/** Id of the row with the same unique key: the hash, the country code, or the columns that are not refreshed. */
+	private static function find( string $table, array $row, array $refresh ): int {
+		global $wpdb;
+
+		$key = isset( $row['hash'] ) ? [ 'hash' ] : ( isset( $row['code'] ) ? [ 'code' ] : array_keys( array_diff_key( $row, $refresh ) ) );
+		$where = [];
+		$args  = [];
+		foreach ( $key as $col ) {
+			if ( in_array( $col, self::BINARY_COLUMNS, true ) ) {
+				$where[] = $col . ' = ' . self::hex( $row[ $col ] );
+				continue;
+			}
+			$where[] = $col . ' = ' . ( is_int( $row[ $col ] ) ? '%d' : '%s' );
+			$args[]  = $row[ $col ];
+		}
+
+		$sql = "SELECT id FROM {$table} WHERE " . implode( ' AND ', $where ) . ' LIMIT 1';
+
+		return (int) $wpdb->get_var( $args === [] ? $sql : $wpdb->prepare( $sql, ...$args ) );
 	}
 
 	/**
@@ -136,11 +208,11 @@ final class DB {
 			}
 
 			if ( in_array( $col, self::BINARY_COLUMNS, true ) ) {
-				$marks[] = 'UNHEX(%s)';
-			} else {
-				$marks[] = is_int( $value ) ? '%d' : '%s';
+				$marks[] = self::hex( $value );
+				continue;
 			}
-			$args[] = $value;
+			$marks[] = is_int( $value ) ? '%d' : '%s';
+			$args[]  = $value;
 		}
 
 		return [ implode( ', ', $cols ), implode( ', ', $marks ), $args ];

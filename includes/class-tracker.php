@@ -198,12 +198,11 @@ final class Tracker {
 		global $wpdb;
 
 		$wpdb->query( $wpdb->prepare(
-			'INSERT IGNORE INTO ' . DB::table( 'trails' ) . ' (view_id, page_id, device, created_at, samples) VALUES (%d, %d, %d, %d, UNHEX(%s))',
+			'INSERT IGNORE INTO ' . DB::table( 'trails' ) . ' (view_id, page_id, device, created_at, samples) VALUES (%d, %d, %d, %d, ' . DB::hex( $hit['s'] ) . ')',
 			$view['id'],
 			$view['page_id'],
 			$session['device'],
-			$now,
-			$hit['s']
+			$now
 		) );
 	}
 
@@ -218,8 +217,6 @@ final class Tracker {
 	 * Returns the visitor id. "new" is true only when this hit created the visitor row.
 	 */
 	private static function visitor( string $vh, int $now ): array {
-		global $wpdb;
-
 		$id = DB::upsert( DB::table( 'visitors' ), [
 			'hash'       => $vh,
 			'first_seen' => $now,
@@ -227,7 +224,7 @@ final class Tracker {
 			'sessions'   => 0,
 		], [ 'last_seen' => $now ] );
 
-		return [ 'id' => $id, 'new' => $wpdb->rows_affected === 1 ];
+		return [ 'id' => $id, 'new' => DB::$inserted ];
 	}
 
 	private static function session_for_visitor( int $visitor_id, int $now, int $timeout ): ?array {
@@ -248,14 +245,15 @@ final class Tracker {
 	private static function view_by_key( string $vk ): ?array {
 		global $wpdb;
 
-		$row = $wpdb->get_row( $wpdb->prepare(
+		// The key was checked as 16 hex characters by the validator, so the literal is safe.
+		$row = $wpdb->get_row(
 			'SELECT v.id AS view_id, v.page_id, s.id AS session_id, s.started_at, s.device
 			 FROM ' . DB::table( 'views' ) . ' v
 			 JOIN ' . DB::table( 'sessions' ) . ' s ON s.id = v.session_id
-			 WHERE v.view_key = UNHEX(%s)
+			 WHERE v.view_key = ' . DB::hex( $vk ) . '
 			 ORDER BY v.id DESC LIMIT 1',
-			$vk
-		), 'ARRAY_A' );
+			'ARRAY_A'
+		);
 
 		if ( ! $row ) {
 			return null;
@@ -330,7 +328,7 @@ final class Tracker {
 
 		$wpdb->query( $wpdb->prepare(
 			'UPDATE ' . DB::table( 'sessions' ) . ' SET views = %d, exit_page_id = %d, last_seen = %d, duration = %d,
-			 is_bounce = IF(events > 0 OR %d > 1, 0, 1)
+			 is_bounce = CASE WHEN events > 0 OR %d > 1 THEN 0 ELSE 1 END
 			 WHERE id = %d',
 			$views,
 			$page_id,

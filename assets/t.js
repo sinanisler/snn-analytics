@@ -37,7 +37,18 @@
 
 	// Three routes, tried in order: the plugin's t.php, the REST API, then admin-ajax.php, which hosts
 	// that block plugin PHP files and REST for visitors usually still allow.
-	var routes = [cfg.u, cfg.f, cfg.a];
+	// A route on this site's own host, written with www or with another scheme, is moved to the page's
+	// origin. A cross-origin call gets no CORS answer, so the tracker could not tell whether it worked.
+	function sameOrigin(url) {
+		try {
+			var u = new URL(url, location.href);
+			if (u.host.replace(/^www./, '') === location.host.replace(/^www./, '')) {
+				return location.origin + u.pathname + u.search;
+			}
+		} catch (e) {}
+		return url;
+	}
+	var routes = [cfg.u, cfg.f, cfg.a].map(sameOrigin);
 	var route = 0;
 	try {
 		var saved = JSON.parse(localStorage.getItem('snnARoute') || 'null');
@@ -69,11 +80,20 @@
 		}
 		return post(stage, body).then(function (res) {
 			// Every route answers 204. Anything else (403, 404, 5xx, or a redirect to an HTML page) means this
-			// route is blocked, so move to the next one and remember it. A network error does not move.
+			// route is blocked, so move to the next one and remember it.
 			if (res.status !== 204 && stage < routes.length - 1) {
 				if (stage >= route) {
 					route = stage + 1;
 					remember();
+				}
+				return deliver(body, stage + 1);
+			}
+		}, function () {
+			// A network error can be a firewall that drops the connection, or the visitor being offline.
+			// Try the next route for this page, but do not remember it: offline is not a blocked route.
+			if (stage < routes.length - 1) {
+				if (stage >= route) {
+					route = stage + 1;
 				}
 				return deliver(body, stage + 1);
 			}
@@ -85,7 +105,11 @@
 	var viewStored = false;
 	var waiting = [];
 
-	function flush() {
+	function flush(key) {
+		// The answer of a page view from before a back/forward restore must not open the new view's queue.
+		if (key !== vk) {
+			return;
+		}
 		viewStored = true;
 		waiting.splice(0).forEach(function (body) {
 			deliver(body);
@@ -94,7 +118,7 @@
 
 	function send(body) {
 		if (viewStored || document.visibilityState === 'hidden') {
-			flush();
+			flush(vk);
 			deliver(body);
 		} else {
 			waiting.push(body);
@@ -167,7 +191,7 @@
 		for (var step = el; step && step !== document.body; step = step.parentElement) {
 			for (var prev = step; prev; prev = prev.previousElementSibling) {
 				if (/^H[1-6]$/.test(prev.tagName)) {
-					return label(prev);
+					return label(prev).replace(/^Unlabeled button$/, 'untitled heading');
 				}
 			}
 		}
@@ -193,7 +217,7 @@
 				hit = target.closest(goal.selector);
 			} catch (e) {}
 			if (hit) {
-				send({ e: 'ev', vk: vk, t: 6, v: String(goal.id) });
+				sendOnce({ e: 'ev', vk: vk, t: 6, v: String(goal.id) });
 			}
 		});
 
@@ -398,8 +422,16 @@
 			return pair.slice(0, 300);
 		}).join('&');
 
-		deliver({ e: 'pv', vk: vk, pg: cfg.pg, r: ref, q: utm ? '?' + utm : '' }).then(flush);
-		windowScrolled();
+		var key = vk;
+		deliver({ e: 'pv', vk: vk, pg: cfg.pg, r: ref, q: utm ? '?' + utm : '' }).then(function () {
+			flush(key);
+		});
+		// Before images load, a page can look shorter than the window and count as fully read.
+		if (document.readyState === 'complete') {
+			windowScrolled();
+		} else {
+			window.addEventListener('load', windowScrolled, { once: true });
+		}
 	}
 
 	// A page restored from the back/forward cache is a new view, but the script does not run again.
@@ -409,6 +441,8 @@
 			viewStored = false;
 			waiting = [];
 			reached = {};
+			recent = {};
+			lastSelection = '';
 			selections = 0;
 			active = 0;
 			since = document.visibilityState === 'visible' ? Date.now() : 0;
