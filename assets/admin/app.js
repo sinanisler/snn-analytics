@@ -175,6 +175,14 @@
 		}
 	}
 
+	/** Small flag for a country code, from the SVG set in assets/flags. Nothing is shown for an unknown country. */
+	function flag(code) {
+		if (!code) {
+			return null;
+		}
+		return h('img', { class: 'snn-a-flag', src: (cfg.flags || '') + code.toLowerCase() + '.svg', alt: '', width: '20', height: '15', loading: 'lazy' });
+	}
+
 	function isTagged(c) {
 		return !!(c.source || c.medium || c.campaign);
 	}
@@ -1480,7 +1488,7 @@
 							s.entry,
 							s.exit,
 							s.referrer,
-							countryName(s.country),
+							h('span', { class: 'snn-a-country' }, [flag(s.country), countryName(s.country)]),
 							DEVICE_LABELS[s.device] || 'Other',
 							n(s.views),
 							duration(s.duration)
@@ -1511,6 +1519,25 @@
 			selected = null;
 		}
 
+		function clock(at) {
+			return new Date(at * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+		}
+
+		/** Label and value pairs in a compact grid, for the visitor facts at the top of a visit. */
+		function facts(items) {
+			return h('dl', { class: 'snn-a-facts' }, items.map(function (item) {
+				return h('div', {}, [h('dt', { text: item[0] }), h('dd', {}, item[1])]);
+			}));
+		}
+
+		function action(event) {
+			return h('li', {}, [
+				h('span', { class: 'snn-a-time', text: clock(event.at) }),
+				h('span', { text: event.label + ': ' }),
+				h('strong', { text: event.value })
+			]);
+		}
+
 		/** The visit opens as a full-width row directly under the session that was clicked. */
 		function showJourney(id) {
 			if (!selected) {
@@ -1523,7 +1550,28 @@
 			api('stats/journey', { id: id }).then(function (data) {
 				clear(cell);
 				var s = data.session;
+				var v = data.visitor;
 				var close = h('button', { type: 'button', class: 'button-link', onclick: clearSelection }, 'Close');
+				var place = [s.city, s.region].filter(Boolean).join(', ');
+				var campaign = [s.campaign.source, s.campaign.medium, s.campaign.campaign].filter(Boolean).join(' / ');
+				var device = [DEVICE_LABELS[s.device] || 'Other', s.browser, s.os].filter(Boolean).join(' · ');
+				var steps = data.steps.map(function (step, index) {
+					return h('li', {}, [
+						h('div', { class: 'snn-a-step-head' }, [
+							h('span', { class: 'snn-a-time', text: clock(step.at) }),
+							h('span', { class: 'snn-a-muted', text: '+' + duration(step.at - s.started_at) }),
+							h('strong', { text: step.title || step.path }),
+							h('span', { class: 'snn-a-muted', text: step.path })
+						]),
+						h('div', { class: 'snn-a-step-meta' }, [
+							h('span', { text: 'On page ' + duration(step.duration) }),
+							index === 0 ? h('span', { class: 'snn-a-badge', text: 'Entry' }) : null,
+							index === data.steps.length - 1 ? h('span', { class: 'snn-a-badge', text: 'Exit' }) : null,
+							step.has_trail ? h('span', { class: 'snn-a-badge', text: 'Cursor trail' }) : null
+						]),
+						step.events.length ? h('ul', { class: 'snn-a-step-events' }, step.events.map(action)) : null
+					]);
+				});
 				cell.appendChild(card('Visit on ' + when(s.started_at), [
 					h('p', { class: 'snn-a-stat-row' }, [
 						h('span', {}, [h('strong', { text: duration(s.duration) }), ' duration']),
@@ -1531,17 +1579,19 @@
 						h('span', {}, [h('strong', { text: String(s.events) }), ' events']),
 						s.bounce ? h('span', { class: 'snn-a-badge', text: 'Bounced' }) : null
 					]),
-					h('ol', { class: 'snn-a-timeline' }, data.timeline.map(function (item) {
-						var time = h('span', { class: 'snn-a-time', text: new Date(item.at * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) });
-						if (item.type === 'view') {
-							return h('li', {}, [
-								time,
-								h('strong', { text: item.title || item.path }),
-								h('span', { class: 'snn-a-muted', text: ' ' + item.path + ' · ' + duration(item.duration) + ' on page' })
-							]);
-						}
-						return h('li', {}, [time, h('span', { text: item.label + ': ' }), h('strong', { text: item.value })]);
-					})),
+					facts([
+						['Visitor', (s.new ? 'New visitor' : 'Returning visitor') + ' · ' + v.sessions + (v.sessions === 1 ? ' session' : ' sessions')],
+						['First seen', v.first_seen ? when(v.first_seen) : '–'],
+						['Location', h('span', { class: 'snn-a-country' }, [flag(s.country), countryName(s.country) + (place ? ' · ' + place : '')])],
+						['Device', device],
+						['Came from', s.referrer + (campaign ? ' · ' + campaign : '')],
+						['Entry page', s.entry],
+						['Exit page', s.exit]
+					]),
+					h('h3', { class: 'snn-a-subhead', text: 'History' }),
+					h('ol', { class: 'snn-a-timeline' }, steps),
+					data.unattached.length ? h('h3', { class: 'snn-a-subhead', text: 'Actions without a page view' }) : null,
+					data.unattached.length ? h('ul', { class: 'snn-a-step-events' }, data.unattached.map(action)) : null,
 					data.others.length ? h('h3', { class: 'snn-a-subhead', text: 'Other visits from this visitor' }) : null,
 					data.others.length ? h('ul', { class: 'snn-a-plain' }, data.others.map(function (o) {
 						return h('li', {}, [

@@ -143,6 +143,7 @@ final class Admin {
 			'rest'      => esc_url_raw( rest_url( API::NS . '/' ) ),
 			'nonce'     => wp_create_nonce( 'wp_rest' ),
 			'world'     => plugins_url( 'assets/geo/world.json', SNN_A_FILE ),
+			'flags'     => plugins_url( 'assets/flags/4x3/', SNN_A_FILE ),
 			'canManage' => current_user_can( self::MANAGE_CAP ),
 			'cards'     => self::CARDS,
 			'timezone'  => wp_timezone_string(),

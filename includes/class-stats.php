@@ -689,25 +689,58 @@ final class Stats {
 	}
 
 	/**
-	 * One session as a timeline: page views and events in time order, plus the visitor's other sessions.
+	 * One session in full: who the visitor is, where the visit came from, and every page view in order
+	 * with the clicks, form submits and other actions that happened on that page. Plus the visitor's other sessions.
 	 */
 	public static function journey( int $session_id ): ?array {
 		global $wpdb;
 
-		$sessions = DB::table( 'sessions' );
-		$views    = DB::table( 'views' );
-		$events   = DB::table( 'events' );
-		$pages    = DB::table( 'pages' );
-		$targets  = DB::table( 'event_targets' );
+		$sessions  = DB::table( 'sessions' );
+		$views     = DB::table( 'views' );
+		$events    = DB::table( 'events' );
+		$pages     = DB::table( 'pages' );
+		$targets   = DB::table( 'event_targets' );
+		$visitors  = DB::table( 'visitors' );
+		$countries = DB::table( 'countries' );
+		$cities    = DB::table( 'cities' );
+		$ua        = DB::table( 'ua' );
+		$refs      = DB::table( 'referrers' );
+		$camps     = DB::table( 'campaigns' );
+		$utm       = DB::table( 'utm_values' );
+		$trails    = DB::table( 'trails' );
 
-		$session = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$sessions} WHERE id = %d", $session_id ), ARRAY_A );
+		$session = $wpdb->get_row( $wpdb->prepare(
+			"SELECT s.*, c.code AS country, ci.name AS city, ci.region AS region,
+			        b.name AS browser, o.name AS os, r.domain AS referrer,
+			        us.value AS utm_source, um.value AS utm_medium, uc.value AS utm_campaign,
+			        vis.first_seen AS visitor_first_seen, vis.sessions AS visitor_sessions,
+			        entry.title AS entry_title, entry.path AS entry_path,
+			        xp.title AS exit_title, xp.path AS exit_path
+			 FROM {$sessions} s
+			 LEFT JOIN {$countries} c ON c.id = s.country_id
+			 LEFT JOIN {$cities} ci ON ci.id = s.city_id
+			 LEFT JOIN {$ua} b ON b.id = s.browser_id
+			 LEFT JOIN {$ua} o ON o.id = s.os_id
+			 LEFT JOIN {$refs} r ON r.id = s.referrer_id
+			 LEFT JOIN {$camps} cp ON cp.id = s.campaign_id
+			 LEFT JOIN {$utm} us ON us.id = cp.source_id
+			 LEFT JOIN {$utm} um ON um.id = cp.medium_id
+			 LEFT JOIN {$utm} uc ON uc.id = cp.campaign_id
+			 LEFT JOIN {$visitors} vis ON vis.id = s.visitor_id
+			 LEFT JOIN {$pages} entry ON entry.id = s.entry_page_id
+			 LEFT JOIN {$pages} xp ON xp.id = s.exit_page_id
+			 WHERE s.id = %d",
+			$session_id
+		), ARRAY_A );
 		if ( ! $session ) {
 			return null;
 		}
 
 		$view_rows = $wpdb->get_results( $wpdb->prepare(
-			"SELECT v.id, v.created_at, v.duration, v.seq, p.title, p.path
-			 FROM {$views} v JOIN {$pages} p ON p.id = v.page_id
+			"SELECT v.id, v.created_at, v.duration, v.seq, p.title, p.path, (t.view_id IS NOT NULL) AS has_trail
+			 FROM {$views} v
+			 JOIN {$pages} p ON p.id = v.page_id
+			 LEFT JOIN {$trails} t ON t.view_id = v.id
 			 WHERE v.session_id = %d ORDER BY v.created_at, v.id",
 			$session_id
 		), ARRAY_A );
@@ -719,27 +752,35 @@ final class Stats {
 			$session_id
 		), ARRAY_A );
 
-		$timeline = [];
+		$steps = [];
 		foreach ( $view_rows as $v ) {
-			$timeline[] = [
-				'type'     => 'view',
-				'at'       => (int) $v['created_at'],
-				'title'    => self::clean_title( (string) $v['title'] ),
-				'path'     => (string) $v['path'],
-				'duration' => (int) $v['duration'],
-				'seq'      => (int) $v['seq'],
+			$steps[ (int) $v['id'] ] = [
+				'id'        => (int) $v['id'],
+				'seq'       => (int) $v['seq'],
+				'at'        => (int) $v['created_at'],
+				'title'     => self::clean_title( (string) $v['title'] ),
+				'path'      => (string) $v['path'],
+				'duration'  => (int) $v['duration'],
+				'has_trail' => (bool) $v['has_trail'],
+				'events'    => [],
 			];
 		}
-		$types = self::EVENT_LABELS;
+
+		// An action goes under the page view it happened on. Anything without a page view is kept separately.
+		$labels     = self::EVENT_LABELS;
+		$unattached = [];
 		foreach ( $event_rows as $e ) {
-			$timeline[] = [
-				'type'  => 'event',
+			$event = [
 				'at'    => (int) $e['created_at'],
-				'label' => $types[ (int) $e['type'] ] ?? 'Event',
+				'label' => $labels[ (int) $e['type'] ] ?? 'Event',
 				'value' => (string) $e['value'],
 			];
+			if ( isset( $steps[ (int) $e['view_id'] ] ) ) {
+				$steps[ (int) $e['view_id'] ]['events'][] = $event;
+			} else {
+				$unattached[] = $event;
+			}
 		}
-		usort( $timeline, static fn( $a, $b ) => $a['at'] <=> $b['at'] );
 
 		$others = $wpdb->get_results( $wpdb->prepare(
 			"SELECT id, started_at, views, duration, is_bounce FROM {$sessions}
@@ -749,7 +790,7 @@ final class Stats {
 		), ARRAY_A );
 
 		return [
-			'session'  => [
+			'session'    => [
 				'id'         => (int) $session['id'],
 				'visitor'    => (int) $session['visitor_id'],
 				'started_at' => (int) $session['started_at'],
@@ -760,9 +801,27 @@ final class Stats {
 				'bounce'     => (bool) $session['is_bounce'],
 				'new'        => (bool) $session['is_new'],
 				'device'     => (int) $session['device'],
+				'country'    => (string) ( $session['country'] ?? '' ),
+				'city'       => (string) ( $session['city'] ?? '' ),
+				'region'     => (string) ( $session['region'] ?? '' ),
+				'browser'    => (string) ( $session['browser'] ?? '' ),
+				'os'         => (string) ( $session['os'] ?? '' ),
+				'referrer'   => (string) ( $session['referrer'] ?? '' ) !== '' ? (string) $session['referrer'] : 'Direct',
+				'campaign'   => [
+					'source'   => (string) ( $session['utm_source'] ?? '' ),
+					'medium'   => (string) ( $session['utm_medium'] ?? '' ),
+					'campaign' => (string) ( $session['utm_campaign'] ?? '' ),
+				],
+				'entry'      => self::clean_title( (string) ( $session['entry_title'] ?: $session['entry_path'] ) ),
+				'exit'       => self::clean_title( (string) ( $session['exit_title'] ?: $session['exit_path'] ) ),
 			],
-			'timeline' => $timeline,
-			'others'   => array_map( static fn( $row ) => [
+			'visitor'    => [
+				'first_seen' => (int) ( $session['visitor_first_seen'] ?? 0 ),
+				'sessions'   => (int) ( $session['visitor_sessions'] ?? 0 ),
+			],
+			'steps'      => array_values( $steps ),
+			'unattached' => $unattached,
+			'others'     => array_map( static fn( $row ) => [
 				'id'         => (int) $row['id'],
 				'started_at' => (int) $row['started_at'],
 				'views'      => (int) $row['views'],
