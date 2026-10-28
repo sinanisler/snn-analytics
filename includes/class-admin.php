@@ -42,6 +42,7 @@ final class Admin {
 	const TOP_BAR = [
 		'snn-analytics',
 		'snn-analytics-realtime',
+		'snn-analytics-journeys',
 		'snn-analytics-pages',
 		'snn-analytics-heatmaps',
 		'snn-analytics-trails',
@@ -50,7 +51,6 @@ final class Admin {
 		'snn-analytics-geo',
 		'snn-analytics-devices',
 		'snn-analytics-campaigns',
-		'snn-analytics-journeys',
 		'snn-analytics-goals',
 		'snn-analytics-settings',
 	];
