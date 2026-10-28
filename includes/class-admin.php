@@ -53,6 +53,22 @@ final class Admin {
 		'snn-analytics-settings',
 	];
 
+	/** One-line explanation shown when hovering a top-bar tab. */
+	const TAB_TIPS = [
+		'snn-analytics'           => 'The big picture: visitors, pages, sources and goals at a glance.',
+		'snn-analytics-realtime'  => 'Who is on your site right now.',
+		'snn-analytics-journeys'  => 'Follow one visitor through the pages they viewed and what they did.',
+		'snn-analytics-pages'     => 'How each page performs, with heatmaps of where people click.',
+		'snn-analytics-compare'   => 'Put pages side by side to see which does better.',
+		'snn-analytics-heatmaps'  => 'See where visitors click and scroll on a page.',
+		'snn-analytics-replay'    => 'Watch a visit play back step by step.',
+		'snn-analytics-referrers' => 'Which websites, search engines and social networks send you visitors.',
+		'snn-analytics-geo'       => 'Where in the world your visitors are.',
+		'snn-analytics-devices'   => 'Which devices, browsers and operating systems people use.',
+		'snn-analytics-goals'     => 'Track the actions that matter, follow visitors through funnels, and measure your campaigns.',
+		'snn-analytics-settings'  => 'Tracking, privacy, data retention and who can see these reports.',
+	];
+
 	/**
 	 * Whether the current user may open a screen. Settings and Import need manage_options; every
 	 * other screen follows the role choices made under Settings (administrators always pass).
@@ -166,7 +182,7 @@ final class Admin {
 			<?php foreach ( self::TOP_BAR as $slug ) : ?>
 				<?php if ( ! self::can_open( $slug ) ) { continue; } ?>
 				<?php $url = add_query_arg( $range + [ 'page' => $slug ], admin_url( 'admin.php' ) ); ?>
-				<a href="<?php echo esc_url( $url ); ?>" class="snn-a-tab<?php echo $slug === $current ? ' is-current' : ''; ?>"<?php echo $slug === $current ? ' aria-current="page"' : ''; ?>><?php echo esc_html( self::SCREENS[ $slug ][1] ); ?></a>
+				<a href="<?php echo esc_url( $url ); ?>" class="snn-a-tab<?php echo $slug === $current ? ' is-current' : ''; ?>"<?php echo $slug === $current ? ' aria-current="page"' : ''; ?><?php echo isset( self::TAB_TIPS[ $slug ] ) ? ' data-tip="' . esc_attr( self::TAB_TIPS[ $slug ] ) . '"' : ''; ?>><?php echo esc_html( self::SCREENS[ $slug ][1] ); ?></a>
 			<?php endforeach; ?>
 		</nav>
 		<?php

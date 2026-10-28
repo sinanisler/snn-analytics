@@ -83,6 +83,117 @@
 		}, []);
 	}
 
+	// ----------------------------------------------------------- tooltips
+
+	/** Plain-language explanations, shown next to any table heading, card title or figure with this exact label. */
+	var GLOSSARY = {
+		'Visitors': 'Different people who visited. Someone who comes back several times is counted once.',
+		'New visitors': 'People visiting your site for the first time in this period.',
+		'Sessions': 'One visit. A session is a run of page views by the same person and ends after a spell of inactivity.',
+		'Views': 'Total page views, including repeat views of the same page.',
+		'Bounce rate': 'The share of visits that left after seeing only one page. Lower usually means people stayed and looked around.',
+		'Avg. time': 'How long a visit lasts on average.',
+		'Active time': 'Time spent with the page open and in use, not sitting in a background tab.',
+		'Avg. time on page': 'How long visitors actively spend on this page on average.',
+		'Views per session': 'How many pages a visit looks at on average.',
+		'Views per visitor': 'How many pages each person looks at on average.',
+		'Events': 'Actions tracked besides page views, such as clicks and custom events.',
+		'Entrances (landing page)': 'Visits that started on this page.',
+		'Clicks recorded': 'Clicks on this page that were tracked for the heatmap.',
+		'Exit rate': 'The share of views of this page that were the last page of the visit.',
+		'Exits': 'Visits that ended on this page.',
+		'Conversions': 'Times visitors completed a goal. Each visit counts once per goal.',
+		'Goal': 'An action you want visitors to take.',
+		'Type': 'What kind of action the goal watches for.',
+		'Rule': 'What a visit has to do to count as a conversion.',
+		'Source': 'Where the visit came from, such as a newsletter, Facebook or Google.',
+		'Medium': 'The kind of channel, such as email, social or cpc (paid ads).',
+		'Campaign': 'The name you gave the link or promotion.',
+		'Term': 'The search keyword, for paid search campaigns.',
+		'Content': 'Tells apart different links or ads inside one campaign.',
+		'Traffic over time': 'Visitors and views for every day in the selected period.',
+		'Top pages': 'The pages that were viewed most.',
+		'Geographic traffic': 'Where in the world your visitors are.',
+		'New vs. returning': 'How many visitors are new and how many came back.',
+		'Devices': 'Whether people use desktop, mobile or tablet.',
+		'Traffic sources': 'The channels that send you visitors.',
+		'Campaigns': 'Tagged links you shared and the visits and conversions they brought.',
+		'Goals': 'Actions you want visitors to take, and how often they happened.',
+		'Realtime': 'Visitors on your site right now.',
+		'Channels': 'Visits grouped by how people found you: direct, search, social, referral, ads or email.',
+		'Domains': 'The websites that sent visitors to you.',
+		'Browsers': 'The browsers your visitors use.',
+		'Operating systems': 'The operating systems your visitors use.',
+		'Link builder': 'Adds tracking tags to a web address so visits from that link are counted as a campaign.',
+		'Campaign results': 'Visits and conversions for every campaign link, plus visits without tags.'
+	};
+
+	/** A small "?" that explains a thing when hovered or focused. */
+	function tip(text) {
+		return h('span', { class: 'snn-a-tip', tabindex: '0', role: 'img', 'aria-label': text, 'data-tip': text, text: '?' });
+	}
+
+	/** The glossary tip for a label, or null. */
+	function tipFor(label) {
+		return Object.prototype.hasOwnProperty.call(GLOSSARY, label) ? tip(GLOSSARY[label]) : null;
+	}
+
+	/**
+	 * One floating bubble for every [data-tip] element. It is positioned on screen, not inside
+	 * the element, so scroll boxes and table headers never clip it.
+	 */
+	(function () {
+		var bubble = null;
+		var current = null;
+
+		function hide() {
+			current = null;
+			if (bubble && bubble.parentNode) {
+				bubble.parentNode.removeChild(bubble);
+			}
+		}
+
+		function show(target) {
+			var text = target.getAttribute('data-tip');
+			if (!text || target === current) {
+				return;
+			}
+			current = target;
+			bubble = bubble || h('div', { class: 'snn-a-tooltip', role: 'tooltip' });
+			bubble.textContent = text;
+			document.body.appendChild(bubble);
+
+			var r = target.getBoundingClientRect();
+			var w = bubble.offsetWidth;
+			var hgt = bubble.offsetHeight;
+			var left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), window.innerWidth - w - 8);
+			var top = r.top - hgt - 8;
+			if (top < 8) {
+				top = r.bottom + 8;
+			}
+			bubble.style.left = Math.round(left) + 'px';
+			bubble.style.top = Math.round(top) + 'px';
+		}
+
+		function find(event) {
+			return event.target && event.target.closest ? event.target.closest('[data-tip]') : null;
+		}
+
+		document.addEventListener('mouseover', function (event) {
+			var target = find(event);
+			if (target) { show(target); } else { hide(); }
+		});
+		document.addEventListener('focusin', function (event) {
+			var target = find(event);
+			if (target) { show(target); }
+		});
+		document.addEventListener('focusout', hide);
+		document.addEventListener('keydown', function (event) {
+			if (event.key === 'Escape') { hide(); }
+		});
+		window.addEventListener('scroll', hide, true);
+	})();
+
 	function clear(node) {
 		while (node.firstChild) {
 			node.removeChild(node.firstChild);
@@ -367,7 +478,8 @@
 		return h('div', { class: 'snn-a-scroll' }, h('table', { class: 'snn-a-table' }, [
 			h('thead', {}, h('tr', {}, heads.map(function (head) {
 				var numeric = Array.isArray(head);
-				return h('th', { class: numeric ? 'num' : '', scope: 'col', text: numeric ? head[0] : head });
+				var label = numeric ? head[0] : head;
+				return h('th', { class: numeric ? 'num' : '', scope: 'col' }, [label, tipFor(label)]);
 			}))),
 			h('tbody', {}, body)
 		]));
@@ -404,7 +516,7 @@
 			h('header', { class: 'snn-a-card-head' }, [
 				opts.grip ? h('span', { class: 'snn-a-grip', 'aria-hidden': 'true', title: 'Drag to move', text: '⠿' }) : null,
 				h('div', { class: 'snn-a-card-title' }, [
-					h('h2', { text: title }),
+					h('h2', {}, [title, opts.tip ? tip(opts.tip) : tipFor(title)]),
 					opts.sub ? h('p', { class: 'snn-a-card-sub', text: opts.sub }) : null
 				]),
 				h('div', { class: 'snn-a-card-actions' }, [
@@ -422,7 +534,7 @@
 
 	function kpi(label, value, delta) {
 		return h('div', { class: 'snn-a-kpi' }, [
-			h('div', { class: 'snn-a-kpi-label', text: label }),
+			h('div', { class: 'snn-a-kpi-label' }, [label, tipFor(label)]),
 			h('div', { class: 'snn-a-kpi-value', text: value }),
 			h('div', { class: 'snn-a-kpi-delta ' + (delta.cls || ''), text: delta.text })
 		]);
@@ -2015,18 +2127,18 @@
 
 	function urlBuilder() {
 		var fields = [
-			['url', 'Destination URL', 'url', 'https://example.com/landing/', true],
-			['utm_source', 'Source (required): where you share it', 'text', 'newsletter', false],
-			['utm_medium', 'Medium: the kind of channel', 'text', 'email', false],
-			['utm_campaign', 'Campaign (required): a name for it', 'text', 'spring-sale', false],
-			['utm_term', 'Term (optional)', 'text', '', false],
-			['utm_content', 'Content (optional)', 'text', '', false]
+			['url', 'Destination URL', 'url', 'https://example.com/landing/', true, 'The page on your site that the link should open. Paste the full address, starting with https://'],
+			['utm_source', 'Source (required)', 'text', 'newsletter', false, 'Where you will share the link, such as newsletter, facebook or google.'],
+			['utm_medium', 'Medium', 'text', 'email', false, 'The kind of channel: email, social, cpc (paid ads) or banner.'],
+			['utm_campaign', 'Campaign (required)', 'text', 'spring-sale', false, 'A name for this promotion. Reports group visits by this name.'],
+			['utm_term', 'Term (optional)', 'text', '', false, 'Only for paid search: the keyword you bid on.'],
+			['utm_content', 'Content (optional)', 'text', '', false, 'Tells apart two links in the same campaign, such as header-button and footer-link.']
 		];
 		var inputs = {};
 		var grid = h('div', { class: 'snn-a-form-grid' });
 		fields.forEach(function (f) {
 			inputs[f[0]] = h('input', { type: f[2], placeholder: f[3], 'aria-label': f[1], autocomplete: 'off' });
-			grid.appendChild(h('label', { class: 'snn-a-field' + (f[4] ? ' is-full' : '') }, [h('span', { text: f[1] }), inputs[f[0]]]));
+			grid.appendChild(h('label', { class: 'snn-a-field' + (f[4] ? ' is-full' : '') }, [h('span', {}, [f[1], tip(f[5])]), inputs[f[0]]]));
 		});
 
 		var hint = h('p', { class: 'snn-a-hint', role: 'status' });
@@ -2254,19 +2366,21 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 	 * walks new users through the order to do things in.
 	 */
 	function renderConversions(rp) {
-		var TABS = [['goals', 'Goals'], ['funnels', 'Funnels'], ['campaigns', 'Campaigns']];
+		var TABS = [
+			['goals', 'Goals', 'The actions you want visitors to take, such as reaching a thank-you page or clicking a button.'],
+			['funnels', 'Funnels', 'A series of goals in order. Shows how many visitors reach each step and where they drop off.'],
+			['campaigns', 'Campaigns', 'Tag the links you share to see which emails, posts and ads bring visitors and conversions.']
+		];
 		var tab = new URLSearchParams(window.location.search).get('tab');
 		if (!TABS.some(function (t) { return t[0] === tab; })) {
 			tab = 'goals';
 		}
 
 		var data = null;
-		var intro = h('div');
-		var nav = h('div', { class: 'snn-a-segment snn-a-tabs', role: 'group', 'aria-label': 'Conversion tracking sections' });
+		var nav = h('div', { class: 'snn-a-segment snn-a-subtabs', role: 'group', 'aria-label': 'Conversion tracking sections' });
 		var panel = h('div', {}, skeleton(6));
 
 		root.appendChild(h('div', { class: 'snn-a-toolbar' }, rangeControl()));
-		root.appendChild(intro);
 		root.appendChild(nav);
 		root.appendChild(panel);
 
@@ -2278,27 +2392,6 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 			draw();
 		}
 
-		function drawIntro() {
-			clear(intro);
-			var steps = [
-				['Create a goal', 'Choose the action that counts as a win, like reaching a thank-you page or clicking a buy button.', data.goals.length > 0, 'goals'],
-				['Tag your links (optional)', 'See which emails, posts and ads bring people who convert.', data.campaigns.some(isTagged), 'campaigns'],
-				['Build a funnel (optional)', 'Follow visitors through several goals in order and see where they drop off.', data.funnels.length > 0, 'funnels']
-			];
-			if (steps.every(function (s) { return s[2]; })) {
-				return;
-			}
-			intro.appendChild(card('Get started in three steps', h('ol', { class: 'snn-a-checklist' }, steps.map(function (s) {
-				return h('li', { class: s[2] ? 'is-done' : '' }, [
-					h('span', { class: 'snn-a-check', 'aria-hidden': 'true', text: s[2] ? '✓' : '' }),
-					h('div', {}, [
-						h('strong', {}, h('a', { href: '#', onclick: function (event) { event.preventDefault(); pick(s[3]); } }, s[0])),
-						h('span', { class: 'snn-a-muted', text: ' ' + s[1] })
-					])
-				]);
-			})), { sub: 'A conversion is a visit that did something you care about. Nothing is counted until you create a goal.' }));
-		}
-
 		function drawNav() {
 			clear(nav);
 			TABS.forEach(function (t) {
@@ -2307,6 +2400,7 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 					type: 'button',
 					class: 'snn-a-seg' + (active ? ' is-active' : ''),
 					'aria-pressed': active ? 'true' : 'false',
+					'data-tip': t[2],
 					onclick: function () { pick(t[0]); }
 				}, t[1]));
 			});
@@ -2327,7 +2421,6 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 		function load() {
 			Promise.all([api('goals', rp), api('funnels', rp), api('stats/campaigns', rp)]).then(function (results) {
 				data = { goals: results[0], funnels: results[1], campaigns: results[2] };
-				drawIntro();
 				draw();
 			}).catch(function (err) {
 				clear(panel);
@@ -2398,7 +2491,7 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 			3: { label: 'Event name', placeholder: 'signup', text: 'Your site sends this with window.snnA.track("signup"). Needs a little code.' }
 		};
 		var valueLabel = h('span', { text: hints[1].label });
-		var matchField = h('label', { class: 'snn-a-field' }, [h('span', { text: 'The address' }), match]);
+		var matchField = h('label', { class: 'snn-a-field' }, [h('span', {}, ['The address', tip('How the page address is compared with what you type next. “Contains” also catches /thank-you/, /thanks/ and similar pages.')]), match]);
 		var hint = h('p', { class: 'snn-a-hint' }, hints[1].text);
 
 		type.addEventListener('change', function () {
@@ -2409,13 +2502,39 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 			matchField.hidden = type.value !== '1';
 		});
 
-		return h('details', { class: 'snn-a-add', open: open ? true : null }, [
+		// One-click starting points. They fill in the form; the user only has to check it and save.
+		var presets = [
+			['Visited a thank-you page', 1, 2, '/thank', 'Thank-you page visited'],
+			['Visited the checkout page', 1, 2, '/checkout', 'Checkout visited'],
+			['Visited the contact page', 1, 2, '/contact', 'Contact page visited'],
+			['Clicked a phone number', 2, 1, 'a[href^="tel:"]', 'Phone number clicked'],
+			['Clicked an email address', 2, 1, 'a[href^="mailto:"]', 'Email address clicked']
+		];
+		var form = h('details', { class: 'snn-a-add', open: open ? true : null });
+
+		function usePreset(p) {
+			type.value = String(p[1]);
+			type.dispatchEvent(new Event('change'));
+			match.value = String(p[2]);
+			value.value = p[3];
+			name.value = p[4];
+			error.textContent = '';
+			form.open = true;
+		}
+
+		var presetBox = h('div', { class: 'snn-a-presets' }, presets.map(function (p) {
+			return h('button', { type: 'button', class: 'button', onclick: function () { usePreset(p); } }, p[0]);
+		}));
+
+		[
 			h('summary', {}, 'Add a goal'),
+			h('p', { class: 'snn-a-presets-label' }, ['Quick start: pick one, then press Save', tip('Each button fills in the form below with a common goal. You can change anything before you save.')]),
+			presetBox,
 			h('div', { class: 'snn-a-form-grid' }, [
-				h('label', { class: 'snn-a-field is-full' }, [h('span', { text: 'What counts as a conversion?' }), type]),
+				h('label', { class: 'snn-a-field is-full' }, [h('span', {}, ['What counts as a conversion?', tip('Pick the kind of action. Visiting a page is the simplest and works for most sites.')]), type]),
 				matchField,
-				h('label', { class: 'snn-a-field' }, [valueLabel, value]),
-				h('label', { class: 'snn-a-field is-full' }, [h('span', { text: 'Goal name (optional)' }), name])
+				h('label', { class: 'snn-a-field' }, [h('span', {}, [valueLabel, tip('The page address, button selector or event name the goal looks for.')]), value]),
+				h('label', { class: 'snn-a-field is-full' }, [h('span', {}, ['Goal name (optional)', tip('A label for your reports. If you leave it empty the value above is used.')]), name])
 			]),
 			hint,
 			error,
@@ -2432,7 +2551,9 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 					value: value.value.trim()
 				}).then(onSaved).catch(function (err) { error.textContent = err.message; });
 			} }, 'Save goal'))
-		]);
+		].forEach(function (node) { form.appendChild(node); });
+
+		return form;
 	}
 
 	function funnelList(funnels, rp, reload) {
@@ -2482,7 +2603,11 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 				return h('option', { value: String(g.id) }, g.name || 'Untitled goal');
 			})));
 			steps.push(select);
-			stepBox.appendChild(h('label', { class: 'snn-a-field' }, [h('span', { text: 'Step ' + steps.length }), select]));
+			// Start with the goals in the order they were created, so a first funnel needs no picking.
+			if (goals[steps.length - 1]) {
+				select.value = String(goals[steps.length - 1].id);
+			}
+			stepBox.appendChild(h('label', { class: 'snn-a-field' }, [h('span', {}, ['Step ' + steps.length, steps.length === 1 ? tip('The first goal visitors reach. Each later step has to come after the one before it.') : null]), select]));
 		}
 
 		function removeStep() {
@@ -2498,13 +2623,13 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 		return h('details', { class: 'snn-a-add', open: open ? true : null }, [
 			h('summary', {}, 'Add a funnel'),
 			h('div', { class: 'snn-a-form-grid' }, [
-				h('label', { class: 'snn-a-field' }, [h('span', { text: 'Name' }), name]),
-				h('label', { class: 'snn-a-field' }, [h('span', { text: 'Window (days)' }), days])
+				h('label', { class: 'snn-a-field' }, [h('span', {}, ['Name', tip('Any name that helps you recognise the funnel, such as Purchase or Sign-up.')]), name]),
+				h('label', { class: 'snn-a-field' }, [h('span', {}, ['Window (days)', tip('How long a visitor has to get from one step to the next. 7 days is a good start.')]), days])
 			]),
 			stepBox,
 			h('p', { class: 'snn-a-actions' }, [
-				h('button', { type: 'button', class: 'button', onclick: addStep }, 'Add step'),
-				h('button', { type: 'button', class: 'button', onclick: removeStep }, 'Remove step')
+				h('button', { type: 'button', class: 'button', 'data-tip': 'Add another goal to the end of the funnel (up to 8).', onclick: addStep }, 'Add step'),
+				h('button', { type: 'button', class: 'button', 'data-tip': 'Remove the last step. A funnel keeps at least two.', onclick: removeStep }, 'Remove step')
 			]),
 			error,
 			h('p', {}, h('button', { type: 'button', class: 'button button-primary', onclick: function () {
