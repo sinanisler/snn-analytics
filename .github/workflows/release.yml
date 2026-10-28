@@ -1,0 +1,144 @@
+name: Plugin Release
+
+# Commit message rules:
+#   contains "release"  -> bump patch (0.1.N -> 0.1.N+1), build zip, publish a GitHub release
+#   contains "alphatag" -> build zip, publish a pre-release at the current version (no bump)
+#   anything else       -> build the zip only, publish nothing
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: plugin-release
+  cancel-in-progress: false
+
+env:
+  PLUGIN_SLUG: snn-analytics          # folder name inside the zip, so WordPress installs it under this name
+  PLUGIN_FILE: snn-analytics.php      # main plugin file at the repo root
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Read current version
+        run: |
+          version=$(grep -oP 'Version:\s*\K[0-9.]+' "$PLUGIN_FILE" | head -1)
+          echo "CURRENT_VERSION=$version" >> "$GITHUB_ENV"
+          echo "RELEASE_SHA=$GITHUB_SHA" >> "$GITHUB_ENV"
+          echo "Current version: $version"
+
+      - name: Bump patch version (release commits only)
+        if: contains(github.event.head_commit.message, 'release')
+        run: |
+          current="$CURRENT_VERSION"
+          next=$(awk -F. '{print $1 "." $2 "." ($3 + 1)}' <<< "$current")
+          current_re=${current//./\\.}
+
+          # Both the plugin header and the SNN_A_VERSION constant must change.
+          sed -i -E \
+            -e "s/(Version:[[:space:]]+)${current_re}/\1${next}/" \
+            -e "s/(SNN_A_VERSION',[[:space:]]*')${current_re}'/\1${next}'/" \
+            "$PLUGIN_FILE"
+
+          # Fail the job if either place was not updated.
+          grep -qE "Version:[[:space:]]+${next}\$" "$PLUGIN_FILE"
+          grep -q "SNN_A_VERSION', '${next}'" "$PLUGIN_FILE"
+
+          echo "NEW_VERSION=$next" >> "$GITHUB_ENV"
+          echo "Bumped $current -> $next"
+
+      - name: Commit version bump (release commits only)
+        if: contains(github.event.head_commit.message, 'release')
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$PLUGIN_FILE"
+          git commit -m "Bump version to $NEW_VERSION"
+          git push origin HEAD:main
+          echo "RELEASE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Build plugin zip
+        run: |
+          # The repo root is the plugin. Leave out repo-only files.
+          rm -rf build
+          mkdir -p "build/$PLUGIN_SLUG"
+          rsync -a \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='build' \
+            --exclude='docs-old-plugin-learn-from-it' \
+            --exclude='PLAN.md' \
+            --exclude='*.zip' \
+            --exclude='.DS_Store' \
+            ./ "build/$PLUGIN_SLUG/"
+          (cd build && zip -r "../$PLUGIN_SLUG.zip" "$PLUGIN_SLUG")
+          unzip -l "$PLUGIN_SLUG.zip" | tail -n 1
+
+      - name: Generate release notes
+        if: contains(github.event.head_commit.message, 'release') || contains(github.event.head_commit.message, 'alphatag')
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          if [[ "$COMMIT_MSG" == *release* ]]; then
+            title="What's Changed"
+            tag="v$NEW_VERSION"
+          else
+            title="What's Changed (Pre-release)"
+            tag="pre-v$CURRENT_VERSION"
+          fi
+
+          # Previous release tag. Pre-release tags start with "pre-", so they never match "v*".
+          prev=$(git describe --tags --abbrev=0 --match 'v*' HEAD 2>/dev/null || true)
+          if [ -n "$prev" ]; then range="$prev..HEAD"; else range="HEAD"; fi
+
+          # Leave out the bot's own version-bump commits.
+          changelog=$(git log "$range" --no-merges --invert-grep --grep='^Bump version to' --pretty=format:'- %s (%h)')
+
+          {
+            echo "## $title"
+            echo ""
+            echo "$changelog"
+            echo ""
+            if [ -n "$prev" ]; then
+              echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${prev}...${tag}"
+            fi
+          } > release_notes.md
+
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+          cat release_notes.md
+
+      - name: Create GitHub release
+        if: contains(github.event.head_commit.message, 'release')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: snn-analytics.zip
+          tag_name: v${{ env.NEW_VERSION }}
+          name: Release v${{ env.NEW_VERSION }}
+          body_path: release_notes.md
+          target_commitish: ${{ env.RELEASE_SHA }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub pre-release
+        if: contains(github.event.head_commit.message, 'alphatag')
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          files: snn-analytics.zip
+          tag_name: pre-v${{ env.CURRENT_VERSION }}
+          name: Pre-release v${{ env.CURRENT_VERSION }}
+          body_path: release_notes.md
+          target_commitish: ${{ github.sha }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

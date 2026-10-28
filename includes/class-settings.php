@@ -1,0 +1,93 @@
+<?php
+/**
+ * Plugin settings and the secrets used for visitor hashing and page signing.
+ */
+
+namespace SNN_Analytics;
+
+defined( 'ABSPATH' ) || exit;
+
+final class Settings {
+
+	const SETTINGS = 'snn_a_settings';
+	const SECRETS  = 'snn_a_secrets';
+
+	private static ?array $settings = null;
+	private static ?array $secrets  = null;
+
+	public static function defaults(): array {
+		return [
+			'salt_rotation'   => 'yearly', // never | yearly | monthly | daily
+			'respect_dnt'     => true,     // honour DNT and Sec-GPC
+			'exclude_roles'   => [ 'administrator' ],
+			'session_timeout' => 1800,     // seconds without a hit before a new session starts
+			'site_host'       => '',       // host without "www.", used for internal referrers
+		];
+	}
+
+	public static function get(): array {
+		return self::$settings ??= array_merge( self::defaults(), Store::read( self::SETTINGS ) );
+	}
+
+	public static function update( array $values ): void {
+		Store::write( self::SETTINGS, array_merge( Store::read( self::SETTINGS ), $values ), false );
+		self::$settings = null;
+	}
+
+	/**
+	 * Salt and HMAC key. Created on first use, never shown in the UI, never autoloaded.
+	 */
+	public static function secrets(): array {
+		if ( self::$secrets !== null ) {
+			return self::$secrets;
+		}
+
+		$secrets = Store::read( self::SECRETS );
+		if ( empty( $secrets['salt'] ) || empty( $secrets['hmac'] ) ) {
+			$secrets = [
+				'salt'    => bin2hex( random_bytes( 32 ) ),
+				'salt_at' => time(),
+				'hmac'    => bin2hex( random_bytes( 32 ) ),
+			];
+			Store::write( self::SECRETS, $secrets, false );
+		}
+
+		return self::$secrets = $secrets;
+	}
+
+	/**
+	 * Current visitor salt. Rotates when the configured period has passed.
+	 * "never" keeps one salt forever, so journeys stay linked across days.
+	 */
+	public static function salt(): string {
+		$secrets = self::secrets();
+		$period  = self::rotation_period( (string) self::get()['salt_rotation'] );
+
+		if ( $period > 0 && time() - (int) $secrets['salt_at'] >= $period ) {
+			$secrets = [
+				'salt'    => bin2hex( random_bytes( 32 ) ),
+				'salt_at' => time(),
+				'hmac'    => $secrets['hmac'],
+			];
+			Store::write( self::SECRETS, $secrets, false );
+			self::$secrets = $secrets;
+		}
+
+		return $secrets['salt'];
+	}
+
+	public static function host_of( string $url ): string {
+		$host = strtolower( (string) parse_url( $url, PHP_URL_HOST ) );
+
+		return (string) preg_replace( '/^www\./', '', $host );
+	}
+
+	private static function rotation_period( string $policy ): int {
+		return match ( $policy ) {
+			'daily'   => 86400,
+			'monthly' => 2592000,
+			'yearly'  => 31536000,
+			default   => 0,
+		};
+	}
+}

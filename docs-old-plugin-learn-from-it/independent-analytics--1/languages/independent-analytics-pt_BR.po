@@ -1,0 +1,2332 @@
+# Translation of Plugins - Independent Analytics &#8211; Google Analytics Alternative for WordPress - Stable (latest release) in Portuguese (Brazil)
+# This file is distributed under the same license as the Plugins - Independent Analytics &#8211; Google Analytics Alternative for WordPress - Stable (latest release) package.
+msgid ""
+msgstr ""
+"PO-Revision-Date: 2024-11-19 10:37:50+0000\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=n > 1;\n"
+"X-Generator: GlotPress/4.0.1\n"
+"Language: pt_BR\n"
+"Project-Id-Version: Plugins - Independent Analytics &#8211; Google Analytics Alternative for WordPress - Stable (latest release)\n"
+
+#: IAWP/Admin_Page/Analytics_Page.php:164
+msgid "The \"Solid Security\" plugin is disabling PHP execution in the plugins folder, and this is preventing click tracking from working. Please visit the Security > Settings page, click on the Advanced section, click on System Tweaks Settings, uncheck the \"Disable PHP Plugins\" option, and then save."
+msgstr "O plugin \"Solid Security\" está desativando a execução de PHP na pasta de plugins, o que está impedindo o rastreamento de cliques de funcionar. Acesse a página Security > Settings, clique na seção Advanced, clique em System Tweaks Settings, desmarque a opção \"Disable PHP Plugins\" e então salve."
+
+#: views/settings/email-reports.blade.php:96
+msgid "The email address should come from this domain or your emails may not be delivered."
+msgstr "O endereço de e-mail deve vir deste domínio, ou seus e-mails podem não ser entregues."
+
+#: views/notices/getting-started.blade.php:4
+msgid "Learn how to use all the features in Independent Analytics."
+msgstr "Aprenda como usar todos os recursos no Independent Analytics."
+
+#: views/notices/getting-started.blade.php:3
+msgid "Getting Started Video Tutorial"
+msgstr "Primeiros passos - Tutorial em vídeo"
+
+#: views/date-picker/date-picker.blade.php:22
+msgid "End date"
+msgstr "Data de término"
+
+#: views/date-picker/date-picker.blade.php:11
+msgid "Start date"
+msgstr "Data de início"
+
+#: views/click-tracking/menu.blade.php:105
+msgid "Yes"
+msgstr "Sim"
+
+#: views/click-tracking/menu.blade.php:104
+msgid "Deleting this link pattern will remove its stats from the Clicks report permanently."
+msgstr "Excluir esse padrão de link removerá permanentemente suas estatísticas do relatório de cliques."
+
+#: views/click-tracking/menu.blade.php:103
+msgid "Are you sure?"
+msgstr "Tem certeza?"
+
+#: views/click-tracking/menu.blade.php:77
+msgid "Show Archived Links"
+msgstr "Mostrar links arquivados"
+
+#: views/click-tracking/menu.blade.php:77
+msgid "Hide Archived Links"
+msgstr "Ocultar links arquivados"
+
+#: views/click-tracking/menu.blade.php:74
+msgid "Archived link patterns are no longer tracked, but their data remains in the Clicks report. Deleting an archived link pattern will remove it from this list and remove its data from the Clicks report permanently."
+msgstr "Padrões de links arquivados não são mais rastreados, mas seus dados permanecem no relatório de cliques. Excluir um padrão de link arquivado o removerá desta lista e removerá seus dados do relatório de cliques permanentemente."
+
+#: views/click-tracking/menu.blade.php:70
+msgid "Archived Link Patterns"
+msgstr "Padrões de links arquivados"
+
+#: views/click-tracking/menu.blade.php:35
+#: views/click-tracking/menu.blade.php:82
+msgid "Value"
+msgstr "Valor"
+
+#: views/click-tracking/menu.blade.php:33
+#: views/click-tracking/menu.blade.php:80
+msgid "Name"
+msgstr "Nome"
+
+#: views/click-tracking/menu.blade.php:30
+msgid "Add Link Pattern"
+msgstr "Adicionar padrão de link"
+
+#: views/click-tracking/menu.blade.php:26
+msgid "Links matching the patterns below are being actively monitored for clicks."
+msgstr "Links que correspondem aos padrões abaixo estão sendo monitorados ativamente para cliques."
+
+#: views/click-tracking/menu.blade.php:24
+msgid "Link Patterns"
+msgstr "Padrões de links"
+
+#: views/click-tracking/menu.blade.php:5
+msgid "View Clicks Report"
+msgstr "Visualizar relatório de cliques"
+
+#: views/click-tracking/link.blade.php:98
+#: views/click-tracking/menu.blade.php:83
+msgid "Resume Tracking"
+msgstr "Retomar rastreamento"
+
+#: views/click-tracking/link.blade.php:85
+#: views/click-tracking/menu.blade.php:36
+msgid "Edit"
+msgstr "Editar"
+
+#: views/tables/rows.blade.php:40
+msgid "Edit your tracked links"
+msgstr "Edite seus links monitorados"
+
+#: views/tables/rows.blade.php:34
+msgid "No click data found"
+msgstr "Nenhum dado de clique encontrado"
+
+#: views/settings/export-reports.blade.php:10
+msgid "Export any of your report settings, so they can be duplicated on another website running Independent Analytics."
+msgstr "Exporte qualquer uma das configurações do seu relatório, para que possam ser duplicadas em outro site com o Independent Analytics."
+
+#: views/settings/export-reports.blade.php:5
+msgid "Export Report Settings"
+msgstr "Exportar configurações do relatório"
+
+#: views/settings/email-reports.blade.php:90
+msgid "From email address"
+msgstr "Endereço de email do remetente"
+
+#: views/partials/sidebar.blade.php:170
+msgid "Get click tracking"
+msgstr "Obter rastreamento de cliques"
+
+#: IAWP/Utils/Link_Validator.php:12
+msgid "Invalid characters in subdirectory."
+msgstr "Caracteres inválidos no subdiretório."
+
+#: IAWP/Utils/Link_Validator.php:12
+msgid "Invalid domain."
+msgstr "Domínio inválido."
+
+#: IAWP/Utils/Link_Validator.php:12
+msgid "Invalid Protocol."
+msgstr "Protocolo inválido."
+
+#: IAWP/Utils/Link_Validator.php:12
+msgid "Invalid Extension."
+msgstr "Extensão inválida."
+
+#: IAWP/Utils/Link_Validator.php:12
+msgid "Class cannot contain special characters besides \"-\" and \"_\"."
+msgstr "A classe não pode conter caracteres especiais além de \"-\" e \"_\"."
+
+#: IAWP/Utils/Link_Validator.php:12
+msgid "Class cannot contain spaces."
+msgstr "A classe não pode conter espaços."
+
+#: IAWP/Utils/Link_Validator.php:12
+msgid "Class cannot start with a number or special character."
+msgstr "A classe não pode começar com um número ou caractere especial."
+
+#: IAWP/Utils/Link_Validator.php:12
+msgid "Invalid type."
+msgstr "Tipo inválido."
+
+#: IAWP/Utils/Link_Validator.php:12
+msgid "Value cannot be empty."
+msgstr "O valor não pode estar vazio."
+
+#: IAWP/Utils/Link_Validator.php:12
+msgid "Name cannot be empty."
+msgstr "O nome não pode estar vazio."
+
+#: IAWP/Tables/Table_Clicks.php:27
+msgid "Target"
+msgstr "Destino"
+
+#: IAWP/Tables/Table_Clicks.php:22
+msgid "Click"
+msgstr "Clique"
+
+#: IAWP/Rows/Filter.php:148 IAWP/Tables/Table_Clicks.php:27
+msgid "Link Pattern"
+msgstr "Padrão de link"
+
+#: IAWP/Report_Finder.php:13 IAWP/Report_Finder.php:199
+#: IAWP/Statistics/Click_Statistics.php:23 IAWP/Statistics/Statistics.php:154
+#: IAWP/Tables/Table_Campaigns.php:25 IAWP/Tables/Table_Clicks.php:27
+#: IAWP/Tables/Table_Devices.php:34 IAWP/Tables/Table_Geo.php:28
+#: IAWP/Tables/Table_Pages.php:28 IAWP/Tables/Table_Referrers.php:26
+#: views/partials/sidebar.blade.php:135 views/partials/sidebar.blade.php:167
+msgid "Clicks"
+msgstr "Cliques"
+
+#: IAWP/Migrations/Migration_38.php:59
+msgid "Phone numbers"
+msgstr "Números de telefone"
+
+#: IAWP/Migrations/Migration_38.php:55
+msgid "Emails"
+msgstr "E-mails"
+
+#: IAWP/Migrations/Migration_38.php:51
+msgid "Zips"
+msgstr "Zips"
+
+#: IAWP/Migrations/Migration_38.php:47
+msgid "PDFs"
+msgstr "PDFs"
+
+#: IAWP/Independent_Analytics.php:242 views/settings/export-data.blade.php:20
+msgid "Export Clicks"
+msgstr "Exportar cliques"
+
+#: IAWP/Independent_Analytics.php:242
+msgid "Exporting Clicks"
+msgstr "Exportando cliques"
+
+#: IAWP/Independent_Analytics.php:141 views/click-tracking/menu.blade.php:4
+msgid "Click Tracking"
+msgstr "Rastreamento de cliques"
+
+#: IAWP/Cron_Job.php:42
+msgid "Every minute"
+msgstr "A cada minuto"
+
+#: IAWP/Click_Tracking.php:21
+msgid "Protocol"
+msgstr "Protocolo"
+
+#: IAWP/Click_Tracking.php:21
+msgid "Subdirectory"
+msgstr "Subdiretório"
+
+#: IAWP/Click_Tracking.php:21
+msgid "Domain"
+msgstr "Domínio"
+
+#: IAWP/Click_Tracking.php:21
+msgid "Extension"
+msgstr "Extensão"
+
+#: IAWP/Click_Tracking.php:21
+msgid "Class"
+msgstr "Classe"
+
+#: IAWP/Admin_Page/Click_Tracking_Page.php:15
+msgid "You do not have permission to edit the click tracking settings."
+msgstr "Você não tem permissão para editar as configurações de rastreamento de cliques."
+
+#: IAWP/Admin_Page/Analytics_Page.php:175
+#: IAWP/Admin_Page/Analytics_Page.php:182
+msgid "Dismiss"
+msgstr "Dispensar"
+
+#: IAWP/Admin_Page/Analytics_Page.php:182
+msgid "Click data syncs every 60 seconds. Please allow for this delay when testing clicks on new links."
+msgstr "Os dados de cliques são sincronizados a cada 60 segundos. Leve esse atraso em conta ao testar cliques em novos links."
+
+#: IAWP/Admin_Page/Analytics_Page.php:175
+msgid "We recommend you enable tracking for logged-in visitors."
+msgstr "Recomendamos que você ative o rastreamento para visitantes conectados."
+
+#: IAWP/Admin_Page/Analytics_Page.php:175
+msgctxt "Variable is the name of a plugin"
+msgid "%s compatibility:"
+msgstr "Compatibilidade com %s:"
+
+#: views/settings/woocommerce.blade.php:46
+#: views/settings/woocommerce.blade.php:48
+msgid "Reset to default statuses"
+msgstr "Redefinir para os status padrão"
+
+#: views/settings/woocommerce.blade.php:13
+msgid "Choose which order statuses should be counted in the analytics reports."
+msgstr "Escolha quais status de pedido devem ser contabilizados nos relatórios de análise."
+
+#: views/settings/woocommerce.blade.php:6
+msgid "WooCommerce Order Statuses"
+msgstr "Status de pedidos do WooCommerce"
+
+#: views/date-picker/calendar-month.blade.php:33
+msgid "First view recorded"
+msgstr "Primeira visualização registrada"
+
+#: IAWP/Statistics/Statistics.php:154 IAWP/Tables/Table.php:375
+msgid "Total Sales"
+msgstr "Vendas totais"
+
+#: IAWP/Plugin_Group.php:107
+msgid "eCommerce"
+msgstr "E-commerce"
+
+#: IAWP/Models/Page_Virtual.php:93
+msgid "Upsell"
+msgstr "Upsell"
+
+#: IAWP/Models/Page_Virtual.php:89
+msgid "Collection"
+msgstr "Coleção"
+
+#: IAWP/Models/Page_Virtual.php:85
+msgid "Product"
+msgstr "Produto"
+
+#: IAWP/Data_Pruning/Pruning_Scheduler.php:51
+msgid ""
+"All data from before %1$s will be deleted immediately. This will remove %2$s of your %3$s tracked sessions. \n"
+"\n"
+" This process will repeat daily at midnight."
+msgstr ""
+"Todos os dados anteriores a %1$s serão excluídos imediatamente. Isso removerá %2$s das suas %3$s sessões rastreadas.\n"
+"\n"
+" Este processo será repetido diariamente à meia-noite."
+
+#: IAWP/Cron_Job.php:41
+msgid "Every 5 minutes"
+msgstr "A cada 5 minutos"
+
+#: views/interrupt/database-prefix-too-long.blade.php:13
+msgid "Please click the button below to follow a brief tutorial that will show you how to easily change your database prefix."
+msgstr "Clique no botão abaixo para seguir um breve tutorial que mostrará como alterar facilmente o prefixo do seu banco de dados."
+
+#: views/settings/view-counter/label-show.blade.php:3
+msgid "Show the label"
+msgstr "Mostrar o rótulo"
+
+#: views/settings/pruner.blade.php:62 views/settings/pruner.blade.php:63
+msgid "Enabling Automatic Data Deletion..."
+msgstr "Ativando exclusão automática de dados…"
+
+#: views/settings/pruner.blade.php:61 views/settings/pruner.blade.php:66
+#: views/settings/pruner.blade.php:62 views/settings/pruner.blade.php:67
+msgid "Enable Automatic Data Deletion"
+msgstr "Ativar exclusão automática de dados"
+
+#: views/settings/pruner.blade.php:49 views/settings/pruner.blade.php:50
+msgid "This will delete all data older then the selected timeframe, reducing the size of the database tables that Independent Analytics uses."
+msgstr "Isso excluirá todos os dados que são mais antigos do que o período selecionado, reduzindo o tamanho das tabelas do banco de dados usadas pelo Independent Analytics."
+
+#: views/settings/pruner.blade.php:46 views/settings/pruner.blade.php:47
+msgid "Enable automatic data deletion"
+msgstr "Ativar exclusão automática de dados"
+
+#: views/settings/pruner.blade.php:33 views/settings/pruner.blade.php:34
+msgid "Saving..."
+msgstr "Salvando…"
+
+#: views/settings/pruner.blade.php:6
+msgid "Automatically Delete Old Data"
+msgstr "Excluir dados antigos automaticamente"
+
+#: views/settings/disable-views-column.blade.php:5
+msgid "This hides the \"Views\" column that appears in the Posts menu and other CPT menus."
+msgstr "Isso oculta a coluna \"Visualizações\" que aparece no menu \"Posts\" e em outros menus CPT."
+
+#: views/settings/disable-views-column.blade.php:4
+msgid "Disable the \"Views\" column in the post menus"
+msgstr "Desativar a coluna \"Visualizações\" nos menus de posts"
+
+#: views/settings/block-ips.blade.php:50
+msgid "No ignored IPs"
+msgstr "Sem IPs ignorados"
+
+#: views/settings/block-ips.blade.php:38
+msgid "Ignored IPs"
+msgstr "IPs ignorados"
+
+#: views/settings/block-ips.blade.php:8
+msgid "Ignored IP addresses can still access the site, but their activity will not show up in the analytics."
+msgstr "IPs ignorados ainda podem acessar o site, mas suas atividades não aparecerão nas análises."
+
+#: views/settings/block-ips.blade.php:3
+msgid "Ignore IP Addresses"
+msgstr "Ignorar endereços IP"
+
+#: views/settings/block-by-role.blade.php:58
+msgid "Save User Roles"
+msgstr "Salvar funções de usuário"
+
+#: views/settings/block-by-role.blade.php:54
+msgid "No ignored User Roles"
+msgstr "Nenhuma função de usuário ignorada"
+
+#: views/settings/block-by-role.blade.php:42
+msgid "Ignored User Roles"
+msgstr "Funções de usuário ignoradas"
+
+#: views/settings/block-by-role.blade.php:35
+#: views/settings/block-by-role.blade.php:50
+#: views/settings/block-ips.blade.php:31 views/settings/block-ips.blade.php:46
+msgid "Remove"
+msgstr "Remover"
+
+#: views/settings/block-by-role.blade.php:26
+#: views/settings/block-ips.blade.php:22
+msgid "Add"
+msgstr "Adicionar"
+
+#: views/settings/block-by-role.blade.php:8
+msgid "Ignored user roles can still access the site, but their activity will not show up in the analytics."
+msgstr "Funções de usuário ignoradas ainda podem acessar o site, mas sua atividade não aparecerá nas análises."
+
+#: views/settings/block-by-role.blade.php:3
+msgid "Ignore User Roles"
+msgstr "Ignorar funções de usuários"
+
+#: views/chart.blade.php:40 views/chart.blade.php:43
+msgid "No Comparison"
+msgstr "Sem comparação"
+
+#: IAWP/Settings.php:129
+msgid "Display the label"
+msgstr "Exibir o rótulo"
+
+#: IAWP/Migrations/Migration_17.php:33
+msgctxt "short for operating system"
+msgid "OS"
+msgstr "SO"
+
+#: IAWP/Migrations/Migration_17.php:31
+msgid "European Countries"
+msgstr "Países europeus"
+
+#: IAWP/Migrations/Migration_17.php:28
+msgid "Fastest-Growing Referrers"
+msgstr "Referenciadores de crescimento mais rápido"
+
+#: IAWP/Migrations/Migration_17.php:27
+msgid "Social Media Traffic"
+msgstr "Tráfego de mídias sociais"
+
+#: IAWP/Migrations/Migration_17.php:26
+msgid "Search Engine Traffic"
+msgstr "Tráfego de mecanismos de pesquisa"
+
+#: IAWP/Migrations/Migration_17.php:24
+msgid "Fastest-Growing Pages"
+msgstr "Páginas de crescimento mais rápido"
+
+#: IAWP/Migrations/Migration_17.php:23
+msgid "Top Landing Pages"
+msgstr "Principais páginas de destino"
+
+#: IAWP/Migrations/Migration_17.php:22
+msgid "Blog Posts"
+msgstr "Postagens de blog"
+
+#: IAWP/Data_Pruning/Pruning_Scheduler.php:43
+msgid "Next data pruning scheduled for %s at %s."
+msgstr "A próxima eliminação de dados está agendada para %s às %s."
+
+#: IAWP/Capability_Manager.php:13
+msgid "View all analytics"
+msgstr "Ver todas as análises"
+
+#: IAWP/Capability_Manager.php:13
+msgid "View analytics for authored content"
+msgstr "Ver análises de conteúdo autoral"
+
+#: views/settings/view-counter/views-to-count.blade.php:18
+msgid "Last year"
+msgstr "Último ano"
+
+#: views/settings/view-counter/views-to-count.blade.php:17
+msgid "This year"
+msgstr "Este ano"
+
+#: views/settings/view-counter/views-to-count.blade.php:16
+msgid "Last 12 months"
+msgstr "Últimos 12 meses"
+
+#: views/settings/view-counter/views-to-count.blade.php:15
+msgid "Last 6 months"
+msgstr "Últimos 6 meses"
+
+#: views/settings/view-counter/views-to-count.blade.php:14
+msgid "Last 3 months"
+msgstr "Últimos 3 meses"
+
+#: views/settings/view-counter/views-to-count.blade.php:11
+msgid "Last 90 days"
+msgstr "Últimos 90 dias"
+
+#: views/settings/view-counter/views-to-count.blade.php:10
+msgid "Last 60 days"
+msgstr "Últimos 60 dias"
+
+#: views/settings/export-reports.blade.php:30
+#: views/settings/export-reports.blade.php:32
+msgid "No reports found"
+msgstr "Nenhum relatório encontrado"
+
+#: views/partials/report-header.blade.php:50
+msgid "You have unsaved changes"
+msgstr "Você tem alterações não salvas"
+
+#: IAWP/Plugin_Group.php:112
+msgctxt "Plugin name e.g. WPForms submissions"
+msgid "Upgrade to Independent Analytics Pro to track %s submissions."
+msgstr "Faça upgrade para o Independent Analytics Pro para rastrear envios de %s."
+
+#: IAWP/Form_Submissions/Submission_Listener.php:137
+msgid "Event"
+msgstr "Evento"
+
+#: IAWP/Form_Submissions/Submission_Listener.php:129
+msgid "Appointment"
+msgstr "Agendamento"
+
+#: IAWP/Email_Reports/Email_Reports.php:171
+msgid "Exit Pages"
+msgstr "Exit Pages"
+
+#: IAWP/Email_Reports/Email_Reports.php:168
+msgid "Landing Pages"
+msgstr "Landing Pages"
+
+#: views/quick-stats.blade.php:9
+msgid "Toggle Stats"
+msgstr "Alternar estatísticas"
+
+#: views/plugin-group-options.blade.php:54
+#: views/plugin-group-options.blade.php:55
+msgid "Choose Stats to Display"
+msgstr "Escolha as estatísticas a exibir"
+
+#: views/plugin-group-options.blade.php:118
+#: views/plugin-group-options.blade.php:126
+#: views/settings/view-counter.blade.php:14
+#: views/plugin-group-options.blade.php:123
+#: views/plugin-group-options.blade.php:131
+msgid "Learn more"
+msgstr "Saiba mais"
+
+#: views/settings/view-counter.blade.php:13
+msgid "You can also customize the icon display, label, and date range used by the shortcode."
+msgstr "Você também pode personalizar a exibição do ícone, rótulo e o intervalo de datas usados pelo shortcode."
+
+#: IAWP/Tables/Table.php:379 IAWP/Tables/Table.php:381
+msgid "Submissions"
+msgstr "Envios"
+
+#: IAWP/Rows/Filter.php:146
+msgid "Conversion rate for"
+msgstr "Taxa de conversão para"
+
+#: IAWP/Rows/Filter.php:144
+msgid "Submissions for"
+msgstr "Envios para"
+
+#: IAWP/Statistics/Statistics.php:162
+msgctxt "Title of the contact form"
+msgid "%s Conversion Rate"
+msgstr "Taxa de conversão de %s"
+
+#: IAWP/Statistics/Statistics.php:161
+msgctxt "Title of the contact form"
+msgid "%s Submissions"
+msgstr "Envios de %s"
+
+#: IAWP/Statistics/Statistics.php:154
+msgid "Form Conversion Rate"
+msgstr "Taxa de conversão de formulário"
+
+#: IAWP/Statistics/Statistics.php:154
+msgid "Form Submissions"
+msgstr "Envios de formulário"
+
+#: IAWP/Plugin_Group.php:97
+msgid "Your forms will show up here once a submission has been recorded."
+msgstr "Seus formulários aparecerão aqui assim que um envio for registrado."
+
+#: IAWP/Plugin_Group.php:97
+msgid "Activate a supported form plugin to display these stats."
+msgstr "Ative um plugin de formulários compatível para exibir essas estatísticas."
+
+#: IAWP/Plugin_Group.php:114
+msgid "Upgrade to Independent Analytics Pro to track form submissions."
+msgstr "Faça upgrade para o Independent Analytics Pro para rastrear envios de formulários."
+
+#: IAWP/Plugin_Group.php:97
+msgid "Forms"
+msgstr "Formulários"
+
+#: IAWP/Plugin_Group.php:97
+msgid "Activate a supported eCommerce plugin to display these stats."
+msgstr "Ative um plugin de e-commerce compatível para exibir essas estatísticas."
+
+#: IAWP/Plugin_Group.php:97
+msgid "Upgrade to Independent Analytics Pro to get eCommerce stats."
+msgstr "Faça upgrade para o Independent Analytics Pro para obter estatísticas de e-commerce."
+
+#: IAWP/Plugin_Group.php:97
+msgid "General"
+msgstr "Geral"
+
+#: IAWP/Independent_Analytics.php:155
+msgid "New"
+msgstr "Novo"
+
+#: IAWP/Filters.php:131
+msgid "+%d More"
+msgstr "+%d a mais"
+
+#: IAWP/Email_Reports/Interval_Factory.php:26
+#: IAWP/Email_Reports/Interval_Factory.php:30
+msgid "Daily Views"
+msgstr "Visualizações diárias"
+
+#: IAWP/Email_Reports/Interval_Factory.php:22
+msgid "Hourly Views"
+msgstr "Visualizações por hora"
+
+#: IAWP/Email_Reports/Interval_Factory.php:26
+msgid "Week of"
+msgstr "Semana de"
+
+#: IAWP/Email_Reports/Email_Reports.php:138
+msgid "Analytics Report for"
+msgstr "Relatório de análise para"
+
+#: views/settings/email-reports.blade.php:134
+msgid "Preview email"
+msgstr "Pré-visualizar e-mail"
+
+#: views/settings/email-reports.blade.php:30
+msgid "The email will be delivered every day."
+msgstr "O e-mail será enviado todos os dias."
+
+#: views/settings/email-reports.blade.php:29
+msgid "The email will be delivered on the first day of the week (selected in the settings above)."
+msgstr "O e-mail será enviado no primeiro dia da semana (selecionado nas configurações acima)."
+
+#: views/settings/email-reports.blade.php:28
+msgid "The email will be delivered on the 1st of every month."
+msgstr "O e-mail será enviado no primeiro dia de cada mês."
+
+#: views/settings/email-reports.blade.php:22
+msgid "Delivery Interval"
+msgstr "Intervalo de entrega"
+
+#: IAWP/Settings.php:64
+msgid "Views column"
+msgstr "Coluna de visualizações"
+
+#: IAWP/Email_Reports/Email_Reports.php:74
+msgid "Next email scheduled for %s at %s."
+msgstr "Próximo e-mail agendado para %s às %s."
+
+#: IAWP/Email_Reports/Email_Reports.php:69
+msgid "There is no email scheduled."
+msgstr "Não há e-mail agendado."
+
+#: views/settings/export-reports.blade.php:48
+#: views/settings/export-reports.blade.php:50
+msgid "Import Reports"
+msgstr "Importar relatórios"
+
+#: views/settings/export-reports.blade.php:38
+#: views/settings/export-reports.blade.php:40
+msgid "Export Reports"
+msgstr "Exportar relatórios"
+
+#: views/settings/export-reports.blade.php:13
+msgid "Select all reports"
+msgstr "Selecionar todos os relatórios"
+
+#: views/partials/sidebar.blade.php:30
+msgid "Expand sidebar"
+msgstr "Expandir barra lateral"
+
+#: views/partials/sidebar.blade.php:28
+msgid "Collapse sidebar"
+msgstr "Recolher barra lateral"
+
+#: views/partials/sidebar.blade.php:20
+msgid "Upgrade to Pro (45% off)"
+msgstr "Faça upgrade para a versão Pro (45% de desconto)"
+
+#: views/partials/report-header.blade.php:114
+msgid "Delete report"
+msgstr "Excluir relatório"
+
+#: views/partials/report-header.blade.php:111
+msgid "Are you sure you want to delete this report?"
+msgstr "Tem certeza de que deseja excluir este relatório?"
+
+#: views/partials/report-header.blade.php:109
+msgid "Confirm"
+msgstr "Confirmar"
+
+#: views/partials/report-header.blade.php:95
+msgid "Make default"
+msgstr "Tornar padrão"
+
+#: views/partials/report-header.blade.php:80
+msgid "Save as"
+msgstr "Salvar como"
+
+#: views/partials/report-header.blade.php:75
+msgid "Enter a name for the new report."
+msgstr "Digite um nome para o novo relatório."
+
+#: views/partials/report-header.blade.php:73
+msgid "Create new report"
+msgstr "Criar novo relatório"
+
+#: views/partials/report-header.blade.php:69
+msgid "Save As"
+msgstr "Salvar como"
+
+#: views/partials/report-header.blade.php:54 views/settings/pruner.blade.php:32
+#: views/settings/pruner.blade.php:37 views/settings/woocommerce.blade.php:38
+#: views/click-tracking/link.blade.php:88 views/settings/pruner.blade.php:33
+#: views/settings/pruner.blade.php:38 views/settings/woocommerce.blade.php:40
+msgid "Save"
+msgstr "Salvar"
+
+#: views/partials/report-header.blade.php:31
+msgid "Update title"
+msgstr "Atualizar título"
+
+#: views/partials/report-header.blade.php:26
+msgid "Give this report a new name"
+msgstr "Dê um novo nome a este relatório"
+
+#: views/partials/report-header.blade.php:24
+msgid "Rename report"
+msgstr "Renomear relatório"
+
+#: views/interrupt/database-prefix-too-long.blade.php:19
+#: views/interrupt/missing-database-permissions.blade.php:19
+#: views/interrupt/missing-database-tables.blade.php:20
+#: views/interrupt/pdo.blade.php:13
+#: views/interrupt/database-prefix-too-long.blade.php:21
+#: views/interrupt/missing-database-permissions.blade.php:20
+msgid "Follow Tutorial"
+msgstr "Siga o tutorial"
+
+#: views/interrupt/layout.blade.php:10
+msgid "Get Help"
+msgstr "Obter ajuda"
+
+#: views/interrupt/database-prefix-too-long.blade.php:9
+msgid "is longer than the allowed 25 characters."
+msgstr "é maior do que os 25 caracteres permitidos."
+
+#: views/interrupt/database-prefix-too-long.blade.php:9
+msgid "Your current database prefix"
+msgstr "Seu prefixo de banco de dados atual"
+
+#: views/interrupt/database-prefix-too-long.blade.php:7
+msgid "Your database prefix is longer than 25 characters"
+msgstr "Seu prefixo de banco de dados é maior que 25 caracteres"
+
+#: views/updates.blade.php:6
+msgid "View all updates"
+msgstr "Ver todas as atualizações"
+
+#: views/updates.blade.php:4
+msgid "Newest Updates"
+msgstr "Atualizações mais recentes"
+
+#: IAWP/Tables/Table.php:69 views/tables/table-toolbar.blade.php:4
+msgid "Toggle Columns"
+msgstr "Alternar colunas"
+
+#: views/settings/view-counter/views-to-count.blade.php:13
+msgid "Last month"
+msgstr "Último mês"
+
+#: views/settings/view-counter/views-to-count.blade.php:12
+msgid "This month so far"
+msgstr "Este mês até agora"
+
+#: views/settings/view-counter/views-to-count.blade.php:9
+msgid "Last 30 days"
+msgstr "Últimos 30 dias"
+
+#: views/settings/view-counter/views-to-count.blade.php:3
+msgid "All-time"
+msgstr "Todo o período"
+
+#: views/settings/view-counter/private.blade.php:4
+msgid "Only logged-in visitors will see it."
+msgstr "Apenas visitantes conectados verão isso."
+
+#: views/settings/view-counter/private.blade.php:3
+msgid "Make private"
+msgstr "Tornar privado"
+
+#: views/settings/view-counter/manual-adjustment.blade.php:4
+msgid "Enables an option in the post editor to manually increase the view count, so you can preserve values from your prior view counter plugin."
+msgstr "Ativa uma opção no editor de post para aumentar manualmente a contagem de visualizações, para que você possa preservar os valores do seu plugin anterior de contagem de visualizações."
+
+#: views/settings/view-counter/manual-adjustment.blade.php:3
+msgid "Allow manual adjustment"
+msgstr "Permitir ajuste manual"
+
+#: views/settings/view-counter.blade.php:9
+msgid "Using the shortcode"
+msgstr "Usando o shortcode"
+
+#: views/settings/refresh-salt.blade.php:5
+msgid "This improves data privacy at the expense of unique visitor count accuracy."
+msgstr "Isso melhora a privacidade dos dados em detrimento da precisão da contagem de visitantes únicos."
+
+#: views/settings/refresh-salt.blade.php:3
+msgid "Refresh the visitor salt every day"
+msgstr "Atualizar o \"salt\" do visitante diariamente"
+
+#: views/settings/export-reports.blade.php:43
+#: views/settings/export-reports.blade.php:45
+msgid "Import Custom Reports"
+msgstr "Importar relatórios personalizados"
+
+#: views/settings/export-data.blade.php:8
+msgid "Export all historical data to CSV."
+msgstr "Exportar todos os dados históricos para CSV."
+
+#: views/settings/export-data.blade.php:3
+msgid "Export Data to CSV"
+msgstr "Exportar dados para CSV"
+
+#: views/settings/email-reports.blade.php:83
+msgid "Footer background"
+msgstr "Fundo do rodapé"
+
+#: views/settings/email-reports.blade.php:79
+msgid "Outer background"
+msgstr "Fundo externo"
+
+#: views/settings/email-reports.blade.php:75
+msgid "Metric background"
+msgstr "Fundo das métricas"
+
+#: views/settings/email-reports.blade.php:71
+msgid "Borders"
+msgstr "Bordas"
+
+#: views/settings/disable-widget.blade.php:5
+msgid "This hides the dashboard widget that appears in the Dashboard WordPress admin page."
+msgstr "Isso oculta o widget de painel que aparece na página de administração do WordPress."
+
+#: views/settings/disable-widget.blade.php:4
+msgid "Disable dashboard widget"
+msgstr "Desativar widget de painel"
+
+#: views/settings/delete.blade.php:47
+msgid "The plugin will be deactivated immediately after all data is deleted."
+msgstr "O plugin será desativado imediatamente após todos os dados serem excluídos."
+
+#: views/settings/delete.blade.php:44
+msgid "You are about to delete all data associated with Independent Analytics. This includes all analytics data and settings."
+msgstr "Você está prestes a excluir todos os dados associados ao Independent Analytics. Isso inclui todos os dados de análise e configurações."
+
+#: views/settings/delete.blade.php:24
+msgid "You are about to reset your analytics. This will delete all of the data and return all stats to zero."
+msgstr "Você está prestes a redefinir suas análises. Isso excluirá todos os dados e retornará todas as estatísticas para zero."
+
+#: views/settings/delete.blade.php:15
+msgid "Delete all data & deactivate plugin"
+msgstr "Excluir todos os dados e desativar o plugin"
+
+#: views/settings/delete.blade.php:11 views/settings/delete.blade.php:22
+#: views/settings/delete.blade.php:31
+msgid "Reset analytics"
+msgstr "Redefinir análises"
+
+#: views/settings/block-ips.blade.php:10
+msgid "Your IP address is not ignored:"
+msgstr "Seu endereço IP não está ignorado:"
+
+#: views/settings/block-ips.blade.php:10
+msgid "Your IP address is ignored:"
+msgstr "Seu endereço IP está ignorado:"
+
+#: views/partials/sidebar.blade.php:181
+msgid "Real-Time"
+msgstr "Em tempo real"
+
+#: views/partials/sidebar.blade.php:156
+msgid "Get Campaigns"
+msgstr "Obter campanhas"
+
+#: views/partials/sidebar.blade.php:51
+msgid "Open Real-time analytics"
+msgstr "Abrir análises em tempo real"
+
+#: views/interrupt/missing-database-tables.blade.php:14
+msgid "If you need further guidance, please follow this tutorial:"
+msgstr "Se precisar de mais orientação, siga este tutorial:"
+
+#: views/interrupt/missing-database-tables.blade.php:12
+msgid "Reload this page and the analytics dashboard will appear"
+msgstr "Recarregue esta página e o painel de análises aparecerá"
+
+#: views/interrupt/missing-database-tables.blade.php:11
+msgid "Change %s to %s and save"
+msgstr "Alterar %s para %s e salvar"
+
+#: views/interrupt/missing-database-tables.blade.php:10
+msgid "Locate the option called \"%s\""
+msgstr "Encontre a opção chamada \"%s\""
+
+#: views/interrupt/missing-database-tables.blade.php:9
+msgid "Visit the hidden %s Options page %s in your dashboard"
+msgstr "Visite a %s página de opções %s ocultas no seu painel"
+
+#: views/interrupt/missing-database-tables.blade.php:6
+msgid "The database tables created by Independent Analytics are missing. If you are in the middle of migrating your site to/from staging, you can ignore this message. If you have deleted the tables on purpose and want to continue using Independent Analytics, please follow these steps:"
+msgstr "As tabelas do banco de dados criadas pelo Independent Analytics estão faltando. Se você estiver no meio da migração do seu site para/de um ambiente de teste, pode ignorar esta mensagem. Se você excluiu as tabelas intencionalmente e deseja continuar usando o Independent Analytics, siga estes passos:"
+
+#: views/interrupt/missing-database-tables.blade.php:4
+msgid "Missing Database Tables"
+msgstr "Tabelas do banco de dados faltando"
+
+#: views/interrupt/missing-database-permissions.blade.php:11
+#: views/interrupt/missing-database-permissions.blade.php:12
+msgid "Please follow our tutorial to enable these permissions on your site and analytics tracking will begin right away:"
+msgstr "Siga nosso tutorial para ativar essas permissões no seu site e o rastreamento de análises começará imediatamente:"
+
+#: views/interrupt/missing-database-permissions.blade.php:7
+msgid "Your site is missing the following database privileges required to run Independent Analytics:"
+msgstr "Seu site está faltando os seguintes privilégios de banco de dados obrigatórios para executar o Independent Analytics:"
+
+#: views/interrupt/missing-database-permissions.blade.php:5
+msgid "Missing Database Permissions"
+msgstr "Permissões do banco de dados ausentes"
+
+#: views/interrupt/migration-error.blade.php:14
+msgid "Failed query:"
+msgstr "Consulta falhou:"
+
+#: views/interrupt/migration-error.blade.php:12
+msgid "Error message:"
+msgstr "Mensagem de erro:"
+
+#: views/interrupt/migration-error.blade.php:11
+msgid "Step:"
+msgstr "Etapa:"
+
+#: views/interrupt/migration-error.blade.php:10
+msgid "Migration:"
+msgstr "Migração:"
+
+#: views/interrupt/migration-error.blade.php:9
+msgid "Plugin version:"
+msgstr "Versão do plugin:"
+
+#: views/interrupt/migration-error.blade.php:8
+msgid "Please send the info below to %s and we will help to resolve this error ASAP. We're sorry for the inconvenience."
+msgstr "Envie as informações abaixo para %s e ajudaremos a resolver este erro o mais rápido possível. Pedimos desculpas pelo inconveniente."
+
+#: views/interrupt/migration-error.blade.php:7
+msgid "Data Migration Failed"
+msgstr "Falha na migração de dados"
+
+#: views/campaign-builder.blade.php:209
+msgid "Copy to Form"
+msgstr "Copiar para o formulário"
+
+#: IAWP/Ecommerce/WooCommerce_Referrer_Meta_Box.php:75
+msgid "Campaign Content"
+msgstr "Conteúdo da campanha"
+
+#: IAWP/Ecommerce/WooCommerce_Referrer_Meta_Box.php:72
+msgid "Campaign Term"
+msgstr "Termo da campanha"
+
+#: IAWP/Ecommerce/WooCommerce_Referrer_Meta_Box.php:69
+msgid "Campaign Name"
+msgstr "Nome da campanha"
+
+#: IAWP/Ecommerce/WooCommerce_Referrer_Meta_Box.php:66
+msgid "Campaign Medium"
+msgstr "Meio da campanha"
+
+#: IAWP/Ecommerce/WooCommerce_Referrer_Meta_Box.php:63
+msgid "Campaign Source"
+msgstr "Origem da campanha"
+
+#: IAWP/Ecommerce/WooCommerce_Referrer_Meta_Box.php:53
+msgid "Referrer:"
+msgstr "Referenciador:"
+
+#: IAWP/Ecommerce/WooCommerce_Referrer_Meta_Box.php:42
+msgid "Order Referrer"
+msgstr "Referenciador do pedido"
+
+#: IAWP/View_Counter.php:93
+msgid "Increase count by:"
+msgstr "Aumentar contagem em:"
+
+#: IAWP/View_Counter.php:87
+msgid "View Counter Adjustment"
+msgstr "Ajuste do contador de visualização"
+
+#: IAWP/Tables/Table_Pages.php:28
+msgid "Exit Rate"
+msgstr "Taxa de saída"
+
+#: IAWP/Tables/Table_Pages.php:28 views/email/email.blade.php:121
+msgid "Exits"
+msgstr "Saídas"
+
+#: IAWP/Tables/Table_Pages.php:28 views/email/email.blade.php:119
+msgid "Entrances"
+msgstr "Entradas"
+
+#: IAWP/Tables/Table.php:235
+msgid "Download PDF"
+msgstr "Baixar PDF"
+
+#: IAWP/Tables/Table.php:227
+msgid "Download CSV"
+msgstr "Baixar CSV"
+
+#: IAWP/Tables/Table.php:219
+msgid "Choose a format"
+msgstr "Escolha um formato"
+
+#: IAWP/Tables/Table.php:212
+msgid "Download Report"
+msgstr "Baixar relatório"
+
+#: IAWP/Settings.php:139
+msgid "Allow manual adjustment?"
+msgstr "Permitir ajuste manual?"
+
+#: IAWP/Settings.php:136
+msgid "Make the view counter private?"
+msgstr "Tornar o contador de visualizações privado?"
+
+#: IAWP/Settings.php:116
+msgid "Date range to count views"
+msgstr "Intervalo de datas para contar visualizações"
+
+#: IAWP/Settings.php:70
+msgid "Salt refresh rate"
+msgstr "Taxa de atualização do \"salt\""
+
+#: IAWP/Settings.php:62
+msgid "Dashboard widget"
+msgstr "Widget do painel"
+
+#: IAWP/Statistics/Statistics.php:150
+msgid "Average Session Duration"
+msgstr "Duração média da sessão"
+
+#: IAWP/Plugin_Conflict_Detector.php:145
+msgid "The \"Admin and Site Enhancements\" plugin is blocking the REST API, which Independent Analytics needs to record views. Please visit the Tools > Enhancements menu, click on the \"Disable Components\" section, and deselect the \"Disable REST API\" setting to allow Independent Analytics to track your visitors."
+msgstr "O plugin \"Admin and Site Enhancements\" está bloqueando a API REST, que o Independent Analytics precisa para registrar visualizações. Visite o menu Tools > Enhancements , clique na seção \"Disable Components\" e desmarque a configuração \"Disable REST API\" para permitir que o Independent Analytics rastreie seus visitantes."
+
+#: IAWP/Plugin_Conflict_Detector.php:136
+msgid "The \"WP Hide\" plugin is blocking the REST API, which Independent Analytics needs to record views. Please visit the WP Hide > Rewrite URLs menu and switch the \"Block any JSON REST calls\" option to \"No.\""
+msgstr "O plugin \"WP Hide\" está bloqueando a API REST, que o Independent Analytics precisa para registrar visualizações. Visite o menu WP Hide > Rewrite URLs e altere a opção \"Block any JSON REST calls\" para \"No\"."
+
+#: IAWP/Plugin_Conflict_Detector.php:131
+msgid "The \"WP Hide\" plugin is blocking the REST API, which Independent Analytics needs to record views. Please visit the WP Hide > Rewrite URLs menu and switch the \"Disable JSON REST V2 service\" option to \"No.\""
+msgstr "O plugin \"WP Hide\" está bloqueando a API REST, que o Independent Analytics precisa para registrar visualizações. Visite o menu WP Hide > Rewrite URLs e altere a opção \"Disable JSON REST V2 service\" para \"No\"."
+
+#: IAWP/Plugin_Conflict_Detector.php:119
+msgid "The \"Shield Security\" plugin is blocking the REST API, which Independent Analytics needs to record views. Please visit the Shield Security > Config > Lockdown menu and add \"iawp\" to your allowed namespaces. This will keep the REST API locked down while allowing requests for Independent Analytics."
+msgstr "O plugin \"Shield Security\" está bloqueando a API REST, que o Independent Analytics precisa para registrar visualizações. Visite o menu Shield Security > Config > Lockdown e adicione \"iawp\" aos seus namespaces permitidos. Isso manterá a API REST restrita enquanto permite solicitações para o Independent Analytics."
+
+#: IAWP/Plugin_Conflict_Detector.php:103
+msgid "The \"WP Cerber\" plugin is blocking the REST API, which Independent Analytics needs to record views. Please visit the WP Cerber > Dashboard > Hardening menu and add \"iawp\" to your allowed namespaces. This will keep the REST API locked down while allowing requests for Independent Analytics."
+msgstr "O plugin \"WP Cerber\" está bloqueando a API REST, que o Independent Analytics precisa para registrar visualizações. Visite o menu WP Cerber > Dashboard > Hardening e adicione \"iawp\" aos seus namespaces permitidos. Isso manterá a API REST restrita enquanto permite solicitações para o Independent Analytics."
+
+#: IAWP/Models/Page_Virtual.php:49
+msgid "Checkout Success"
+msgstr "Finalização de compra concluída"
+
+#: IAWP/Menu_Bar_Stats/Menu_Bar_Stats.php:65
+msgid "All Time:"
+msgstr "Todo o período:"
+
+#: IAWP/Independent_Analytics.php:242
+msgid "Close menu"
+msgstr "Fechar menu"
+
+#: IAWP/Independent_Analytics.php:242 views/partials/sidebar.blade.php:35
+msgid "Open menu"
+msgstr "Abrir menu"
+
+#: IAWP/Independent_Analytics.php:242
+msgid "This report archive is invalid. Please export your reports and try again."
+msgstr "Este arquivo de relatório é inválido. Exporte seus relatórios e tente novamente."
+
+#: IAWP/Independent_Analytics.php:154 IAWP/Independent_Analytics.php:156
+msgid "Changelog"
+msgstr "Registro de alterações"
+
+#: IAWP/Independent_Analytics.php:148
+msgid "Help & Support"
+msgstr "Ajuda e suporte"
+
+#: IAWP/Filter_Lists/Referrer_Type_Filter_List.php:11
+msgid "Ad"
+msgstr "Anúncio"
+
+#: IAWP/Filters.php:32
+msgid "+ Add Filter"
+msgstr "+ Adicionar filtro"
+
+#: IAWP/Date_Range/Relative_Date_Range.php:174
+msgid "All Time"
+msgstr "Todo o período"
+
+#: IAWP/Date_Range/Relative_Date_Range.php:150
+msgid "Last 12 Months"
+msgstr "Últimos 12 meses"
+
+#: IAWP/Date_Range/Relative_Date_Range.php:142
+msgid "Last 6 Months"
+msgstr "Últimos 6 meses"
+
+#: IAWP/Date_Range/Relative_Date_Range.php:134
+msgid "Last 3 Months"
+msgstr "Últimos 3 meses"
+
+#: IAWP/Date_Range/Relative_Date_Range.php:87
+msgid "Last 90 Days"
+msgstr "Últimos 90 dias"
+
+#: IAWP/Date_Range/Relative_Date_Range.php:80
+msgid "Last 60 Days"
+msgstr "Últimos 60 dias"
+
+#: IAWP/Admin_Page/Support_Page.php:14 IAWP/Admin_Page/Updates_Page.php:15
+msgid "You do not have permission to view this page."
+msgstr "Você não tem permissão para ver esta página."
+
+#: IAWP/Admin_Page/Analytics_Page.php:178
+msgid "There is no issue at this time, but you will need to enable the missing permissions before updating the plugin to a newer version to ensure an error is avoided. Please click this link to read our tutorial:"
+msgstr "Não há nenhum problema no momento, mas será necessário ativar as permissões ausentes antes de atualizar o plugin para uma nova versão, a fim de evitar erros. Clique neste link para ler nosso tutorial:"
+
+#: IAWP/Admin_Page/Analytics_Page.php:178
+msgid "Your site is missing the following critical database permissions:"
+msgstr "Seu site está sem as seguintes permissões críticas de banco de dados:"
+
+#: views/tables/rows.blade.php:15
+msgid "No device data found"
+msgstr "Nenhum dado do dispositivo encontrado"
+
+#: views/settings/email-reports.blade.php:67
+msgid "Bar chart accent"
+msgstr "Cor de destaque do gráfico de barras"
+
+#: views/settings/email-reports.blade.php:63
+msgid "Bar chart"
+msgstr "Gráfico de barras"
+
+#: views/settings/email-reports.blade.php:59
+msgid "Sub-header text"
+msgstr "Texto do subtítulo"
+
+#: views/settings/email-reports.blade.php:55
+msgid "Sub-header background"
+msgstr "Fundo do subtítulo"
+
+#: views/settings/email-reports.blade.php:51
+msgid "Header text"
+msgstr "Texto do cabeçalho"
+
+#: views/settings/email-reports.blade.php:47
+msgid "Header background"
+msgstr "Fundo do cabeçalho"
+
+#: views/settings/email-reports.blade.php:44
+msgid "Customize the colors"
+msgstr "Personalize as cores"
+
+#: views/settings/block-by-role.blade.php:5
+#: views/settings/block-ips.blade.php:5 views/settings/capabilities.blade.php:5
+#: views/settings/delete.blade.php:5 views/settings/email-reports.blade.php:5
+#: views/settings/export-data.blade.php:5
+#: views/settings/export-reports.blade.php:7
+#: views/settings/export-reports.blade.php:45 views/settings/pruner.blade.php:9
+#: views/settings/view-counter.blade.php:3
+#: views/settings/woocommerce.blade.php:9 views/click-tracking/menu.blade.php:6
+#: views/settings/export-reports.blade.php:47
+msgid "Read Tutorial"
+msgstr "Ler tutorial"
+
+#: views/interrupt/pdo.blade.php:6
+msgid "Your site needs the PDO PHP module enabled for Independent Analytics to run. You can ask your web host to enable this for you, or follow our guide to enable it yourself:"
+msgstr "Seu site precisa que o módulo PDO do PHP esteja ativado para que o Independent Analytics funcione. Você pode pedir ao seu provedor de hospedagem para ativar isso para você ou seguir nosso guia para ativá-lo você mesmo:"
+
+#: views/interrupt/pdo.blade.php:4
+msgid "Missing PDO extension"
+msgstr "Extensão PDO ausente"
+
+#: views/interrupt/database-ahead-of-plugin.blade.php:9
+msgid "If something went wrong with the latest update, please reach out to us via the %1$sContact Us%2$s menu to the left or by emailing us directly at %3$s."
+msgstr "Se algo deu errado com a atualização mais recente, entre em contato conosco pelo menu %1$sFale conosco%2$s à esquerda ou envie um e-mail diretamente para %3$s."
+
+#: views/interrupt/database-ahead-of-plugin.blade.php:6
+msgid "It looks like Independent Analytics was rolled back to an older version not compatible with the current version of the database. Unfortunately, it is not possible to revert the database to an older version without causing data loss. Please update Independent Analytics to the latest version available."
+msgstr "Parece que o Independent Analytics foi revertido para uma versão mais antiga que não é compatível com a versão atual do banco de dados. Infelizmente, não é possível reverter o banco de dados para uma versão mais antiga sem causar perda de dados. Atualize o Independent Analytics para a versão mais recente disponível."
+
+#: IAWP/Tables/Table_Devices.php:34
+msgid "Operating System"
+msgstr "Sistema operacional"
+
+#: IAWP/Tables/Table_Devices.php:34 views/click-tracking/menu.blade.php:34
+#: views/click-tracking/menu.blade.php:81
+msgid "Type"
+msgstr "Tipo"
+
+#: IAWP/Migrations/Migration_17.php:32
+msgid "Browsers"
+msgstr "Navegadores"
+
+#: IAWP/Tables/Table_Devices.php:29 IAWP/Tables/Table_Devices.php:34
+msgid "Browser"
+msgstr "Navegador"
+
+#: IAWP/Tables/Table_Devices.php:28
+msgid "OS"
+msgstr "SO"
+
+#: IAWP/Tables/Table_Devices.php:27
+msgid "Device Type"
+msgstr "Tipo de dispositivo"
+
+#: IAWP/Real_Time.php:64
+msgid "Device Types"
+msgstr "Tipos de dispositivo"
+
+#: IAWP/Independent_Analytics.php:242
+msgid "Exporting Devices..."
+msgstr "Exportando dispositivos…"
+
+#: IAWP/Independent_Analytics.php:242 views/settings/export-data.blade.php:17
+msgid "Export Devices"
+msgstr "Exportar dispositivos"
+
+#: IAWP/Email_Reports/Email_Reports.php:162 IAWP/Report_Finder.php:13
+#: IAWP/Report_Finder.php:195 views/partials/sidebar.blade.php:105
+msgid "Devices"
+msgstr "Dispositivos"
+
+#: views/campaign-builder.blade.php:215 views/click-tracking/link.blade.php:103
+#: views/click-tracking/menu.blade.php:84
+msgid "Delete"
+msgstr "Excluir"
+
+#: IAWP/Migrations/Migration_17.php:30
+msgid "Cities"
+msgstr "Cidades"
+
+#: IAWP/Plugin_Conflict_Detector.php:90
+msgid "The \"NinjaFirewall\" plugin is blocking the REST API, which Independent Analytics needs to record views. Please visit the NinjaFirewall > Firewall Policies menu and uncheck the \"Block any access to the API\" checkbox to allow Independent Analytics to track your visitors."
+msgstr "O plugin \"NinjaFirewall\" está bloqueando a API REST, que o Independent Analytics precisa para registrar visualizações. Visite o menu NinjaFirewall > Firewall Policies e desmarque a caixa de seleção \"Block any access to the API\" para permitir que o Independent Analytics rastreie seus visitantes."
+
+#: views/email/email.blade.php:128
+msgid "This email was generated and delivered by %s"
+msgstr "Este e-mail foi gerado e entregue por %s"
+
+#: views/email/email.blade.php:113
+msgid "Top 10's"
+msgstr "Top 10"
+
+#: views/email/email.blade.php:91
+msgid "Performance Overview"
+msgstr "Visão geral de desempenho"
+
+#: views/email/email.blade.php:91
+msgid "Website performance report"
+msgstr "Relatório de desempenho do site"
+
+#: views/email/email.blade.php:1
+msgid "Website Analytics Report"
+msgstr "Relatório de análises do site"
+
+#: IAWP/Statistics/Intervals/Weekly.php:14
+#: views/settings/email-reports.blade.php:25
+msgid "Weekly"
+msgstr "Semanal"
+
+#: IAWP/Statistics/Intervals/Monthly.php:14
+#: views/settings/email-reports.blade.php:24
+msgid "Monthly"
+msgstr "Mensal"
+
+#: IAWP/Statistics/Intervals/Hourly.php:14
+msgid "Hourly"
+msgstr "Por hora"
+
+#: IAWP/Statistics/Intervals/Daily.php:14
+#: views/settings/email-reports.blade.php:26
+msgid "Daily"
+msgstr "Diariamente"
+
+#: IAWP/Statistics/Statistics.php:152 IAWP/Tables/Table_Campaigns.php:25
+#: IAWP/Tables/Table_Devices.php:34 IAWP/Tables/Table_Geo.php:28
+#: IAWP/Tables/Table_Referrers.php:26
+msgid "Views Per Session"
+msgstr "Visualizações por sessão"
+
+#: views/settings/disable-admin-toolbar-analytics.blade.php:5
+msgid "This hides the stats that appear in the admin toolbar when you view a post or page."
+msgstr "Isto oculta as estatísticas que aparecem na barra de administração ao ver uma postagem ou página."
+
+#: views/settings/disable-admin-toolbar-analytics.blade.php:4
+msgid "Disable admin toolbar stats"
+msgstr "Desativar estatísticas da barra de administração"
+
+#: IAWP/Settings.php:60
+msgid "Admin toolbar stats"
+msgstr "Estatísticas da barra de administração"
+
+#: IAWP/Statistics/Statistics.php:150 IAWP/Tables/Table_Campaigns.php:25
+#: IAWP/Tables/Table_Devices.php:34 IAWP/Tables/Table_Geo.php:28
+#: IAWP/Tables/Table_Pages.php:28 IAWP/Tables/Table_Referrers.php:26
+msgid "Bounce Rate"
+msgstr "Taxa de rejeição"
+
+#: IAWP/Menu_Bar_Stats/Menu_Bar_Stats.php:65
+msgid "Last 30 Days:"
+msgstr "Últimos 30 dias:"
+
+#: IAWP/Menu_Bar_Stats/Menu_Bar_Stats.php:65
+msgid "Yesterday:"
+msgstr "Ontem:"
+
+#: IAWP/Menu_Bar_Stats/Menu_Bar_Stats.php:65
+msgid "Today:"
+msgstr "Hoje:"
+
+#: IAWP/Menu_Bar_Stats/Menu_Bar_Stats.php:65
+msgid "Date"
+msgstr "Data"
+
+#: IAWP/Independent_Analytics.php:242
+msgid "Apply Relative Dates"
+msgstr "Aplicar datas relativas"
+
+#: IAWP/Independent_Analytics.php:242
+msgid "Apply Exact Dates"
+msgstr "Aplicar datas exatas"
+
+#: IAWP/Tables/Table_Pages.php:28
+msgid "View Duration"
+msgstr "Duração da visualização"
+
+#: IAWP/Tables/Table_Campaigns.php:25 IAWP/Tables/Table_Devices.php:34
+#: IAWP/Tables/Table_Geo.php:28 IAWP/Tables/Table_Referrers.php:26
+msgid "Session Duration"
+msgstr "Duração da sessão"
+
+#: IAWP/Independent_Analytics.php:242
+msgid "Exporting Geolocations..."
+msgstr "Exportando geolocalizações…"
+
+#: IAWP/Plugin_Conflict_Detector.php:83
+msgid "The \"WordPress REST API Authentication\" plugin is blocking the REST API, which Independent Analytics needs to record views. Please visit the miniOrange API Authentication > Protected REST APIs menu and uncheck the \"/iawp/search\" box to allow Independent Analytics to track your visitors."
+msgstr "O plugin \"WordPress REST API Authentication\" está bloqueando a API REST, que o Independent Analytics precisa para registrar visualizações. Visite o menu miniOrange API Authentication > Protected REST APIs e desmarque a caixa \"/iawp/search\" para permitir que o Independent Analytics rastreie seus visitantes."
+
+#: IAWP/Plugin_Conflict_Detector.php:76
+msgid "The \"WP Hardening\" plugin is blocking the REST API, which Independent Analytics needs to record views. Please visit the WP Hardening > Security Fixers menu and turn off the \"Disable WP API JSON\" option, so Independent Analytics can track your visitors."
+msgstr "O plugin \"WP Hardening\" está bloqueando a API REST, que o Independent Analytics precisa para registrar visualizações. Visite o menu WP Hardening > Security Fixers e desative a opção \"Disable WP API JSON\", para que o Independent Analytics possa rastrear seus visitantes."
+
+#: IAWP/Independent_Analytics.php:242 views/settings/export-data.blade.php:19
+msgid "Export Campaigns"
+msgstr "Exportar campanhas"
+
+#: IAWP/Independent_Analytics.php:242 views/settings/export-data.blade.php:15
+msgid "Export Geolocations"
+msgstr "Exportar geolocalizações"
+
+#: IAWP/Independent_Analytics.php:242 views/settings/export-data.blade.php:13
+msgid "Export Referrers"
+msgstr "Exportar referenciadores"
+
+#: IAWP/Independent_Analytics.php:242 views/settings/export-data.blade.php:11
+msgid "Export Pages"
+msgstr "Exportar páginas"
+
+#: IAWP/Models/Page_Post_Type_Archive.php:33
+msgid "Shop"
+msgstr "Loja"
+
+#: IAWP/Tables/Table_Pages.php:28
+msgid "Comments"
+msgstr "Comentários"
+
+#: IAWP/Independent_Analytics.php:242
+msgid "Exporting Campaigns..."
+msgstr "Exportando campanhas…"
+
+#: IAWP/Independent_Analytics.php:242
+msgid "Exporting Pages..."
+msgstr "Exportando páginas…"
+
+#: IAWP/Independent_Analytics.php:242
+msgid "Exporting Referrers..."
+msgstr "Exportando referenciadores…"
+
+#: IAWP/Independent_Analytics.php:242
+msgid "Copied"
+msgstr "Copiado"
+
+#: IAWP/Email_Reports/Email_Reports.php:136
+msgid "[Test]"
+msgstr "[Teste]"
+
+#: IAWP/Chart_Geo.php:94 IAWP/Statistics/Statistics.php:150
+#: IAWP/Tables/Table_Campaigns.php:25 IAWP/Tables/Table_Devices.php:34
+#: IAWP/Tables/Table_Geo.php:28 IAWP/Tables/Table_Pages.php:28
+#: IAWP/Tables/Table_Referrers.php:26
+msgid "Sessions"
+msgstr "Sessões"
+
+#: IAWP/Independent_Analytics.php:136
+msgid "Campaign Builder"
+msgstr "Construtor de campanhas"
+
+#: IAWP/Statistics/Statistics.php:154 IAWP/Tables/Table.php:375
+msgid "Average Order Volume"
+msgstr "Volume médio de pedidos"
+
+#: IAWP/Statistics/Statistics.php:154 IAWP/Tables/Table.php:375
+msgid "Earnings Per Visitor"
+msgstr "Ganhos por visitante"
+
+#: IAWP/Statistics/Statistics.php:154 IAWP/Tables/Table.php:375
+#: IAWP/Tables/Table.php:379 IAWP/Tables/Table.php:382
+msgid "Conversion Rate"
+msgstr "Taxa de conversão"
+
+#: views/interrupt/database-ahead-of-plugin.blade.php:4
+msgid "Newer database version found"
+msgstr "Nova versão de banco de dados encontrada"
+
+#: views/settings/email-reports.blade.php:135
+msgid "Send test email"
+msgstr "Enviar e-mail de teste"
+
+#: views/settings/email-reports.blade.php:133
+msgid "Save settings"
+msgstr "Salvar configurações"
+
+#: views/settings/email-reports.blade.php:119
+msgid "Sending to these addresses"
+msgstr "Enviando para esses endereços"
+
+#: views/settings/email-reports.blade.php:116
+msgid "This email already exists"
+msgstr "Este e-mail já existe"
+
+#: views/settings/email-reports.blade.php:112
+#: views/settings/email-reports.blade.php:127
+msgid "Remove email"
+msgstr "Remover e-mail"
+
+#: views/settings/email-reports.blade.php:103
+msgid "Add email"
+msgstr "Adicionar e-mail"
+
+#: views/settings/email-reports.blade.php:99
+msgid "Add new email addresses"
+msgstr "Adicionar novos endereços de e-mail"
+
+#: views/settings/email-reports.blade.php:33
+msgid "Delivery Time"
+msgstr "Tempo de entrega"
+
+#: views/settings/email-reports.blade.php:7
+msgid "Pro"
+msgstr "Pro"
+
+#: views/settings/email-reports.blade.php:3
+msgid "Email Report"
+msgstr "Relatório de e-mail"
+
+#: views/settings/block-by-role.blade.php:39
+msgid "This user role is already blocked"
+msgstr "Esta função de usuário já está bloqueado"
+
+#: views/settings/refresh-salt.blade.php:5
+msgid "Learn more."
+msgstr "Saiba mais."
+
+#: views/interrupt/migration-is-running.blade.php:17
+msgid "This page will automatically refresh when the update's finished."
+msgstr "Esta página será atualizada automaticamente quando a atualização for concluída."
+
+#: views/interrupt/migration-is-running.blade.php:14
+msgid "Your site's performance is not impacted by this update. Analytics tracking will resume once the update is complete."
+msgstr "O desempenho do seu site não é impactado por esta atualização. O rastreamento de análises será retomado assim que a atualização for concluída."
+
+#: views/interrupt/migration-is-running.blade.php:10
+msgid ""
+"We're running an update designed to speed up and improve Independent Analytics.\n"
+"                This can take anywhere from 5 seconds to 5 minutes."
+msgstr ""
+"Estamos executando uma atualização projetada para acelerar e melhorar o Independent Analytics.\n"
+"                Isso pode levar de 5 segundos a 5 minutos."
+
+#: views/interrupt/migration-is-running.blade.php:8
+msgid "Update running"
+msgstr "Atualização em andamento"
+
+#: IAWP/Statistics/Statistics.php:154 IAWP/Tables/Table.php:375
+msgid "Refunded Amount"
+msgstr "Valor reembolsado"
+
+#: IAWP/Statistics/Statistics.php:154 IAWP/Tables/Table.php:375
+msgid "Refunds"
+msgstr "Reembolsos"
+
+#: IAWP/Statistics/Statistics.php:154 IAWP/Tables/Table.php:375
+msgid "Gross Sales"
+msgstr "Vendas brutas"
+
+#: IAWP/Statistics/Statistics.php:154 IAWP/Tables/Table.php:375
+msgid "Orders"
+msgstr "Pedidos"
+
+#: IAWP/Settings.php:211
+msgid "Block by User Role"
+msgstr "Bloquear por função de usuário"
+
+#: IAWP/Settings.php:201
+msgid "Scheduled Email Reports"
+msgstr "Relatórios de e-mail agendados"
+
+#: IAWP/Plugin_Conflict_Detector.php:70
+msgid "The \"All-In-One Intranet\" plugin needs to be deactivated because it is disabling the REST API, which Independent Analytics uses to record visits. You may want to try the \"My Private Site\" plugin instead."
+msgstr "O plugin \"All-In-One Intranet\" precisa ser desativado porque está desativando a API REST, que o Independent Analytics usa para registrar visitas. Você pode querer experimentar o plugin \"My Private Site\" em vez disso."
+
+#: IAWP/Cron_Job.php:40
+msgid "Once a Month"
+msgstr "Uma vez por mês"
+
+#: views/notices/notice.blade.php:6
+msgid "Learn More"
+msgstr "Saiba mais"
+
+#: IAWP/Admin_Page/Analytics_Page.php:170
+msgid "I've cleared the cache"
+msgstr "Já limpei o cache"
+
+#: IAWP/Admin_Page/Analytics_Page.php:170
+msgid "Please clear your cache to ensure tracking works properly."
+msgstr "Limpe seu cache para garantir que o rastreamento funcione corretamente."
+
+#: IAWP/Plugin_Conflict_Detector.php:67
+msgid "The \"WPO Tweaks & Optimizations\" plugin needs to be deactivated because it is disabling the REST API, which Independent Analytics uses to record visits."
+msgstr "O plugin \"WPO Tweaks & Optimizations\" precisa ser desativado porque está desativando a API REST, que o Independent Analytics usa para registrar visitas."
+
+#: IAWP/Plugin_Conflict_Detector.php:62
+msgid "The \"Disable XML-RPC-API\" plugin is blocking REST API requests, which Independent Analytics needs to record views. Please visit the Security Settings menu and turn off the \"Disable JSON REST API\" option, so Independent Analytics can track your visitors."
+msgstr "O plugin \"Disable XML-RPC-API\" está bloqueando solicitações da API REST, que o Independent Analytics precisa para registrar visualizações. Visite o menu Security Settings e desative a opção \"Disable JSON REST API\", para que o Independent Analytics possa rastrear seus visitantes."
+
+#: IAWP/Plugin_Conflict_Detector.php:53
+msgid "The \"Disable REST API\" plugin is blocking REST API requests for unauthenticated users, which Independent Analytics needs to record views. Please enable the /iawp/search route, so Independent Analytics can track your visitors."
+msgstr "O plugin \"Disable REST API\" está bloqueando solicitações da API REST para usuários não autenticados, o que o Independent Analytics precisa para registrar visualizações. Ative a rota /iawp/search, para que o Independent Analytics possa rastrear seus visitantes."
+
+#: IAWP/Plugin_Conflict_Detector.php:44
+msgid "The \"All In One WP Security\" plugin is blocking REST API requests, which Independent Analytics needs to record views. Please disable this setting via the WP Security > Miscellaneous menu."
+msgstr "O plugin \"All In One WP Security\" está bloqueando solicitações da API REST, que o Independent Analytics precisa para registrar visualizações. Desative esta configuração no menu WP Security > Miscellaneous."
+
+#: IAWP/Plugin_Conflict_Detector.php:38
+msgid "The \"Disable WP REST API\" plugin needs to be deactivated because Independent Analytics uses the REST API to record visits."
+msgstr "O plugin \"Disable WP REST API\" precisa ser desativado porque o Independent Analytics usa a API REST para registrar visitas."
+
+#: views/settings/capabilities.blade.php:35
+msgid "White-label for non-admins"
+msgstr "White-label para não administradores"
+
+#: views/real_time.blade.php:89
+msgid "No results in the last 5 minutes."
+msgstr "Sem resultados nos últimos 5 minutos."
+
+#: views/real_time.blade.php:53
+msgid "The Last 30 Minutes"
+msgstr "Os últimos 30 minutos"
+
+#: views/real_time.blade.php:42
+msgid "The Last 5 Minutes"
+msgstr "Os últimos 5 minutos"
+
+#: views/real_time.blade.php:24
+msgid "Active Visitors is the number of people who have viewed a page within the last 5 minutes."
+msgstr "Visitantes ativos é o número de pessoas que viram uma página nos últimos 5 minutos."
+
+#: IAWP/Tables/Table_Campaigns.php:25 IAWP/Tables/Table_Devices.php:34
+#: IAWP/Tables/Table_Geo.php:28 IAWP/Tables/Table_Pages.php:28
+#: IAWP/Tables/Table_Referrers.php:26
+msgid "Visitors Growth"
+msgstr "Crescimento de visitantes"
+
+#: IAWP/Tables/Table_Campaigns.php:25 IAWP/Tables/Table_Devices.php:34
+#: IAWP/Tables/Table_Geo.php:28 IAWP/Tables/Table_Pages.php:28
+#: IAWP/Tables/Table_Referrers.php:26
+msgid "Views Growth"
+msgstr "Crescimento de visualizações"
+
+#: IAWP/Real_Time.php:64
+msgid "Active Campaigns"
+msgstr "Campanhas ativas"
+
+#: IAWP/Real_Time.php:64
+msgid "Active Countries"
+msgstr "Países ativos"
+
+#: IAWP/Real_Time.php:64
+msgid "Active Referrers"
+msgstr "Referenciadores ativos"
+
+#: IAWP/Real_Time.php:64
+msgid "Active Pages"
+msgstr "Páginas ativas"
+
+#: IAWP/Email_Reports/Email_Reports.php:159 IAWP/Real_Time.php:63
+msgid "Countries"
+msgstr "Países"
+
+#: IAWP/Real_Time.php:76
+msgid "Active Visitors"
+msgstr "Visitantes ativos"
+
+#: IAWP/Real_Time.php:76
+msgid "Active Visitor"
+msgstr "Visitante ativo"
+
+#: IAWP/Interval/Ten_Second_Interval.php:34
+msgid "seconds ago"
+msgstr "segundos atrás"
+
+#: IAWP/Interval/Ten_Second_Interval.php:30
+msgid "second ago"
+msgstr "segundo atrás"
+
+#: IAWP/Interval/Ten_Second_Interval.php:26
+msgid "sec"
+msgstr "seg"
+
+#: IAWP/Interval/Minute_Interval.php:34
+msgid "minutes ago"
+msgstr "minutos atrás"
+
+#: IAWP/Interval/Minute_Interval.php:30
+msgid "minute ago"
+msgstr "minuto atrás"
+
+#: IAWP/Interval/Minute_Interval.php:26
+msgid "min"
+msgstr "min"
+
+#: IAWP/Interval/Interval.php:20
+msgid "now"
+msgstr "agora"
+
+#: views/partials/sidebar.blade.php:184
+msgid "Get Real-time analytics"
+msgstr "Obter análises em tempo real"
+
+#: views/partials/sidebar.blade.php:48
+msgid "Real-time"
+msgstr "Tempo real"
+
+#: views/plugin-group-options.blade.php:70
+#: views/plugin-group-options.blade.php:72
+msgid "PRO"
+msgstr "PRO"
+
+#: IAWP/Email_Reports/Email_Reports.php:165 IAWP/Report_Finder.php:13
+#: IAWP/Report_Finder.php:197 views/partials/sidebar.blade.php:120
+#: views/partials/sidebar.blade.php:153
+msgid "Campaigns"
+msgstr "Campanhas"
+
+#: IAWP/Email_Reports/Email_Reports.php:153 IAWP/Real_Time.php:61
+#: IAWP/Report_Finder.php:13 IAWP/Report_Finder.php:189
+#: views/partials/sidebar.blade.php:63
+msgid "Pages"
+msgstr "Páginas"
+
+#: views/settings/track-authenticated-users.blade.php:4
+msgid "Track logged-in users"
+msgstr "Rastrear usuários conectados"
+
+#: views/settings/dark-mode.blade.php:3
+msgid "Enable dark mode theme"
+msgstr "Ativar modo escuro"
+
+#: views/settings/capabilities.blade.php:39
+msgid "Save Permissions"
+msgstr "Salvar permissões"
+
+#: views/settings/capabilities.blade.php:11
+msgid "Admins can always view the analytics and edit the settings."
+msgstr "Os administradores podem sempre visualizar as análises e editar as configurações."
+
+#: views/settings/capabilities.blade.php:18
+msgid "No access"
+msgstr "Sem acesso"
+
+#: views/settings/capabilities.blade.php:8
+msgid "Decide which users can view the analytics and edit the settings."
+msgstr "Decida quais usuários podem ver as análises e editar as configurações."
+
+#: views/settings/capabilities.blade.php:3
+msgid "User Permissions"
+msgstr "Permissões do usuário"
+
+#: views/settings/block-by-role.blade.php:59
+#: views/settings/block-ips.blade.php:55
+#: views/settings/email-reports.blade.php:136
+msgid "Unsaved changes"
+msgstr "Alterações não salvas"
+
+#: views/settings/block-ips.blade.php:54
+msgid "Save IP Addresses"
+msgstr "Salvar endereços IP"
+
+#: views/settings/block-ips.blade.php:35
+msgid "This IP is already blocked"
+msgstr "Este IP já está bloqueado"
+
+#: views/settings/block-by-role.blade.php:38
+#: views/settings/block-ips.blade.php:34
+#: views/settings/email-reports.blade.php:115
+msgid "Input is empty"
+msgstr "A entrada está vazia"
+
+#: IAWP/Settings.php:194
+msgid "Block IP Addresses"
+msgstr "Bloquear endereços IP"
+
+#: IAWP/Settings.php:52
+msgid "Basic Settings"
+msgstr "Configurações básicas"
+
+#: IAWP/Admin_Page/Settings_Page.php:14
+msgid "You do not have permission to edit the settings."
+msgstr "Você não tem permissão para editar as configurações."
+
+#: IAWP/Capability_Manager.php:13
+msgid "View all analytics and edit settings"
+msgstr "Ver todas as análises e editar configurações"
+
+#: views/tables/rows.blade.php:26
+msgid "Create your first campaign"
+msgstr "Crie sua primeira campanha"
+
+#: views/tables/rows.blade.php:20
+msgid "No campaign data found"
+msgstr "Nenhum dado de campanha encontrado"
+
+#: views/campaign-builder.blade.php:194
+msgctxt "Created five minutes ago"
+msgid "Created %s"
+msgstr "Criado %s"
+
+#: views/campaign-builder.blade.php:221
+msgid "No campaign URLs found"
+msgstr "Nenhum URL de campanha encontrado"
+
+#: views/campaign-builder.blade.php:183
+msgid "Latest Campaign URLs"
+msgstr "URLs de campanha mais recentes"
+
+#: views/campaign-builder.blade.php:174 views/campaign-builder.blade.php:203
+msgid "Copy URL"
+msgstr "Copiar URL"
+
+#: views/campaign-builder.blade.php:157
+msgid "New campaign created"
+msgstr "Nova campanha criada"
+
+#: views/campaign-builder.blade.php:148
+msgid "Create Campaign URL"
+msgstr "Criar URL da campanha"
+
+#: views/campaign-builder.blade.php:137
+msgid "Position of the link on the page e.g. author bio"
+msgstr "Posição do link na página, por exemplo, biografia do autor"
+
+#: views/campaign-builder.blade.php:134
+msgid "Bio link"
+msgstr "Link da bio"
+
+#: views/campaign-builder.blade.php:123
+msgid "Keyword used in paid advertising"
+msgstr "Palavra-chave usada em publicidade paga"
+
+#: views/campaign-builder.blade.php:120
+msgid "Get website traffic"
+msgstr "Obter tráfego para o site"
+
+#: views/campaign-builder.blade.php:106
+msgid "Title of the page or ad"
+msgstr "Título da página ou anúncio"
+
+#: views/campaign-builder.blade.php:102
+msgid "5 Ways to Get More Traffic"
+msgstr "5 maneiras de obter mais tráfego"
+
+#: views/campaign-builder.blade.php:88
+msgid "Type of website e.g. Search, Social, Ad"
+msgstr "Tipo de site, por exemplo, pesquisa, social, anúncio"
+
+#: views/campaign-builder.blade.php:84
+msgid "Social Media"
+msgstr "Mídias sociais"
+
+#: views/campaign-builder.blade.php:69
+msgid "Name of the website the link will be placed on"
+msgstr "Nome do site onde o link será colocado"
+
+#: views/campaign-builder.blade.php:53
+msgid "Leave empty to use your homepage"
+msgstr "Deixe em branco para usar sua página inicial"
+
+#: views/campaign-builder.blade.php:44
+msgid "Landing Page Path"
+msgstr "Caminho da landing page"
+
+#: views/campaign-builder.blade.php:39
+msgid "Campaign links always lead to your site"
+msgstr "Links de campanha sempre levam ao seu site"
+
+#: views/campaign-builder.blade.php:30
+msgid "Site URL"
+msgstr "URL do site"
+
+#: views/campaign-builder.blade.php:21
+msgid "Learn how to create campaigns"
+msgstr "Aprenda como criar campanhas"
+
+#: views/campaign-builder.blade.php:18
+msgid "Campaign URL Builder"
+msgstr "Construtor de URL de campanha"
+
+#: IAWP/Tables/Table_Campaigns.php:25 views/campaign-builder.blade.php:128
+msgid "Content"
+msgstr "Conteúdo"
+
+#: IAWP/Tables/Table_Campaigns.php:25 views/campaign-builder.blade.php:114
+msgid "Term"
+msgstr "Termo"
+
+#: IAWP/Tables/Table_Campaigns.php:20 IAWP/Tables/Table_Campaigns.php:25
+#: views/campaign-builder.blade.php:96
+msgid "Campaign"
+msgstr "Campanha"
+
+#: IAWP/Tables/Table_Campaigns.php:25 views/campaign-builder.blade.php:77
+msgid "Medium"
+msgstr "Meio"
+
+#: IAWP/Tables/Table_Campaigns.php:25 views/campaign-builder.blade.php:58
+msgid "Source"
+msgstr "Origem"
+
+#: IAWP/Tables/Table_Campaigns.php:25
+msgid "Landing Page"
+msgstr "Landing Page"
+
+#: IAWP/Independent_Analytics.php:162
+msgid "Upgrade to Pro &rarr;"
+msgstr "Faça upgrade para a versão Pro &rarr;"
+
+#: views/tables/table.blade.php:91
+msgid "Load Next %d Rows"
+msgstr "Carregar próximas %d linhas"
+
+#: views/tables/table.blade.php:88
+msgid "Showing All Rows"
+msgstr "Exibindo todas as linhas"
+
+#: views/settings/view-counter/position.blade.php:5
+msgid "Before and after the content"
+msgstr "Antes e depois do conteúdo"
+
+#: views/settings/view-counter/position.blade.php:4
+msgid "After the content"
+msgstr "Depois do conteúdo"
+
+#: views/settings/view-counter/position.blade.php:3
+msgid "Before the content"
+msgstr "Antes do conteúdo"
+
+#: views/settings/view-counter/label.blade.php:3
+msgid "Edit the text that displays before the number of views."
+msgstr "Edite o texto que é exibido antes do número de visualizações."
+
+#: views/settings/view-counter/icon.blade.php:3
+msgid "Show the icon"
+msgstr "Mostrar o ícone"
+
+#: views/settings/view-counter/exclude.blade.php:3
+msgid "Enter the IDs of any pages you want to exclude separated commas e.g. 32,79,118."
+msgstr "Digite os IDs de quaisquer páginas que deseja excluir, separados por vírgulas, por exemplo, 32,79,118."
+
+#: views/settings/view-counter.blade.php:10
+msgid "You can output the view counter in a custom location using the shortcode:"
+msgstr "Você pode exibir o contador de visualizações em um local personalizado usando o shortcode:"
+
+#: IAWP/Settings.php:122 IAWP/Settings.php:173 IAWP/View_Counter.php:59
+#: IAWP/View_Counter.php:78
+msgid "Views:"
+msgstr "Visualizações:"
+
+#: IAWP/Settings.php:155
+msgid "Uncheck all boxes to only show view count manually. See shortcode documentation below for details."
+msgstr "Desmarque todas as caixas para mostrar apenas a contagem de visualizações manualmente. Veja a documentação do shortcode abaixo para mais detalhes."
+
+#: IAWP/Settings.php:133
+msgid "Display the icon"
+msgstr "Exibir o ícone"
+
+#: IAWP/Settings.php:125
+msgid "Edit the label"
+msgstr "Exibir o rótulo"
+
+#: IAWP/Settings.php:120
+msgid "Exclude these pages"
+msgstr "Excluir estas páginas"
+
+#: IAWP/Settings.php:113
+msgid "Show it in this location"
+msgstr "Mostrar neste local"
+
+#: IAWP/Settings.php:109
+msgid "Display on these post types"
+msgstr "Exibir nestes tipos de post"
+
+#: IAWP/Settings.php:106 views/settings/view-counter/enable.blade.php:3
+msgid "Enable the view counter"
+msgstr "Ativar o contador de visualizações"
+
+#: IAWP/Settings.php:102
+msgid "Public View Counter"
+msgstr "Contador de visualizações público"
+
+#: IAWP/Dashboard_Widget.php:31
+msgid "Open Dashboard"
+msgstr "Abrir painel"
+
+#: views/tables/rows.blade.php:12
+msgid "No geographic data found"
+msgstr "Nenhum dado geográfico encontrado"
+
+#: IAWP/Date_Range/Relative_Date_Range.php:168
+msgid "Last Year"
+msgstr "Último ano"
+
+#: IAWP/Date_Range/Relative_Date_Range.php:159
+msgid "This Year"
+msgstr "Este ano"
+
+#: IAWP/Date_Range/Relative_Date_Range.php:126
+msgid "Last Month"
+msgstr "Último mês"
+
+#: IAWP/Date_Range/Relative_Date_Range.php:118
+msgid "This Month"
+msgstr "Este mês"
+
+#: IAWP/Date_Range/Relative_Date_Range.php:108
+#: views/settings/view-counter/views-to-count.blade.php:7
+msgid "Last Week"
+msgstr "Última semana"
+
+#: IAWP/Date_Range/Relative_Date_Range.php:101
+#: views/settings/view-counter/views-to-count.blade.php:6
+msgid "This Week"
+msgstr "Esta semana"
+
+#: IAWP/Date_Range/Relative_Date_Range.php:66
+#: IAWP/Migrations/Migration_17.php:29
+#: views/settings/view-counter/views-to-count.blade.php:8
+msgid "Last 7 Days"
+msgstr "Últimos 7 dias"
+
+#: IAWP/Date_Range/Relative_Date_Range.php:59
+#: views/settings/view-counter/views-to-count.blade.php:5
+msgid "Yesterday"
+msgstr "Ontem"
+
+#: IAWP/Date_Range/Relative_Date_Range.php:53
+#: IAWP/Migrations/Migration_17.php:25
+#: views/settings/view-counter/views-to-count.blade.php:4
+msgid "Today"
+msgstr "Hoje"
+
+#: IAWP/Tables/Table_Geo.php:23 IAWP/Tables/Table_Geo.php:28
+msgid "City"
+msgstr "Cidade"
+
+#: IAWP/Tables/Table_Geo.php:28
+msgid "Subdivision"
+msgstr "Subdivisão"
+
+#: IAWP/Real_Time.php:63 IAWP/Tables/Table_Geo.php:22
+#: IAWP/Tables/Table_Geo.php:28
+msgid "Country"
+msgstr "País"
+
+#: IAWP/Tables/Table_Geo.php:28
+msgid "Continent"
+msgstr "Continente"
+
+#: IAWP/Admin_Page/Analytics_Page.php:150
+msgctxt "Following text is a noun: DB-IP"
+msgid "Geolocation data powered by"
+msgstr "Dados de geolocalização fornecidos por"
+
+#: IAWP/Report_Finder.php:13 IAWP/Report_Finder.php:193
+#: views/partials/sidebar.blade.php:91
+msgid "Geographic"
+msgstr "Geográfico"
+
+#: IAWP/Filters.php:42
+msgid "Filters"
+msgstr "Filtros"
+
+#: views/tables/rows.blade.php:9
+msgid "No referrers found"
+msgstr "Nenhum referenciador encontrado"
+
+#: views/tables/rows.blade.php:6
+msgid "No views found"
+msgstr "Nenhuma visualização encontrada"
+
+#: views/quick-stats.blade.php:54
+msgid "vs. previous period"
+msgstr "x período anterior"
+
+#: views/date-picker/date-picker.blade.php:45
+#: views/settings/delete.blade.php:33 views/settings/delete.blade.php:56
+#: views/settings/pruner.blade.php:73 views/click-tracking/link.blade.php:89
+#: views/click-tracking/menu.blade.php:106 views/settings/pruner.blade.php:74
+msgid "Cancel"
+msgstr "Cancelar"
+
+#: views/settings/delete.blade.php:26 views/settings/delete.blade.php:49
+msgid "Type \"%s\" in the input below to confirm."
+msgstr "Digite \"%s\" no campo abaixo para confirmar."
+
+#: views/settings/delete.blade.php:42 views/settings/delete.blade.php:54
+msgid "Delete all data"
+msgstr "Excluir todos os dados"
+
+#: views/settings/delete.blade.php:3
+msgid "Danger zone"
+msgstr "Zona de perigo"
+
+#: IAWP/Settings.php:67
+msgid "First day of week"
+msgstr "Primeiro dia da semana"
+
+#: IAWP/Chart_Geo.php:89 IAWP/Statistics/Statistics.php:150
+#: IAWP/Tables/Table_Campaigns.php:25 IAWP/Tables/Table_Devices.php:34
+#: IAWP/Tables/Table_Geo.php:28 IAWP/Tables/Table_Pages.php:28
+#: IAWP/Tables/Table_Referrers.php:26
+msgid "Visitors"
+msgstr "Visitantes"
+
+#: IAWP/Date_Range/Relative_Date_Range.php:73
+msgid "Last 30 Days"
+msgstr "Últimos 30 dias"
+
+#: IAWP/Independent_Analytics.php:262 IAWP/Menu_Bar_Stats/Menu_Bar_Stats.php:65
+msgid "Analytics Dashboard"
+msgstr "Painel de análises"
+
+#: IAWP/Tables/Table_Pages.php:28
+msgid "Post Category"
+msgstr "Categoria de post"
+
+#: IAWP/Settings.php:94
+msgid "Saturday"
+msgstr "Sábado"
+
+#: IAWP/Settings.php:94
+msgid "Friday"
+msgstr "Sexta-feira"
+
+#: IAWP/Settings.php:94
+msgid "Thursday"
+msgstr "Quinta-feira"
+
+#: IAWP/Settings.php:94
+msgid "Wednesday"
+msgstr "Quarta-feira"
+
+#: IAWP/Settings.php:94
+msgid "Tuesday"
+msgstr "Terça-feira"
+
+#: IAWP/Settings.php:94
+msgid "Monday"
+msgstr "Segunda-feira"
+
+#: IAWP/Settings.php:94
+msgid "Sunday"
+msgstr "Domingo"
+
+#: IAWP/Tables/Table.php:100
+msgid "(deleted)"
+msgstr "(excluído)"
+
+#: IAWP/Tables/Table_Pages.php:28
+msgid "Publish Date"
+msgstr "Data de publicação"
+
+#: IAWP/Tables/Table_Pages.php:28
+msgid "Page Type"
+msgstr "Tipo de página"
+
+#: IAWP/Tables/Table_Pages.php:28
+msgid "Author"
+msgstr "Autor"
+
+#: IAWP/Tables/Table_Pages.php:28
+msgid "URL"
+msgstr "URL"
+
+#: IAWP/Tables/Table_Pages.php:28
+msgid "Title"
+msgstr "Título"
+
+#: IAWP/Tables/Table_Referrers.php:26
+msgid "Referrer Type"
+msgstr "Tipo de referenciador"
+
+#: views/settings/index.blade.php:6 views/settings/view-counter.blade.php:17
+msgid "Save Settings"
+msgstr "Salvar configurações"
+
+#: IAWP/Settings.php:58
+msgid "Track logged in users"
+msgstr "Rastrear usuários conectados"
+
+#: IAWP/Settings.php:56
+msgid "Dark mode"
+msgstr "Modo escuro"
+
+#: IAWP/Models/Page_Search.php:32
+msgid "Search:"
+msgstr "Pesquisar:"
+
+#: IAWP/Models/Page_Home.php:37 IAWP/Models/Page_Home.php:48
+msgid "Blog"
+msgstr "Blog"
+
+#: IAWP/Models/Page_Date_Archive.php:53
+msgid "Date Archive (Day)"
+msgstr "Arquivo de data (Dia)"
+
+#: IAWP/Models/Page_Date_Archive.php:51
+msgid "Date Archive (Month)"
+msgstr "Arquivo de data (Mês)"
+
+#: IAWP/Models/Page_Date_Archive.php:49
+msgid "Date Archive (Year)"
+msgstr "Arquivo de data (Ano)"
+
+#: IAWP/Models/Page_Author_Archive.php:32
+#: IAWP/Models/Page_Post_Type_Archive.php:39
+#: views/click-tracking/link.blade.php:95
+#: views/click-tracking/menu.blade.php:37
+msgid "Archive"
+msgstr "Arquivo"
+
+#: IAWP/Filters.php:244 IAWP/Rows/Filter.php:104
+msgid "On"
+msgstr "Em"
+
+#: IAWP/Filters.php:244 IAWP/Rows/Filter.php:108
+msgid "After"
+msgstr "Após"
+
+#: IAWP/Filters.php:244 IAWP/Rows/Filter.php:106
+msgid "Before"
+msgstr "Antes"
+
+#: IAWP/Filters.php:242 IAWP/Rows/Filter.php:116
+msgid "Isn't"
+msgstr "Não é"
+
+#: IAWP/Filters.php:242 IAWP/Rows/Filter.php:114
+msgid "Is"
+msgstr "É"
+
+#: IAWP/Filters.php:240
+msgid "Equal to"
+msgstr "Igual a"
+
+#: IAWP/Filters.php:240
+msgid "Less than"
+msgstr "Menor que"
+
+#: IAWP/Filters.php:240
+msgid "Greater than"
+msgstr "Maior que"
+
+#: IAWP/Filters.php:238 IAWP/Rows/Filter.php:112
+msgid "Exactly matches"
+msgstr "Corresponde exatamente a"
+
+#: IAWP/Filters.php:238 IAWP/Rows/Filter.php:110
+msgid "Contains"
+msgstr "Contém"
+
+#: IAWP/Filter_Lists/Page_Type_Filter_List.php:35
+msgid "404"
+msgstr "404"
+
+#: IAWP/Filter_Lists/Page_Type_Filter_List.php:34
+msgid "Search Results"
+msgstr "Resultados da pesquisa"
+
+#: IAWP/Filter_Lists/Page_Type_Filter_List.php:33
+msgid "Date Archive"
+msgstr "Arquivo de data"
+
+#: IAWP/Filter_Lists/Page_Type_Filter_List.php:32
+#: IAWP/Models/Page_Author_Archive.php:40
+msgid "Author Archive"
+msgstr "Arquivo do autor"
+
+#: IAWP/Filter_Lists/Page_Type_Filter_List.php:31
+msgid "Blog Home"
+msgstr "Página inicial do blog"
+
+#: IAWP/Filter_Lists/Page_Type_Filter_List.php:19
+msgid "Tag"
+msgstr "Tag"
+
+#: IAWP/Filter_Lists/Page_Type_Filter_List.php:18
+msgid "Category"
+msgstr "Categoria"
+
+#: IAWP/Filter_Lists/Page_Type_Filter_List.php:14
+msgid "Attachment"
+msgstr "Anexo"
+
+#: IAWP/Filter_Lists/Page_Type_Filter_List.php:13
+#: IAWP/Models/Page_Virtual.php:63 IAWP/Real_Time.php:61
+#: IAWP/Tables/Table_Pages.php:23
+msgid "Page"
+msgstr "Página"
+
+#: IAWP/Filter_Lists/Page_Type_Filter_List.php:12
+msgid "Post"
+msgstr "Post"
+
+#: IAWP/Filter_Lists/Referrer_Type_Filter_List.php:11
+msgid "Direct"
+msgstr "Direto"
+
+#: IAWP/Filter_Lists/Referrer_Type_Filter_List.php:11 IAWP/Real_Time.php:62
+#: IAWP/Tables/Table_Referrers.php:21 IAWP/Tables/Table_Referrers.php:26
+msgid "Referrer"
+msgstr "Referenciador"
+
+#: IAWP/Filter_Lists/Referrer_Type_Filter_List.php:11
+msgid "Social"
+msgstr "Social"
+
+#: IAWP/Filter_Lists/Referrer_Type_Filter_List.php:11
+#: IAWP/Models/Page_Search.php:40
+msgid "Search"
+msgstr "Pesquisar"
+
+#: views/partials/filter-column-select.blade.php:4
+msgid "Choose a column"
+msgstr "Escolha uma coluna"
+
+#: IAWP/Filters.php:151 IAWP/Rows/Filter.php:96
+msgid "Exclude"
+msgstr "Excluir"
+
+#: IAWP/Filters.php:150 IAWP/Rows/Filter.php:94
+msgid "Include"
+msgstr "Incluir"
+
+#: IAWP/Filters.php:76
+msgid "Reset"
+msgstr "Redefinir"
+
+#: IAWP/Filters.php:67 views/date-picker/date-picker.blade.php:39
+msgid "Apply"
+msgstr "Aplicar"
+
+#: IAWP/Filters.php:58
+msgid "+ Add another condition"
+msgstr "+ Adicionar outra condição"
+
+#: IAWP/Independent_Analytics.php:130
+msgid "Settings"
+msgstr "Configurações"
+
+#: IAWP/Email_Reports/Email_Reports.php:156 IAWP/Real_Time.php:62
+#: IAWP/Report_Finder.php:13 IAWP/Report_Finder.php:191
+#: views/partials/sidebar.blade.php:77
+msgid "Referrers"
+msgstr "Referenciadores"
+
+#: IAWP/Chart_Geo.php:84 IAWP/Custom_WordPress_Columns/Views_Column.php:34
+#: IAWP/Independent_Analytics.php:242 IAWP/Menu_Bar_Stats/Menu_Bar_Stats.php:65
+#: IAWP/Statistics/Statistics.php:150 IAWP/Tables/Table_Campaigns.php:25
+#: IAWP/Tables/Table_Devices.php:34 IAWP/Tables/Table_Geo.php:28
+#: IAWP/Tables/Table_Pages.php:28 IAWP/Tables/Table_Referrers.php:26
+#: views/email/email.blade.php:123 views/real_time.blade.php:67
+msgid "Views"
+msgstr "Visualizações"
+
+#: IAWP/Dashboard_Widget.php:24 IAWP/Independent_Analytics.php:124
+#: IAWP/Independent_Analytics.php:125 IAWP/Interrupt.php:19
+#: IAWP/Interrupt.php:20
+msgid "Analytics"
+msgstr "Análises"
+
+#. Description of the plugin
+#: iawp.php
+msgid "User-friendly website analytics built for WordPress"
+msgstr "Análise de site amigável para WordPress"
+
+#. Plugin URI of the plugin
+#. Author URI of the plugin
+#: iawp.php
+msgid "https://independentwp.com/"
+msgstr "https://independentwp.com/"
+
+#. Plugin Name of the plugin
+#. Author of the plugin
+#: iawp.php
+msgid "Independent Analytics"
+msgstr "Independent Analytics"
