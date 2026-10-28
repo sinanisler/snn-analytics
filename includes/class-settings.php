@@ -18,7 +18,7 @@ final class Settings {
 	public static function defaults(): array {
 		return [
 			'salt_rotation'   => 'yearly', // never | yearly | monthly | daily
-			'respect_dnt'     => true,     // honour DNT and Sec-GPC
+			'respect_dnt'     => false,    // honour DNT and Sec-GPC
 			'exclude_roles'   => [ 'administrator' ],
 			'session_timeout' => 1800,     // seconds without a hit before a new session starts
 			'site_host'       => '',       // host without "www.", used for internal referrers
