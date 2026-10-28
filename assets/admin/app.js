@@ -1916,7 +1916,8 @@
 				]),
 				canvas,
 				h('p', { class: 'snn-a-linkrow' }, [
-					h('a', { class: 'button', href: pageLink('snn-analytics-heatmaps') + '&pid=' + row.id }, 'Click heatmap')
+					!cfg.can || cfg.can.heatmaps ? h('a', { class: 'button', href: pageLink('snn-analytics-heatmaps') + '&pid=' + row.id }, 'Click heatmap') : null,
+					!cfg.can || cfg.can.compare ? h('a', { class: 'button', href: pageLink('snn-analytics-compare') + '&ids=' + row.id }, 'Compare with…') : null
 				])
 			], { sub: row.path, actions: close }));
 			detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -2555,6 +2556,10 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 		var totalsNote = h('div', {});
 		var poll = null;
 
+		if (cfg.canManage) {
+			tools.appendChild(databaseCard());
+		}
+
 		tools.appendChild(card('City database', geoBox, { sub: 'DB-IP Lite, free and licensed CC BY 4.0. Adds city data to the Geographic and Journeys screens.' }));
 
 		tools.appendChild(card('Daily totals', [
@@ -2655,12 +2660,291 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 		});
 	}
 
+	// ------------------------------------------------------------ compare
+
+	var SLOT_COLORS = ['#2271b1', '#00a32a', '#dba617', '#8c5cd6'];
+	var SLOT_LETTERS = ['A', 'B', 'C', 'D'];
+
+	/**
+	 * Pick two to four pages and see them side by side. For every measure the best page is marked,
+	 * so it is clear which page does better. Pages are picked from the most viewed in the range.
+	 */
+	function renderCompare(rp) {
+		var slots = (urlParam('ids') || '').split(',').map(Number).filter(Boolean).slice(0, 4);
+		var chartMetric = 'views';
+		var pickers = h('div', { class: 'snn-a-slots' });
+		var results = h('div', {});
+		var pageRows = [];
+
+		root.appendChild(h('div', { class: 'snn-a-toolbar' }, rangeControl()));
+		root.appendChild(h('p', { class: 'snn-a-caption', text: 'Pick two to four pages. The best value in each row is highlighted, and the arrows show the change against the previous period.' }));
+		root.appendChild(pickers);
+		root.appendChild(results);
+
+		function save() {
+			setUrlParam('ids', slots.join(','));
+		}
+
+		function drawPickers() {
+			clear(pickers);
+			slots.forEach(function (id, i) {
+				var select = h('select', { 'aria-label': 'Page ' + SLOT_LETTERS[i], onchange: function () {
+					slots[i] = Number(select.value);
+					save();
+					drawPickers();
+					load();
+				} }, pageRows.map(function (row) {
+					return h('option', {
+						value: String(row.id),
+						text: (row.title || row.path) + ' · ' + row.path,
+						selected: row.id === id ? true : null
+					});
+				}));
+				pickers.appendChild(h('div', { class: 'snn-a-slot', style: 'border-color:' + SLOT_COLORS[i] }, [
+					h('span', { class: 'snn-a-slot-badge', style: 'background:' + SLOT_COLORS[i], text: SLOT_LETTERS[i] }),
+					select,
+					slots.length > 2 ? h('button', { type: 'button', class: 'button-link', 'aria-label': 'Remove page ' + SLOT_LETTERS[i], onclick: function () {
+						slots.splice(i, 1);
+						save();
+						drawPickers();
+						load();
+					} }, 'Remove') : null
+				]));
+			});
+			if (slots.length < 4 && pageRows.length > slots.length) {
+				pickers.appendChild(h('button', { type: 'button', class: 'button', onclick: function () {
+					var next = pageRows.filter(function (row) { return slots.indexOf(row.id) === -1; })[0];
+					slots.push(next.id);
+					save();
+					drawPickers();
+					load();
+				} }, '+ Add a page'));
+			}
+		}
+
+		var measures = [
+			{ key: 'views', label: 'Views', dir: 1, value: function (c) { return c.views; }, text: n },
+			{ key: 'visitors', label: 'Visitors', dir: 1, value: function (c) { return c.visitors; }, text: n },
+			{ key: 'avg_time', label: 'Avg. time on page', dir: 1, value: function (c) { return c.avg_time; }, text: duration },
+			{ key: 'per_visitor', label: 'Views per visitor', dir: 1, value: function (c) { return c.visitors ? c.views / c.visitors : 0; }, text: function (v) { return (Math.round(v * 100) / 100).toString(); } },
+			{ key: 'entrances', label: 'Entrances (landing page)', dir: 1, value: function (c) { return c.entrances; }, text: n },
+			{ key: 'clicks', label: 'Clicks recorded', dir: 1, value: function (c) { return c.clicks || 0; }, text: n },
+			{ key: 'exit_rate', label: 'Exit rate', dir: -1, value: function (c) { return c.views ? c.exits / c.views * 100 : 0; }, text: pct, points: true },
+			{ key: 'exits', label: 'Exits', dir: 0, value: function (c) { return c.exits; }, text: n }
+		];
+
+		function paint(data) {
+			clear(results);
+			if (data.length < 2) {
+				results.appendChild(empty('Choose at least two pages that have views in this range.'));
+				return;
+			}
+
+			var wins = data.map(function () { return 0; });
+			var contested = 0;
+
+			var rows = measures.map(function (m) {
+				var values = data.map(function (p) { return m.value(p.current); });
+				var best = null;
+				if (m.dir !== 0) {
+					var top = m.dir > 0 ? Math.max.apply(null, values) : Math.min.apply(null, values);
+					var holders = values.filter(function (v) { return v === top; }).length;
+					// A tie, or a row where every page is 0, has no winner.
+					if (holders === 1 && (m.dir < 0 || top > 0)) {
+						best = values.indexOf(top);
+						wins[best] += 1;
+					}
+					contested += 1;
+				}
+				return h('tr', {}, [h('th', { scope: 'row', text: m.label })].concat(data.map(function (p, i) {
+					var prev = m.value(p.previous);
+					var d = change(values[i], prev, { invert: m.dir < 0, points: !!m.points });
+					return h('td', { class: 'num' + (best === i ? ' is-best' : '') }, [
+						h('strong', { text: m.text(values[i]) }),
+						best === i ? h('span', { class: 'snn-a-best', text: 'Best' }) : null,
+						h('span', { class: 'snn-a-kpi-delta ' + d.cls, text: d.text })
+					]);
+				})));
+			});
+
+			var leader = wins.indexOf(Math.max.apply(null, wins));
+			var tied = wins.filter(function (w) { return w === wins[leader]; }).length > 1;
+			var verdict = tied || !wins[leader]
+				? 'No page is clearly ahead in this period.'
+				: SLOT_LETTERS[leader] + ' (' + (data[leader].title || data[leader].path) + ') leads on ' + wins[leader] + ' of ' + contested + ' measures.';
+
+			results.appendChild(card('Side by side', [
+				h('p', { class: 'snn-a-verdict', text: verdict }),
+				h('div', { class: 'snn-a-scroll' }, h('table', { class: 'snn-a-table snn-a-compare' }, [
+					h('thead', {}, h('tr', {}, [h('th', { scope: 'col', text: 'Measure' })].concat(data.map(function (p, i) {
+						return h('th', { scope: 'col', class: 'num' }, [
+							h('span', { class: 'snn-a-slot-badge', style: 'background:' + SLOT_COLORS[i], text: SLOT_LETTERS[i] }),
+							h('span', { class: 'snn-a-compare-name', text: p.title || p.path }),
+							h('span', { class: 'snn-a-muted', text: p.path })
+						]);
+					})))),
+					h('tbody', {}, rows)
+				]))
+			], { sub: rangeLabel(rp) }));
+
+			var canvas = chartBox(280);
+			var seg = h('div', { class: 'snn-a-segment', role: 'group', 'aria-label': 'Chart measure' }, [['views', 'Views'], ['visitors', 'Visitors']].map(function (o) {
+				return h('button', {
+					type: 'button',
+					class: 'snn-a-seg' + (chartMetric === o[0] ? ' is-active' : ''),
+					'aria-pressed': chartMetric === o[0] ? 'true' : 'false',
+					onclick: function () { chartMetric = o[0]; paint(data); }
+				}, o[1]);
+			}));
+			results.appendChild(card('Over time', canvas, { sub: 'Per day', actions: seg }));
+			charts.splice(0).forEach(function (chart) { chart.destroy(); });
+			lineChart(canvas.querySelector('canvas'), data[0].series.map(function (d) { return dayLabel(d.date); }), data.map(function (p, i) {
+				return { label: SLOT_LETTERS[i] + ' · ' + (p.title || p.path), color: SLOT_COLORS[i], data: p.series.map(function (d) { return d[chartMetric]; }) };
+			}));
+		}
+
+		function load() {
+			if (slots.length < 2) {
+				clear(results);
+				results.appendChild(empty('Choose at least two pages that have views in this range.'));
+				return;
+			}
+			clear(results);
+			results.appendChild(skeleton(6));
+			api('stats/compare', Object.assign({}, rp, { ids: slots.join(',') })).then(paint).catch(function (err) {
+				clear(results);
+				results.appendChild(failed(err, load));
+			});
+		}
+
+		api('stats/pages', Object.assign({}, rp, { orderby: 'views', order: 'desc', per_page: 100 })).then(function (data) {
+			pageRows = data.rows;
+			var known = pageRows.map(function (row) { return row.id; });
+			slots = slots.filter(function (id, i) { return known.indexOf(id) !== -1 && slots.indexOf(id) === i; });
+			for (var i = 0; slots.length < 2 && i < pageRows.length; i++) {
+				if (slots.indexOf(pageRows[i].id) === -1) {
+					slots.push(pageRows[i].id);
+				}
+			}
+			if (pageRows.length < 2) {
+				results.appendChild(empty('Comparing needs at least two pages with views in this range.'));
+				return;
+			}
+			save();
+			drawPickers();
+			load();
+		}).catch(function (err) {
+			results.appendChild(failed(err));
+		});
+	}
+
+	// ----------------------------------------------------------- database
+
+	function bytesText(bytes) {
+		if (bytes === null || bytes === undefined) {
+			return 'n/a';
+		}
+		if (bytes < 1024 * 1024) {
+			return (Math.round(bytes / 102.4) / 10) + ' KB';
+		}
+		if (bytes < 1024 * 1024 * 1024) {
+			return (Math.round(bytes / 104857.6) / 10) + ' MB';
+		}
+		return (Math.round(bytes / 107374182.4) / 10) + ' GB';
+	}
+
+	/** Size and row count of every table, and how the total has grown day by day. */
+	function databaseCard() {
+		var body = h('div', {}, skeleton(5));
+
+		function paint(data) {
+			clear(body);
+			var history = data.history || [];
+			var sized = data.total_bytes !== null;
+			var measure = sized ? 'bytes' : 'rows';
+			var first = history[0];
+			var last = history[history.length - 1];
+			var span = history.length > 1
+				? Math.max(1, Math.round((Date.parse(last.date) - Date.parse(first.date)) / 86400000))
+				: 0;
+			var perDay = span ? (last[measure] - first[measure]) / span : null;
+
+			var facts = [
+				['Total size', sized ? bytesText(data.total_bytes) : 'Not reported by this database'],
+				['Total rows', n(data.total_rows)],
+				['Oldest visit', data.oldest_view ? new Date(data.oldest_view * 1000).toLocaleDateString() : 'None yet'],
+				['Growth per day', perDay === null ? 'Needs two days of history' : (sized ? bytesText(Math.max(0, perDay)) : n(Math.max(0, Math.round(perDay))) + ' rows')]
+			];
+			if (perDay !== null && sized && perDay > 0 && data.total_bytes) {
+				facts.push(['In 12 months', '≈ ' + bytesText(data.total_bytes + perDay * 365)]);
+			}
+
+			body.appendChild(h('dl', { class: 'snn-a-facts' }, facts.map(function (f) {
+				return h('div', {}, [h('dt', { text: f[0] }), h('dd', { text: f[1] })]);
+			})));
+
+			if (history.length > 1) {
+				var canvas = chartBox(180);
+				body.appendChild(h('p', { class: 'snn-a-caption', text: sized ? 'Database size per day' : 'Rows per day' }));
+				body.appendChild(canvas);
+				lineChart(canvas.querySelector('canvas'), history.map(function (d) { return dayLabel(d.date); }), [
+					{ label: sized ? 'MB' : 'Rows', color: ACCENT, fill: true, data: history.map(function (d) { return sized ? Math.round(d.bytes / 10485.76) / 100 : d.rows; }) }
+				]);
+			} else {
+				body.appendChild(h('p', { class: 'snn-a-hint', text: 'The size is recorded once a day. The growth chart appears after the second day.' }));
+			}
+
+			var groups = {};
+			data.tables.forEach(function (t) { (groups[t.group] = groups[t.group] || []).push(t); });
+			var largest = Math.max.apply(null, data.tables.map(function (t) { return t[measure] || 0; }).concat([1]));
+
+			Object.keys(groups).forEach(function (group) {
+				var list = groups[group].slice().sort(function (a, b) { return (b[measure] || 0) - (a[measure] || 0); });
+				var sum = list.reduce(function (s, t) { return s + (t.bytes || 0); }, 0);
+				body.appendChild(h('h3', { class: 'snn-a-subhead' }, [group, sized ? h('span', { class: 'snn-a-muted', text: ' · ' + bytesText(sum) }) : null]));
+				body.appendChild(h('div', { class: 'snn-a-scroll' }, h('table', { class: 'snn-a-table snn-a-dbtable' }, [
+					h('thead', {}, h('tr', {}, [
+						h('th', { scope: 'col', text: 'Table' }),
+						h('th', { scope: 'col', class: 'num', text: 'Rows' }),
+						h('th', { scope: 'col', class: 'num', text: 'Data' }),
+						h('th', { scope: 'col', class: 'num', text: 'Indexes' }),
+						h('th', { scope: 'col', class: 'num', text: 'Total' })
+					])),
+					h('tbody', {}, list.map(function (t) {
+						return h('tr', {}, [
+							h('td', {}, [
+								h('span', { class: 'snn-a-dbbar', style: 'width:' + Math.round((t[measure] || 0) / largest * 100) + '%' }),
+								h('code', { text: t.name })
+							]),
+							h('td', { class: 'num', text: (t.approx ? '≈ ' : '') + n(t.rows) }),
+							h('td', { class: 'num', text: bytesText(t.data) }),
+							h('td', { class: 'num', text: bytesText(t.index) }),
+							h('td', { class: 'num', text: bytesText(t.bytes) })
+						]);
+					}))
+				])));
+			});
+		}
+
+		function load() {
+			api('admin/db-stats').then(paint).catch(function (err) {
+				clear(body);
+				body.appendChild(failed(err, load));
+			});
+		}
+
+		load();
+
+		return card('Database', body, { sub: 'How much space your statistics use and how fast they grow. Row counts marked ≈ are estimates.' });
+	}
+
 	// --------------------------------------------------------------- start
 
 	var views = {
 		dashboard: renderDashboard,
 		realtime: renderRealtime,
 		pages: renderPages,
+		compare: renderCompare,
 		heatmaps: renderHeatmaps,
 		replay: renderReplay,
 		referrers: renderReferrers,

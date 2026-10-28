@@ -19,7 +19,8 @@ define( 'SNN_A_FILE', __FILE__ );
 foreach ( [
 	'class-store', 'class-settings', 'class-db', 'class-validator', 'class-ua', 'class-bot',
 	'class-mmdb', 'class-geo', 'class-ranges', 'class-goals', 'class-tracker', 'class-frontend',
-	'class-rest', 'class-rollup', 'class-stats', 'class-api', 'class-maintenance', 'class-importer', 'class-admin',
+	'class-rest', 'class-rollup', 'class-stats', 'class-access', 'class-api', 'class-maintenance', 'class-importer',
+	'class-admin', 'class-widget',
 ] as $snn_a_file ) {
 	require_once __DIR__ . '/includes/' . $snn_a_file . '.php';
 }
@@ -64,8 +65,10 @@ add_action( SNN_Analytics\Geo::HOOK, [ SNN_Analytics\Geo::class, 'run_download' 
 
 SNN_Analytics\Frontend::register();
 SNN_Analytics\REST::register();
+SNN_Analytics\Access::register();
 SNN_Analytics\API::register();
 
 if ( is_admin() ) {
 	SNN_Analytics\Admin::register();
+	SNN_Analytics\Widget::register();
 }

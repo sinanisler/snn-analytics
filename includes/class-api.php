@@ -21,8 +21,11 @@ final class API {
 	}
 
 	public static function routes(): void {
-		$view  = static fn() => current_user_can( self::CAP );
 		$admin = static fn() => current_user_can( 'manage_options' );
+
+		// A route is open to anyone who may use at least one of the features that read from it.
+		$for = static fn( string ...$features ) => static fn() => Access::can_any( ...$features );
+		$any = static fn() => current_user_can( self::CAP );
 
 		$range = [
 			'range' => [ 'type' => 'string', 'default' => '30d', 'sanitize_callback' => 'sanitize_text_field' ],
@@ -43,54 +46,58 @@ final class API {
 			'permission_callback' => $perm,
 		] );
 
-		$get( '/stats/overview', [ self::class, 'overview' ], $range, $view );
+		$get( '/stats/overview', [ self::class, 'overview' ], $range, $any );
 		$get( '/stats/pages', [ self::class, 'pages' ], $range + [
 			'search'   => [ 'type' => 'string', 'default' => '', 'sanitize_callback' => 'sanitize_text_field' ],
 			'orderby'  => [ 'type' => 'string', 'default' => 'views', 'sanitize_callback' => 'sanitize_key' ],
 			'order'    => [ 'type' => 'string', 'default' => 'desc', 'sanitize_callback' => 'sanitize_key' ],
 			'page'     => [ 'type' => 'integer', 'default' => 1 ],
 			'per_page' => [ 'type' => 'integer', 'default' => 25 ],
-		], $view );
+		], $for( 'dashboard', 'pages', 'compare', 'heatmaps' ) );
+		$get( '/stats/compare', [ self::class, 'compare' ], $range + [
+			'ids' => [ 'type' => 'string', 'default' => '', 'sanitize_callback' => 'sanitize_text_field' ],
+		], $for( 'compare' ) );
 		$get( '/stats/page-series', [ self::class, 'page_series' ], $range + [
 			'id' => [ 'type' => 'integer', 'required' => true ],
-		], $view );
+		], $for( 'pages', 'compare' ) );
 		$get( '/stats/heatmap', [ self::class, 'heatmap' ], $range + [
-				'id'     => [ 'type' => 'integer', 'required' => true ],
-				'device' => [ 'type' => 'integer', 'default' => 0 ],
-			], $view );
-			$get( '/stats/trails', [ self::class, 'trails' ], $range + [
-				'id'     => [ 'type' => 'integer', 'required' => true ],
-				'device' => [ 'type' => 'integer', 'default' => 0 ],
-			], $view );
-			$get( '/stats/referrers', [ self::class, 'referrers' ], $range, $view );
-		$get( '/stats/geo', [ self::class, 'geo' ], $range, $view );
-		$get( '/stats/devices', [ self::class, 'devices' ], $range, $view );
-		$get( '/stats/campaigns', [ self::class, 'campaigns' ], $range, $view );
-		$get( '/stats/interactions', [ self::class, 'interactions' ], $range, $view );
-		$get( '/stats/realtime', [ self::class, 'realtime' ], [], $view );
+			'id'     => [ 'type' => 'integer', 'required' => true ],
+			'device' => [ 'type' => 'integer', 'default' => 0 ],
+		], $for( 'heatmaps', 'pages' ) );
+		$get( '/stats/trails', [ self::class, 'trails' ], $range + [
+			'id'     => [ 'type' => 'integer', 'required' => true ],
+			'device' => [ 'type' => 'integer', 'default' => 0 ],
+		], $for( 'heatmaps', 'pages' ) );
+		$get( '/stats/referrers', [ self::class, 'referrers' ], $range, $for( 'dashboard', 'referrers' ) );
+		$get( '/stats/geo', [ self::class, 'geo' ], $range, $for( 'dashboard', 'geo' ) );
+		$get( '/stats/devices', [ self::class, 'devices' ], $range, $for( 'dashboard', 'devices' ) );
+		$get( '/stats/campaigns', [ self::class, 'campaigns' ], $range, $for( 'dashboard', 'campaigns' ) );
+		$get( '/stats/interactions', [ self::class, 'interactions' ], $range, $for( 'journeys' ) );
+		$get( '/stats/realtime', [ self::class, 'realtime' ], [], $for( 'dashboard', 'realtime' ) );
 		$get( '/stats/recent', [ self::class, 'recent' ], [
 			'limit' => [ 'type' => 'integer', 'default' => 10 ],
-		], $view );
+		], $for( 'dashboard', 'realtime', 'journeys' ) );
 		$get( '/stats/journeys', [ self::class, 'journeys' ], $range + [
 			'page'     => [ 'type' => 'integer', 'default' => 1 ],
 			'per_page' => [ 'type' => 'integer', 'default' => 25 ],
-		], $view );
+		], $for( 'journeys', 'replay' ) );
 		$get( '/stats/journey', [ self::class, 'journey' ], [
 			'id' => [ 'type' => 'integer', 'required' => true ],
-		], $view );
-		$get( '/goals', [ self::class, 'goals' ], $range, $view );
-		$post( '/goals', [ self::class, 'save_goal' ], $view );
-		$post( '/goals/delete', [ self::class, 'delete_goal' ], $view );
-		$get( '/funnels', [ self::class, 'funnels' ], $range, $view );
-		$post( '/funnels', [ self::class, 'save_funnel' ], $view );
-		$post( '/funnels/delete', [ self::class, 'delete_funnel' ], $view );
+		], $for( 'journeys', 'replay' ) );
+		$get( '/goals', [ self::class, 'goals' ], $range, $for( 'dashboard', 'goals' ) );
+		$post( '/goals', [ self::class, 'save_goal' ], $for( 'goals' ) );
+		$post( '/goals/delete', [ self::class, 'delete_goal' ], $for( 'goals' ) );
+		$get( '/funnels', [ self::class, 'funnels' ], $range, $for( 'goals' ) );
+		$post( '/funnels', [ self::class, 'save_funnel' ], $for( 'goals' ) );
+		$post( '/funnels/delete', [ self::class, 'delete_funnel' ], $for( 'goals' ) );
 		$get( '/funnels/report', [ self::class, 'funnel_report' ], $range + [
 			'id' => [ 'type' => 'integer', 'required' => true ],
-		], $view );
+		], $for( 'goals' ) );
 
-		$get( '/prefs/dashboard', [ self::class, 'get_layout' ], [], $view );
-		$post( '/prefs/dashboard', [ self::class, 'save_layout' ], $view );
+		$get( '/prefs/dashboard', [ self::class, 'get_layout' ], [], $for( 'dashboard' ) );
+		$post( '/prefs/dashboard', [ self::class, 'save_layout' ], $for( 'dashboard' ) );
 
+		$get( '/admin/db-stats', [ self::class, 'db_stats' ], [], $admin );
 		$post( '/admin/rebuild', [ self::class, 'rebuild' ], $admin );
 		$post( '/admin/delete-data', [ self::class, 'delete_data' ], $admin );
 		$get( '/geo', [ self::class, 'geo_status' ], [], $admin );
@@ -149,6 +156,12 @@ final class API {
 			'page'     => max( 1, (int) $req->get_param( 'page' ) ),
 			'per_page' => (int) $req->get_param( 'per_page' ),
 		] ) );
+	}
+
+	public static function compare( \WP_REST_Request $req ): \WP_REST_Response {
+		$ids = array_map( 'intval', explode( ',', (string) $req->get_param( 'ids' ) ) );
+
+		return self::ok( Stats::compare( $ids, self::range( $req ) ) );
 	}
 
 	public static function page_series( \WP_REST_Request $req ): \WP_REST_Response {
@@ -274,6 +287,10 @@ final class API {
 	}
 
 	// -------------------------------------------------------------- admin
+
+	public static function db_stats(): \WP_REST_Response {
+		return self::ok( Maintenance::db_stats() );
+	}
 
 	public static function rebuild(): \WP_REST_Response {
 		$first = Rollup::first_day();

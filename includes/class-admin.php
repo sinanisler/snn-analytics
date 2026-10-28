@@ -22,6 +22,7 @@ final class Admin {
 		'snn-analytics'           => [ 'dashboard', 'Dashboard', self::MENU_CAP ],
 		'snn-analytics-realtime'  => [ 'realtime', 'Realtime', self::MENU_CAP ],
 		'snn-analytics-pages'     => [ 'pages', 'Pages', self::MENU_CAP ],
+		'snn-analytics-compare'   => [ 'compare', 'Compare', self::MENU_CAP ],
 		'snn-analytics-heatmaps'  => [ 'heatmaps', 'Heatmaps', self::MENU_CAP ],
 		'snn-analytics-replay'    => [ 'replay', 'Replay', self::MENU_CAP ],
 		'snn-analytics-referrers' => [ 'referrers', 'Referrers', self::MENU_CAP ],
@@ -43,6 +44,7 @@ final class Admin {
 		'snn-analytics-realtime',
 		'snn-analytics-journeys',
 		'snn-analytics-pages',
+		'snn-analytics-compare',
 		'snn-analytics-heatmaps',
 		'snn-analytics-replay',
 		'snn-analytics-referrers',
@@ -52,6 +54,31 @@ final class Admin {
 		'snn-analytics-goals',
 		'snn-analytics-settings',
 	];
+
+	/**
+	 * Whether the current user may open a screen. Settings and Import need manage_options; every
+	 * other screen follows the role choices made under Settings (administrators always pass).
+	 */
+	public static function can_open( string $slug ): bool {
+		if ( ! isset( self::SCREENS[ $slug ] ) ) {
+			return false;
+		}
+
+		[ $view, , $cap ] = self::SCREENS[ $slug ];
+
+		return $cap === self::MANAGE_CAP ? current_user_can( $cap ) : Access::can( $view );
+	}
+
+	/** First top-bar screen the current user can open, or null. */
+	public static function first_screen(): ?string {
+		foreach ( self::TOP_BAR as $slug ) {
+			if ( self::can_open( $slug ) ) {
+				return $slug;
+			}
+		}
+
+		return null;
+	}
 
 	public static function register(): void {
 		add_action( 'admin_menu', [ self::class, 'menu' ] );
@@ -83,6 +110,16 @@ final class Admin {
 	 */
 	public static function prepare(): void {
 		$page = sanitize_key( wp_unslash( $_GET['page'] ?? '' ) );
+
+		// A role without the Dashboard lands on the first screen it does have.
+		if ( $page === self::SLUG && current_user_can( self::MENU_CAP ) && ! self::can_open( $page ) ) {
+			$first = self::first_screen();
+			if ( $first !== null ) {
+				wp_safe_redirect( add_query_arg( 'page', $first, admin_url( 'admin.php' ) ) );
+				exit;
+			}
+		}
+
 		if ( ! isset( self::SCREENS[ $page ] ) || in_array( $page, self::SIDEBAR, true ) ) {
 			return;
 		}
@@ -96,9 +133,12 @@ final class Admin {
 	/** Shell for every screen. The page slug decides which view the app shows. */
 	public static function screen(): void {
 		$slug = sanitize_key( wp_unslash( $_GET['page'] ?? self::SLUG ) );
-		[ $view, $title, $cap ] = self::SCREENS[ $slug ] ?? self::SCREENS[ self::SLUG ];
+		if ( ! isset( self::SCREENS[ $slug ] ) ) {
+			$slug = self::SLUG;
+		}
+		[ $view, $title ] = self::SCREENS[ $slug ];
 
-		if ( ! current_user_can( $cap ) ) {
+		if ( ! self::can_open( $slug ) ) {
 			wp_die( esc_html__( 'You do not have permission to view this page.', 'snn-analytics' ), 403 );
 		}
 
@@ -126,6 +166,7 @@ final class Admin {
 		?>
 		<nav class="snn-a-tabs" aria-label="SNN Analytics screens">
 			<?php foreach ( self::TOP_BAR as $slug ) : ?>
+				<?php if ( ! self::can_open( $slug ) ) { continue; } ?>
 				<?php $url = add_query_arg( $range + [ 'page' => $slug ], admin_url( 'admin.php' ) ); ?>
 				<a href="<?php echo esc_url( $url ); ?>" class="snn-a-tab<?php echo $slug === $current ? ' is-current' : ''; ?>"<?php echo $slug === $current ? ' aria-current="page"' : ''; ?>><?php echo esc_html( self::SCREENS[ $slug ][1] ); ?></a>
 			<?php endforeach; ?>
@@ -149,6 +190,7 @@ final class Admin {
 			'world'     => plugins_url( 'assets/geo/world.json', SNN_A_FILE ),
 			'flags'     => plugins_url( 'assets/flags/4x3/', SNN_A_FILE ),
 			'canManage' => current_user_can( self::MANAGE_CAP ),
+			'can'       => array_map( static fn( $feature ) => Access::can( $feature ), array_combine( array_keys( Access::FEATURES ), array_keys( Access::FEATURES ) ) ),
 			'cards'     => self::CARDS,
 			'timezone'  => wp_timezone_string(),
 			'pageUrl'   => admin_url( 'admin.php?page=' ),
@@ -158,6 +200,59 @@ final class Admin {
 	}
 
 	// ----------------------------------------------------------- settings
+
+	/** Start of one setting: title and help on the left, the control on the right. */
+	private static function row( string $title, string $help = '', string $for = '' ): void {
+		?>
+		<div class="snn-a-row">
+			<div class="snn-a-row-text">
+				<?php if ( $for !== '' ) : ?>
+					<label for="<?php echo esc_attr( $for ); ?>" class="snn-a-row-title"><?php echo esc_html( $title ); ?></label>
+				<?php else : ?>
+					<span class="snn-a-row-title"><?php echo esc_html( $title ); ?></span>
+				<?php endif; ?>
+				<?php if ( $help !== '' ) : ?>
+					<p class="snn-a-row-help"><?php echo esc_html( $help ); ?></p>
+				<?php endif; ?>
+			</div>
+			<div class="snn-a-row-control">
+		<?php
+	}
+
+	private static function row_end(): void {
+		echo '</div></div>';
+	}
+
+	/** An on/off switch. The checkbox stays a real checkbox, so the form posts it as before. */
+	private static function toggle( string $name, bool $on, string $label ): void {
+		?>
+		<label class="snn-a-switch">
+			<input type="checkbox" name="<?php echo esc_attr( $name ); ?>" value="1" <?php checked( $on ); ?>>
+			<span class="snn-a-switch-ui" aria-hidden="true"></span>
+			<span class="snn-a-switch-text"><?php echo esc_html( $label ); ?></span>
+		</label>
+		<?php
+	}
+
+	private static function select( string $name, array $options, $current ): void {
+		?>
+		<select name="<?php echo esc_attr( $name ); ?>" id="<?php echo esc_attr( $name ); ?>">
+			<?php foreach ( $options as $value => $label ) : ?>
+				<option value="<?php echo esc_attr( (string) $value ); ?>" <?php selected( (string) $current, (string) $value ); ?>><?php echo esc_html( $label ); ?></option>
+			<?php endforeach; ?>
+		</select>
+		<?php
+	}
+
+	private static function section( string $title, string $text ): void {
+		?>
+		<section class="snn-a-set">
+			<header class="snn-a-set-head">
+				<h2><?php echo esc_html( $title ); ?></h2>
+				<p><?php echo esc_html( $text ); ?></p>
+			</header>
+		<?php
+	}
 
 	private static function settings_form(): void {
 		$s = Settings::get();
@@ -183,110 +278,107 @@ final class Admin {
 			3650 => '10 years',
 		];
 
+		$roles = wp_roles()->get_names();
+		unset( $roles['administrator'] );
+
 		?>
 		<?php if ( isset( $_GET['saved'] ) ) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>
 			<div class="notice notice-success is-dismissible"><p>Settings saved.</p></div>
 		<?php endif; ?>
 
-		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="snn-a-form">
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="snn-a-form snn-a-settings">
 			<input type="hidden" name="action" value="snn_a_save_settings">
 			<?php wp_nonce_field( 'snn_a_save_settings' ); ?>
 
-			<table class="form-table" role="presentation">
-				<tr>
-					<th scope="row"><label for="salt_rotation">Visitor salt rotation</label></th>
-					<td>
-						<select name="salt_rotation" id="salt_rotation">
-							<?php foreach ( $rotations as $value => $label ) : ?>
-								<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $s['salt_rotation'], $value ); ?>><?php echo esc_html( $label ); ?></option>
-							<?php endforeach; ?>
-						</select>
-						<p class="description">Visitors are identified by a salted hash of the IP, browser, OS and device type. Never by stored IPs. Each rotation makes returning visitors count as new.</p>
-					</td>
-				</tr>
-				<tr>
-					<th scope="row"><label for="retention_months">Keep raw data</label></th>
-					<td>
-						<select name="retention_months" id="retention_months">
-							<?php foreach ( $retention as $months => $label ) : ?>
-								<option value="<?php echo esc_attr( (string) $months ); ?>" <?php selected( (int) $s['retention_months'], $months ); ?>><?php echo esc_html( $label ); ?></option>
-							<?php endforeach; ?>
-						</select>
-						<p class="description">Individual visits and journeys older than this are deleted. Daily totals are kept.</p>
-					</td>
-				</tr>
-				<tr>
-					<th scope="row">Click heatmap</th>
-					<td>
-						<label>
-							<input type="checkbox" name="heatmap" value="1" <?php checked( $s['heatmap'] ); ?>>
-							Record where visitors click on each page
-						</label>
-						<p class="description">Counts only, per page, day and device. No click is stored on its own. Shown on the Pages screen.</p>
-					</td>
-				</tr>
-				<tr>
-					<th scope="row">Cursor trails</th>
-					<td>
-						<label>
-							<input type="checkbox" name="cursor_trails" value="1" <?php checked( $s['cursor_trails'] ); ?>>
-							Record how the pointer moves on each page (mouse, pen or touch)
-						</label>
-						<p class="description">Off by default. Each view keeps one path of at most 60 seconds, sampled four times a second. Visitors are not identified by it.</p>
-						<p>
-							<label for="cursor_retention_days">Keep trails for</label>
-							<select name="cursor_retention_days" id="cursor_retention_days">
-								<?php foreach ( $trails as $days => $label ) : ?>
-									<option value="<?php echo esc_attr( (string) $days ); ?>" <?php selected( (int) $s['cursor_retention_days'], $days ); ?>><?php echo esc_html( $label ); ?></option>
-								<?php endforeach; ?>
-							</select>
-						</p>
-					</td>
-				</tr>
-				<tr>
-					<th scope="row">Respect Do Not Track</th>
-					<td>
-						<label>
-							<input type="checkbox" name="respect_dnt" value="1" <?php checked( $s['respect_dnt'] ); ?>>
-							Do not track visitors who send DNT or Global Privacy Control
-						</label>
-					</td>
-				</tr>
-				<tr>
-					<th scope="row">Do not track these roles</th>
-					<td>
+			<?php self::section( 'Privacy and tracking', 'Decide who is counted and how visitors are recognised.' ); ?>
+				<?php self::row( 'Visitor salt rotation', 'Visitors are identified by a salted hash of the IP, browser, OS and device type. Never by stored IPs. Each rotation makes returning visitors count as new.', 'salt_rotation' ); ?>
+					<?php self::select( 'salt_rotation', $rotations, $s['salt_rotation'] ); ?>
+				<?php self::row_end(); ?>
+
+				<?php self::row( 'Respect Do Not Track', 'Do not track visitors who send DNT or Global Privacy Control.' ); ?>
+					<?php self::toggle( 'respect_dnt', (bool) $s['respect_dnt'], 'Enabled' ); ?>
+				<?php self::row_end(); ?>
+
+				<?php self::row( 'Do not track these roles', 'Logged-in users with these roles are not tracked.' ); ?>
+					<div class="snn-a-chips">
 						<?php foreach ( wp_roles()->get_names() as $role => $name ) : ?>
-							<label class="snn-a-check-row">
+							<label class="snn-a-chip">
 								<input type="checkbox" name="exclude_roles[]" value="<?php echo esc_attr( $role ); ?>" <?php checked( in_array( $role, $s['exclude_roles'], true ) ); ?>>
-								<?php echo esc_html( translate_user_role( $name ) ); ?>
+								<span><?php echo esc_html( translate_user_role( $name ) ); ?></span>
 							</label>
 						<?php endforeach; ?>
-						<p class="description">Logged-in users with these roles are not tracked.</p>
-					</td>
-				</tr>
-				<tr>
-					<th scope="row"><label for="session_timeout">Session timeout (seconds)</label></th>
-					<td>
-						<input type="number" name="session_timeout" id="session_timeout" min="300" max="86400" step="60" value="<?php echo esc_attr( (string) $s['session_timeout'] ); ?>">
-						<p class="description">A visitor without activity for this long starts a new session. Between 300 and 86400.</p>
-					</td>
-				</tr>
-				<tr>
-					<th scope="row">Uninstall</th>
-					<td>
-						<label>
-							<input type="checkbox" name="delete_on_uninstall" value="1" <?php checked( $s['delete_on_uninstall'] ); ?>>
-							Delete all data and tables when the plugin is deleted
-						</label>
-						<p class="description">Off by default, so your statistics survive a reinstall. Turn it on only if you want a clean removal.</p>
-					</td>
-				</tr>
-			</table>
+					</div>
+				<?php self::row_end(); ?>
 
-			<?php submit_button( 'Save settings' ); ?>
+				<?php self::row( 'Session timeout', 'A visitor without activity for this long starts a new session. Between 300 and 86400 seconds.', 'session_timeout' ); ?>
+					<span class="snn-a-unit">
+						<input type="number" name="session_timeout" id="session_timeout" min="300" max="86400" step="60" value="<?php echo esc_attr( (string) $s['session_timeout'] ); ?>">
+						<span>seconds</span>
+					</span>
+				<?php self::row_end(); ?>
+			</section>
+
+			<?php self::section( 'Behaviour and data', 'What is recorded on each page and how long it is kept.' ); ?>
+				<?php self::row( 'Keep raw data', 'Individual visits and journeys older than this are deleted. Daily totals are kept.', 'retention_months' ); ?>
+					<?php self::select( 'retention_months', $retention, (int) $s['retention_months'] ); ?>
+				<?php self::row_end(); ?>
+
+				<?php self::row( 'Click heatmap', 'Counts only, per page, day and device. No click is stored on its own. Shown on the Heatmaps screen.' ); ?>
+					<?php self::toggle( 'heatmap', (bool) $s['heatmap'], 'Record clicks' ); ?>
+				<?php self::row_end(); ?>
+
+				<?php self::row( 'Cursor trails', 'Off by default. Each view keeps one path of at most 60 seconds, sampled four times a second. Visitors are not identified by it.' ); ?>
+					<?php self::toggle( 'cursor_trails', (bool) $s['cursor_trails'], 'Record pointer movement' ); ?>
+				<?php self::row_end(); ?>
+
+				<?php self::row( 'Keep trails for', 'Trails older than this are deleted.', 'cursor_retention_days' ); ?>
+					<?php self::select( 'cursor_retention_days', $trails, (int) $s['cursor_retention_days'] ); ?>
+				<?php self::row_end(); ?>
+
+				<?php self::row( 'Delete data on uninstall', 'Off by default, so your statistics survive a reinstall. Turn it on only if you want a clean removal.' ); ?>
+					<?php self::toggle( 'delete_on_uninstall', (bool) $s['delete_on_uninstall'], 'Delete all data and tables' ); ?>
+				<?php self::row_end(); ?>
+			</section>
+
+			<?php self::section( 'Who can see what', 'Administrators always see everything. Tick the roles that may use each feature, which is useful on client sites. Settings and Import stay administrator-only.' ); ?>
+				<?php if ( $roles === [] ) : ?>
+					<p class="snn-a-row-help">There are no roles other than administrator.</p>
+				<?php else : ?>
+					<div class="snn-a-scroll">
+						<table class="snn-a-matrix">
+							<thead>
+								<tr>
+									<th scope="col">Feature</th>
+									<?php foreach ( $roles as $name ) : ?>
+										<th scope="col"><?php echo esc_html( translate_user_role( $name ) ); ?></th>
+									<?php endforeach; ?>
+								</tr>
+							</thead>
+							<tbody>
+								<?php foreach ( Access::FEATURES as $feature => $label ) : ?>
+									<?php $allowed = Access::roles_for( $feature ); ?>
+									<tr>
+										<th scope="row"><?php echo esc_html( $label ); ?></th>
+										<?php foreach ( $roles as $role => $name ) : ?>
+											<td>
+												<input type="checkbox" name="role_access[<?php echo esc_attr( $feature ); ?>][]" value="<?php echo esc_attr( $role ); ?>" <?php checked( in_array( $role, $allowed, true ) ); ?> aria-label="<?php echo esc_attr( $label . ': ' . translate_user_role( $name ) ); ?>">
+											</td>
+										<?php endforeach; ?>
+									</tr>
+								<?php endforeach; ?>
+							</tbody>
+						</table>
+					</div>
+					<p class="snn-a-row-help">The Dashboard also shows summary numbers from the other reports. Give Dashboard access only to roles that may see them.</p>
+				<?php endif; ?>
+			</section>
+
+			<div class="snn-a-savebar">
+				<?php submit_button( 'Save settings', 'primary', 'submit', false ); ?>
+			</div>
 		</form>
 
-		<h2>Tools</h2>
+		<h2 class="snn-a-tools-title">Tools</h2>
 		<div id="snn-a-tools" data-view="settings-tools"></div>
 		<?php
 	}
@@ -327,6 +419,7 @@ final class Admin {
 			'exclude_roles'         => $excluded,
 			'session_timeout'       => $timeout,
 			'delete_on_uninstall'   => isset( $_POST['delete_on_uninstall'] ),
+			'role_access'           => Access::sanitize( wp_unslash( $_POST['role_access'] ?? [] ) ),
 		] );
 
 		wp_safe_redirect( add_query_arg(

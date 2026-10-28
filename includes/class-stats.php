@@ -332,6 +332,92 @@ final class Stats {
 		return self::fill_series( $rows, $r['from'], $r['to'] );
 	}
 
+	/**
+	 * Side-by-side numbers for 2 to 4 pages: totals for the range and for the period before it,
+	 * click counts and a daily series. Pages come back in the order they were asked for.
+	 */
+	public static function compare( array $ids, array $r ): array {
+		global $wpdb;
+
+		$ids = array_slice( array_values( array_unique( array_filter( array_map( 'intval', $ids ) ) ) ), 0, 4 );
+		if ( $ids === [] ) {
+			return [];
+		}
+
+		$marks = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+		$daily = DB::table( 'd_pages' );
+
+		$info = [];
+		foreach ( $wpdb->get_results( $wpdb->prepare(
+			'SELECT id, title, path, post_type FROM ' . DB::table( 'pages' ) . " WHERE id IN ({$marks})",
+			...$ids
+		), ARRAY_A ) as $row ) {
+			$info[ (int) $row['id'] ] = $row;
+		}
+
+		$totals = static function ( int $from, int $to ) use ( $wpdb, $daily, $marks, $ids ): array {
+			$out = [];
+			foreach ( $wpdb->get_results( $wpdb->prepare(
+				"SELECT page_id, SUM(views) AS views, SUM(visitors) AS visitors, SUM(duration_sum) AS duration_sum,
+				        SUM(entrances) AS entrances, SUM(exits) AS exits
+				 FROM {$daily} WHERE page_id IN ({$marks}) AND day BETWEEN %d AND %d GROUP BY page_id",
+				...array_merge( $ids, [ $from, $to ] )
+			), ARRAY_A ) as $row ) {
+				$views = (int) $row['views'];
+
+				$out[ (int) $row['page_id'] ] = [
+					'views'     => $views,
+					'visitors'  => (int) $row['visitors'],
+					'avg_time'  => $views > 0 ? (int) round( (int) $row['duration_sum'] / $views ) : 0,
+					'entrances' => (int) $row['entrances'],
+					'exits'     => (int) $row['exits'],
+				];
+			}
+
+			return $out;
+		};
+
+		$empty    = [ 'views' => 0, 'visitors' => 0, 'avg_time' => 0, 'entrances' => 0, 'exits' => 0 ];
+		$current  = $totals( $r['from'], $r['to'] );
+		$previous = $totals( $r['prev_from'], $r['prev_to'] );
+
+		$clicks = [];
+		foreach ( $wpdb->get_results( $wpdb->prepare(
+			'SELECT page_id, SUM(clicks) AS clicks FROM ' . DB::table( 'heat' ) . " WHERE page_id IN ({$marks}) AND day BETWEEN %d AND %d GROUP BY page_id",
+			...array_merge( $ids, [ $r['from'], $r['to'] ] )
+		), ARRAY_A ) as $row ) {
+			$clicks[ (int) $row['page_id'] ] = (int) $row['clicks'];
+		}
+
+		$by_page = [];
+		foreach ( $wpdb->get_results( $wpdb->prepare(
+			"SELECT page_id, day, 0 AS sessions, visitors, views, 0 AS bounces, duration_sum
+			 FROM {$daily} WHERE page_id IN ({$marks}) AND day BETWEEN %d AND %d ORDER BY day",
+			...array_merge( $ids, [ $r['from'], $r['to'] ] )
+		), ARRAY_A ) as $row ) {
+			$by_page[ (int) $row['page_id'] ][] = $row;
+		}
+
+		$out = [];
+		foreach ( $ids as $id ) {
+			if ( ! isset( $info[ $id ] ) ) {
+				continue;
+			}
+
+			$out[] = [
+				'id'        => $id,
+				'title'     => self::clean_title( (string) $info[ $id ]['title'] ),
+				'path'      => (string) $info[ $id ]['path'],
+				'post_type' => (string) $info[ $id ]['post_type'],
+				'current'   => ( $current[ $id ] ?? $empty ) + [ 'clicks' => $clicks[ $id ] ?? 0 ],
+				'previous'  => $previous[ $id ] ?? $empty,
+				'series'    => self::fill_series( $by_page[ $id ] ?? [], $r['from'], $r['to'] ),
+			];
+		}
+
+		return $out;
+	}
+
 	// -------------------------------------------------------------- referrers
 
 	public static function referrers( array $r ): array {
@@ -536,6 +622,16 @@ final class Stats {
 
 	// ------------------------------------------------------------- realtime
 
+	/** Visitors seen in the last 30 minutes. */
+	public static function active_now(): int {
+		global $wpdb;
+
+		return (int) $wpdb->get_var( $wpdb->prepare(
+			'SELECT COUNT(DISTINCT visitor_id) FROM ' . DB::table( 'sessions' ) . ' WHERE last_seen >= %d',
+			time() - 1800
+		) );
+	}
+
 	public static function realtime(): array {
 		global $wpdb;
 
@@ -546,10 +642,7 @@ final class Stats {
 		$refs     = DB::table( 'referrers' );
 		$countries = DB::table( 'countries' );
 
-		$active = (int) $wpdb->get_var( $wpdb->prepare(
-			"SELECT COUNT(DISTINCT visitor_id) FROM {$sessions} WHERE last_seen >= %d",
-			$now - 1800
-		) );
+		$active = self::active_now();
 
 		$per_minute = $wpdb->get_results( $wpdb->prepare(
 			"SELECT FLOOR(created_at / 60) AS minute, COUNT(*) AS views
