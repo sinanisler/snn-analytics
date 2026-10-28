@@ -17,6 +17,9 @@ final class Tracker {
 	const RATE_LIMIT_VIEWS = 600; // page views per visitor hash per minute (APCu only)
 	const MAX_VIEWS  = 2000;  // views per session before it stops counting
 
+	/** Payment and sign-in hosts that send a visitor back to the site in the middle of a visit. */
+	const ROUND_TRIP = '/(^|\.)(paypal|stripe|iyzipay|iyzico|klarna|mollie|adyen|payu|paytr|braintreegateway|squareup|authorize|2checkout|checkout|razorpay|mercadopago|sumup|wise)\.[a-z.]+$|^(checkout|pay|payment|payments|secure|3ds|acs|login|auth|accounts|signin|sso)\.|(^|\.)(accounts\.google|appleid\.apple|login\.microsoftonline|login\.live)\.com$/';
+
 	/**
 	 * Entry point. Always produces the same response, so it never reveals what was stored.
 	 */
@@ -85,9 +88,22 @@ final class Tracker {
 				return;
 			}
 
+			// A visitor who comes back from another site or campaign while a session is open starts a new
+			// session, or that source would be lost. No referrer (direct, or a link on this site) continues it,
+			// and so does a reload of the landing page, which repeats the session's own source.
+			// A return from a payment page or a sign-in provider is the same visit, so it never splits one.
+			$referrer_id = self::referrer_id( $hit['ref'], $settings['site_host'] );
+			$campaign_id = self::campaign_id( $hit['q'] );
+			$round_trip  = (bool) preg_match( self::ROUND_TRIP, Settings::host_of( $hit['ref'] ) );
+			if ( $session !== null
+				&& ( ( $referrer_id !== null && $referrer_id !== $session['referrer_id'] && ! $round_trip )
+					|| ( $campaign_id !== null && $campaign_id !== $session['campaign_id'] ) ) ) {
+				$session = null;
+			}
+
 			$page_id = self::page_id( $hit['page'] );
 			if ( $session === null ) {
-				$session = self::new_session( $visitor, $hit, $page_id, $now, $info, $server, $settings['site_host'] );
+				$session = self::new_session( $visitor, $referrer_id, $campaign_id, $page_id, $now, $info, $server );
 			}
 
 			self::add_view( $session, $hit['vk'], $page_id, $now );
@@ -231,12 +247,22 @@ final class Tracker {
 		global $wpdb;
 
 		$row = $wpdb->get_row( $wpdb->prepare(
-			'SELECT id, views, started_at FROM ' . DB::table( 'sessions' ) . ' WHERE visitor_id = %d AND last_seen >= %d ORDER BY last_seen DESC LIMIT 1',
+			'SELECT id, views, started_at, referrer_id, campaign_id FROM ' . DB::table( 'sessions' ) . ' WHERE visitor_id = %d AND last_seen >= %d ORDER BY last_seen DESC LIMIT 1',
 			$visitor_id,
 			$now - $timeout
 		), 'ARRAY_A' );
 
-		return $row ? array_map( 'intval', $row ) : null;
+		if ( ! $row ) {
+			return null;
+		}
+
+		return [
+			'id'          => (int) $row['id'],
+			'views'       => (int) $row['views'],
+			'started_at'  => (int) $row['started_at'],
+			'referrer_id' => $row['referrer_id'] === null ? null : (int) $row['referrer_id'],
+			'campaign_id' => $row['campaign_id'] === null ? null : (int) $row['campaign_id'],
+		];
 	}
 
 	/**
@@ -282,7 +308,7 @@ final class Tracker {
 		return (string) inet_ntop( substr( $packed, 0, 8 ) . str_repeat( "\0", 8 ) );
 	}
 
-	private static function new_session( array $visitor, array $hit, int $page_id, int $now, array $info, array $server, string $site_host ): array {
+	private static function new_session( array $visitor, ?int $referrer_id, ?int $campaign_id, int $page_id, int $now, array $info, array $server ): array {
 		global $wpdb;
 
 		$geo = Geo::locate( $server, self::client_ip( $server ) );
@@ -293,8 +319,8 @@ final class Tracker {
 			'last_seen'     => $now,
 			'entry_page_id' => $page_id,
 			'exit_page_id'  => $page_id,
-			'referrer_id'   => self::referrer_id( $hit['ref'], $site_host ),
-			'campaign_id'   => self::campaign_id( $hit['q'] ),
+			'referrer_id'   => $referrer_id,
+			'campaign_id'   => $campaign_id,
 			'country_id'    => $geo['country_id'],
 			'city_id'       => $geo['city_id'],
 			'device'        => $info['device'],

@@ -78,6 +78,7 @@ jobs:
             --exclude='.github' \
             --exclude='build' \
             --exclude='PLAN.md' \
+            --exclude='tests' \
             --exclude='*.zip' \
             --exclude='.DS_Store' \
             ./ "build/$PLUGIN_SLUG/"

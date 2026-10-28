@@ -104,6 +104,7 @@
 	// drop it (a scroll restored on reload, a quick click). A hidden page sends at once: it may not come back.
 	var viewStored = false;
 	var viewSent = false;
+	var leaving = false;
 	var waiting = [];
 
 	function flush(key) {
@@ -121,7 +122,7 @@
 		// Nothing leaves before the page view, and the page view waits for a sign of a person (see human()).
 		if (!viewSent) {
 			waiting.push(body);
-		} else if (viewStored || document.visibilityState === 'hidden') {
+		} else if (viewStored || leaving || document.visibilityState === 'hidden') {
 			flush(vk);
 			deliver(body);
 		} else {
@@ -168,7 +169,9 @@
 			since = Date.now();
 		}
 	});
+	// Safari can still report the tab as visible during pagehide, so leaving sends the queue on its own.
 	window.addEventListener('pagehide', function () {
+		leaving = true;
 		ping();
 		finishTrail();
 	});
@@ -480,6 +483,7 @@
 			vk = viewKey();
 			viewStored = false;
 			viewSent = false;
+			leaving = false;
 			waiting = [];
 			reached = {};
 			recent = {};
