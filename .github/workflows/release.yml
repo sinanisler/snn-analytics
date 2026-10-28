@@ -77,7 +77,6 @@ jobs:
             --exclude='.git' \
             --exclude='.github' \
             --exclude='build' \
-            --exclude='docs-old-plugin-learn-from-it' \
             --exclude='PLAN.md' \
             --exclude='*.zip' \
             --exclude='.DS_Store' \
