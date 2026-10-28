@@ -10,8 +10,27 @@
 	var tools = document.getElementById('snn-a-tools');
 	var charts = [];
 	var teardown = null;
+	var SVG_NS = 'http://www.w3.org/2000/svg';
+	var PER_PAGE = 25;
 
+	var ACCENT = '#2271b1';
+	var COLOR_VISITORS = ACCENT;
+	var COLOR_VIEWS = '#8c5cd6';
+	var PALETTE = ['#2271b1', '#00a32a', '#dba617', '#8c5cd6', '#d63638', '#72aee6', '#8c8f94'];
 	var CHANNEL_TYPES = { 1: 'Direct', 2: 'Search', 3: 'Social', 4: 'Referral', 5: 'Ad', 6: 'Email' };
+	var DEVICE_LABELS = { 1: 'Desktop', 2: 'Mobile', 3: 'Tablet' };
+	var CARD_LABELS = {
+		chart: 'Traffic over time',
+		pages: 'Top pages',
+		geo: 'Geographic traffic',
+		newreturning: 'New vs. returning',
+		devices: 'Devices',
+		sources: 'Traffic sources',
+		recent: 'Recent views',
+		realtime: 'Realtime',
+		campaigns: 'Campaigns',
+		goals: 'Goals'
+	};
 	var PRESETS = [
 		['today', 'Today'],
 		['7d', '7 days'],
@@ -20,6 +39,14 @@
 		['12m', '12 months'],
 		['custom', 'Custom']
 	];
+	var RANGE_LABELS = { today: 'Today', '7d': 'Last 7 days', '30d': 'Last 30 days', '90d': 'Last 90 days', '12m': 'Last 12 months' };
+
+	if (window.Chart) {
+		window.Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+		window.Chart.defaults.font.size = 12;
+		window.Chart.defaults.color = '#646970';
+		window.Chart.defaults.borderColor = '#f0f0f1';
+	}
 
 	// ------------------------------------------------------------ helpers
 
@@ -83,13 +110,30 @@
 		return Math.floor(m / 60) + 'h ' + (m % 60) + 'm';
 	}
 
-	function change(current, previous) {
-		if (!previous) {
-			return current ? { text: 'new', cls: 'up' } : { text: '–', cls: '' };
+	/**
+	 * Compares two numbers for the KPI tiles. invert means a lower value is good (bounce rate).
+	 * points means the change is shown in percentage points, not percent.
+	 */
+	function change(current, previous, opts) {
+		var invert = !!(opts && opts.invert);
+		var points = !!(opts && opts.points);
+		if (!previous && !current) {
+			return { text: 'No change', cls: '' };
 		}
-		var diff = Math.round((current - previous) / previous * 1000) / 10;
-		var arrow = diff > 0 ? '↗ +' : diff < 0 ? '↘ −' : '→ ';
-		return { text: arrow + Math.abs(diff) + '%', cls: diff > 0 ? 'up' : diff < 0 ? 'down' : '' };
+		if (!previous) {
+			return { text: 'New in this period', cls: invert ? 'bad' : 'good' };
+		}
+		var diff = points
+			? Math.round((current - previous) * 10) / 10
+			: Math.round((current - previous) / previous * 1000) / 10;
+		if (!diff) {
+			return { text: 'No change', cls: '' };
+		}
+		var up = diff > 0;
+		return {
+			text: (up ? '▲ +' : '▼ −') + Math.abs(diff) + (points ? ' pts' : '%'),
+			cls: up !== invert ? 'good' : 'bad'
+		};
 	}
 
 	function ago(ts) {
@@ -101,7 +145,16 @@
 	}
 
 	function when(ts) {
-		return new Date(ts * 1000).toLocaleString();
+		return new Date(ts * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+	}
+
+	function clock(ts) {
+		return new Date(ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+	}
+
+	/** Series dates arrive as YYYY-MM-DD in the site timezone. Parse them as local dates so they do not shift. */
+	function dayLabel(date) {
+		return new Date(date + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric' });
 	}
 
 	var regionNames = null;
@@ -120,6 +173,14 @@
 		} catch (e) {
 			return code;
 		}
+	}
+
+	function isTagged(c) {
+		return !!(c.source || c.medium || c.campaign);
+	}
+
+	function campaignName(c) {
+		return [c.source, c.medium, c.campaign].filter(Boolean).join(' / ');
 	}
 
 	function api(path, params) {
@@ -153,12 +214,8 @@
 		});
 	}
 
-	function pageLink(slug, extra) {
-		var params = currentRange();
-		Object.keys(extra || {}).forEach(function (key) {
-			params[key] = extra[key];
-		});
-		return cfg.pageUrl + slug + '&' + new URLSearchParams(params).toString();
+	function pageLink(slug) {
+		return cfg.pageUrl + slug + '&' + new URLSearchParams(currentRange()).toString();
 	}
 
 	// -------------------------------------------------------------- range
@@ -170,6 +227,13 @@
 			from: p.get('from') || '',
 			to: p.get('to') || ''
 		};
+	}
+
+	function rangeLabel(rp) {
+		if (rp.range === 'custom') {
+			return (rp.from || '?') + ' – ' + (rp.to || '?');
+		}
+		return RANGE_LABELS[rp.range] || 'Last 30 days';
 	}
 
 	function setRange(params) {
@@ -188,133 +252,254 @@
 
 	function rangeControl() {
 		var current = currentRange();
-		var from = h('input', { type: 'date', value: current.from, 'aria-label': 'From' });
-		var to = h('input', { type: 'date', value: current.to, 'aria-label': 'To' });
-		var customBox = h('span', { class: 'snn-a-custom', style: current.range === 'custom' ? '' : 'display:none' }, [
-			from, ' – ', to,
+		var hint = h('p', { class: 'snn-a-hint', role: 'status' });
+		var from = h('input', { type: 'date', value: current.from, 'aria-label': 'Start date' });
+		var to = h('input', { type: 'date', value: current.to, 'aria-label': 'End date' });
+		var custom = h('div', { class: 'snn-a-custom', hidden: current.range !== 'custom' }, [
+			from,
+			h('span', { class: 'snn-a-muted', text: 'to' }),
+			to,
 			h('button', { type: 'button', class: 'button', onclick: function () {
-				if (from.value && to.value) {
+				if (!from.value || !to.value) {
+					hint.textContent = 'Choose both a start and an end date.';
+				} else if (from.value > to.value) {
+					hint.textContent = 'The start date must be before the end date.';
+				} else {
 					setRange({ range: 'custom', from: from.value, to: to.value });
 				}
 			} }, 'Apply')
 		]);
 
 		return h('div', { class: 'snn-a-range' }, [
-			PRESETS.map(function (preset) {
+			h('div', { class: 'snn-a-segment', role: 'group', 'aria-label': 'Date range' }, PRESETS.map(function (preset) {
+				var active = current.range === preset[0];
 				return h('button', {
 					type: 'button',
-					class: 'button' + (current.range === preset[0] ? ' button-primary' : ''),
+					class: 'snn-a-seg' + (active ? ' is-active' : ''),
+					'aria-pressed': active ? 'true' : 'false',
 					onclick: function () {
 						if (preset[0] === 'custom') {
-							customBox.style.display = '';
+							custom.hidden = false;
+							from.focus();
 							return;
 						}
 						setRange({ range: preset[0] });
 					}
 				}, preset[1]);
-			}),
-			customBox
+			})),
+			custom,
+			hint
 		]);
 	}
 
 	// -------------------------------------------------------- components
 
-	function card(title, body, link, subtitle) {
-		return h('section', { class: 'snn-a-card' }, [
-			h('header', { class: 'snn-a-card-head' }, [
-				h('div', {}, [
-					h('h2', { text: title }),
-					subtitle ? h('span', { class: 'snn-a-card-sub', text: subtitle }) : null
-				]),
-				link ? h('a', { href: link }, 'See more →') : null
-			]),
-			h('div', { class: 'snn-a-card-body' }, body)
+	function numCol(label) {
+		return [label, true];
+	}
+
+	function notice(text, kind) {
+		return h('div', { class: 'snn-a-notice is-' + (kind || 'info'), role: kind === 'error' ? 'alert' : 'status' }, text);
+	}
+
+	function failed(err, retry) {
+		return h('div', { class: 'snn-a-notice is-error', role: 'alert' }, [
+			h('span', { text: 'Could not load this data. ' + err.message + ' ' }),
+			retry ? h('button', { type: 'button', class: 'button', onclick: retry }, 'Try again') : null
 		]);
 	}
 
-	function table(headers, rows, emptyText) {
-		if (!rows.length) {
-			return h('p', { class: 'snn-a-empty' }, emptyText || 'No data for this range yet.');
+	function skeleton(lines) {
+		var bars = [];
+		for (var i = 0; i < (lines || 3); i++) {
+			bars.push(h('span', { class: 'snn-a-skel', style: 'width:' + (58 + ((i * 23) % 40)) + '%' }));
 		}
-		return h('table', { class: 'widefat striped snn-a-table' }, [
-			h('thead', {}, h('tr', {}, headers.map(function (head) {
-				return h('th', { text: head });
-			}))),
-			h('tbody', {}, rows.map(function (cells) {
-				return h('tr', {}, cells.map(function (cell) {
-					if (cell && cell.nodeType) {
-						return h('td', {}, cell);
-					}
-					return h('td', { text: cell === null || cell === undefined ? '' : String(cell) });
-				}));
-			}))
+		return h('div', { class: 'snn-a-skeleton', 'aria-busy': 'true', 'aria-label': 'Loading' }, bars);
+	}
+
+	function empty(text, action) {
+		return h('div', { class: 'snn-a-empty' }, [
+			h('p', { text: text || 'No data for this range yet.' }),
+			action || null
 		]);
+	}
+
+	/**
+	 * A table inside a horizontal scroll box, so wide tables never push the page sideways.
+	 * heads: strings, or numCol() for right-aligned numeric columns.
+	 * onRow(index, row): optional. Makes rows selectable with the mouse and the keyboard.
+	 */
+	function table(heads, rows, emptyText, onRow) {
+		if (!rows.length) {
+			return empty(emptyText);
+		}
+		var body = rows.map(function (cells, index) {
+			var attrs = { 'data-index': index };
+			if (onRow) {
+				attrs.class = 'is-selectable';
+				attrs.tabindex = '0';
+				attrs.onclick = function (event) { onRow(index, event.currentTarget); };
+				attrs.onkeydown = function (event) {
+					if (event.key === 'Enter' || event.key === ' ') {
+						event.preventDefault();
+						onRow(index, event.currentTarget);
+					}
+				};
+			}
+			return h('tr', attrs, cells.map(function (cell, i) {
+				var numeric = Array.isArray(heads[i]);
+				return h('td', { class: numeric ? 'num' : '' }, cell === null || cell === undefined ? '' : cell);
+			}));
+		});
+		return h('div', { class: 'snn-a-scroll' }, h('table', { class: 'snn-a-table' }, [
+			h('thead', {}, h('tr', {}, heads.map(function (head) {
+				var numeric = Array.isArray(head);
+				return h('th', { class: numeric ? 'num' : '', scope: 'col', text: numeric ? head[0] : head });
+			}))),
+			h('tbody', {}, body)
+		]));
+	}
+
+	function pager(page, pages, go) {
+		if (pages <= 1) {
+			return null;
+		}
+		return h('nav', { class: 'snn-a-pager', 'aria-label': 'Pagination' }, [
+			h('button', { type: 'button', class: 'button', disabled: page <= 1 ? true : null, onclick: function () { go(page - 1); } }, '‹ Previous'),
+			h('span', { class: 'snn-a-muted', text: 'Page ' + page + ' of ' + pages }),
+			h('button', { type: 'button', class: 'button', disabled: page >= pages ? true : null, onclick: function () { go(page + 1); } }, 'Next ›')
+		]);
+	}
+
+	function card(title, body, opts) {
+		opts = opts || {};
+		var section = h('section', { class: 'snn-a-card' + (opts.wide ? ' is-wide' : ''), 'aria-label': title }, [
+			h('header', { class: 'snn-a-card-head' }, [
+				h('div', { class: 'snn-a-card-title' }, [
+					h('h2', { text: title }),
+					opts.sub ? h('p', { class: 'snn-a-card-sub', text: opts.sub }) : null
+				]),
+				h('div', { class: 'snn-a-card-actions' }, [
+					opts.actions || null,
+					opts.link ? h('a', { class: 'snn-a-link', href: opts.link }, opts.linkText || 'View report →') : null
+				])
+			]),
+			h('div', { class: 'snn-a-card-body' }, body)
+		]);
+		if (opts.id) {
+			section.setAttribute('data-card', opts.id);
+		}
+		return section;
 	}
 
 	function kpi(label, value, delta) {
 		return h('div', { class: 'snn-a-kpi' }, [
-			h('div', { class: 'snn-a-kpi-label' }, h('span', { text: label })),
+			h('div', { class: 'snn-a-kpi-label', text: label }),
 			h('div', { class: 'snn-a-kpi-value', text: value }),
-			delta ? h('div', { class: 'snn-a-kpi-delta ' + delta.cls }, [
-				h('span', { text: delta.text }),
-				h('span', { class: 'snn-a-kpi-vs', text: ' vs previous period' })
-			]) : null
+			h('div', { class: 'snn-a-kpi-delta ' + (delta.cls || ''), text: delta.text })
 		]);
 	}
 
-	function lineChart(canvas, labels, datasets) {
+	function liveCount(count) {
+		return h('div', { class: 'snn-a-live' }, [
+			h('span', { class: 'snn-a-live-dot', 'aria-hidden': 'true' }),
+			h('strong', { text: n(count) }),
+			h('span', { text: ' visitor' + (count === 1 ? '' : 's') + ' in the last 5 minutes' })
+		]);
+	}
+
+	function pageCell(row) {
+		return h('div', { class: 'snn-a-page-cell' }, row.title
+			? [h('strong', { text: row.title }), h('span', { class: 'snn-a-muted', text: row.path })]
+			: [h('strong', { text: row.path })]);
+	}
+
+	function chartBox(height) {
+		return h('div', { class: 'snn-a-chart', style: 'height:' + (height || 260) + 'px' }, h('canvas', {}));
+	}
+
+	function fadeColor(color, alpha) {
+		var hex = color.replace('#', '');
+		var r = parseInt(hex.slice(0, 2), 16);
+		var g = parseInt(hex.slice(2, 4), 16);
+		var b = parseInt(hex.slice(4, 6), 16);
+		return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+	}
+
+	function lineChart(canvas, labels, sets) {
 		var chart = new window.Chart(canvas, {
 			type: 'line',
 			data: {
 				labels: labels,
-				datasets: datasets.map(function (set) {
+				datasets: sets.map(function (set) {
 					return {
 						label: set.label,
 						data: set.data,
 						borderColor: set.color,
-						backgroundColor: set.color,
-						tension: 0.25,
+						backgroundColor: set.fill ? fadeColor(set.color, 0.12) : set.color,
+						borderWidth: 2,
+						borderDash: set.dash || [],
+						fill: !!set.fill,
+						tension: 0.3,
 						pointRadius: 0,
-						fill: false
+						pointHoverRadius: 4
 					};
 				})
 			},
-			options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, scales: { y: { beginAtZero: true } } }
+			options: {
+				responsive: true,
+				maintainAspectRatio: false,
+				interaction: { mode: 'index', intersect: false },
+				plugins: {
+					legend: { position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 8, padding: 16 } }
+				},
+				scales: {
+					x: { grid: { display: false }, ticks: { maxTicksLimit: 8, maxRotation: 0, autoSkipPadding: 12 } },
+					y: { beginAtZero: true, grid: { color: '#f0f0f1' }, ticks: { precision: 0 } }
+				}
+			}
 		});
 		charts.push(chart);
 		return chart;
 	}
 
-	function doughnut(canvas, labels, data) {
+	/** Doughnut with a text legend next to it. Each row shows the value and its share. */
+	function breakdown(labels, values, colors) {
+		colors = colors || PALETTE;
+		var total = values.reduce(function (sum, v) { return sum + Number(v || 0); }, 0);
+		if (!total) {
+			return empty('No data for this range yet.');
+		}
+		var canvas = h('canvas', {});
 		var chart = new window.Chart(canvas, {
 			type: 'doughnut',
 			data: {
 				labels: labels,
-				datasets: [{ data: data, backgroundColor: ['#2271b1', '#00a32a', '#dba617', '#d63638', '#8c8f94', '#72aee6', '#9b51e0'] }]
+				datasets: [{ data: values, backgroundColor: colors, borderWidth: 0 }]
 			},
-			options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+			options: {
+				responsive: true,
+				maintainAspectRatio: false,
+				cutout: '68%',
+				plugins: { legend: { display: false } }
+			}
 		});
 		charts.push(chart);
-		return chart;
-	}
-
-	function chartBox(height) {
-		return h('div', { class: 'snn-a-chart', style: 'height:' + (height || 260) + 'px' }, [
-			h('canvas', {})
+		return h('div', { class: 'snn-a-breakdown' }, [
+			h('div', { class: 'snn-a-donut' }, canvas),
+			h('ul', { class: 'snn-a-legend' }, labels.map(function (label, i) {
+				return h('li', {}, [
+					h('i', { class: 'snn-a-dot', style: 'background:' + colors[i % colors.length], 'aria-hidden': 'true' }),
+					h('span', { class: 'snn-a-legend-label', text: label }),
+					h('strong', { text: n(values[i]) }),
+					h('span', { class: 'snn-a-muted', text: pct(100 * values[i] / total) })
+				]);
+			}))
 		]);
 	}
 
-	function loading() {
-		return h('p', { class: 'snn-a-loading', text: 'Loading…' });
-	}
+	// ------------------------------------------------------------- map
 
-	function failed(err) {
-		return h('div', { class: 'notice notice-error inline' }, h('p', { text: 'Could not load this data: ' + err.message }));
-	}
-
-	// ------------------------------------------------------------- views
-
-	var SVG_NS = 'http://www.w3.org/2000/svg';
 	var worldPromise = null;
 
 	function loadWorld() {
@@ -322,15 +507,6 @@
 			worldPromise = fetch(cfg.world, { credentials: 'same-origin' }).then(function (r) { return r.json(); });
 		}
 		return worldPromise;
-	}
-
-	function rangeLabel(rp) {
-		var labels = { today: 'Today', '7d': 'Last 7 days', '30d': 'Last 30 days', '90d': 'Last 90 days', '12m': 'Last 12 months' };
-		return rp.range === 'custom' ? (rp.from || '') + ' – ' + (rp.to || '') : (labels[rp.range] || 'Last 30 days');
-	}
-
-	function empty() {
-		return h('p', { class: 'snn-a-empty', text: 'No data for this range yet.' });
 	}
 
 	/** One path per country, shaded by sessions. Used by the dashboard and the Geographic screen. */
@@ -356,7 +532,7 @@
 			var path = document.createElementNS(SVG_NS, 'path');
 			var title = document.createElementNS(SVG_NS, 'title');
 			path.setAttribute('d', world.countries[code]);
-			path.setAttribute('fill', count ? 'rgba(34,113,177,' + (0.25 + 0.75 * strength).toFixed(2) + ')' : '#e5e7eb');
+			path.setAttribute('fill', count ? fadeColor(ACCENT, (0.2 + 0.8 * strength).toFixed(2)) : '#eef0f2');
 			path.setAttribute('stroke', '#ffffff');
 			path.setAttribute('stroke-width', '0.5');
 			title.textContent = countryName(code) + ': ' + n(count) + ' sessions';
@@ -367,219 +543,245 @@
 		return svg;
 	}
 
-	function renderDashboard(rp) {
-		var grid = h('div', { class: 'snn-a-grid' });
-		var metrics = h('div', { class: 'snn-a-kpis' }, loading());
-		var customize = h('div', { class: 'snn-a-customize', style: 'display:none' });
-		var overview = api('stats/overview', rp);
-		var period = rangeLabel(rp);
+	function mapLegend() {
+		return h('div', { class: 'snn-a-scale' }, [
+			h('span', { class: 'snn-a-muted', text: 'Fewer sessions' }),
+			h('i', { 'aria-hidden': 'true' }),
+			h('span', { class: 'snn-a-muted', text: 'More sessions' })
+		]);
+	}
 
-		root.appendChild(rangeControl());
-		root.appendChild(metrics);
-		root.appendChild(h('p', {}, [
-			h('button', { type: 'button', class: 'button', onclick: function () {
-				customize.style.display = customize.style.display === 'none' ? '' : 'none';
-			} }, 'Customize cards')
-		]));
+	function cityNote() {
+		return h('div', { class: 'snn-a-notice is-info', role: 'status' }, [
+			h('span', { text: 'City data needs the free city database. ' }),
+			h('a', { href: cfg.pageUrl + 'snn-analytics-settings' }, 'Install it in Settings →')
+		]);
+	}
+
+	// ------------------------------------------------------------- views
+
+	function renderDashboard(rp) {
+		var period = rangeLabel(rp);
+		var grid = h('div', { class: 'snn-a-grid' });
+		var kpis = h('div', { class: 'snn-a-kpis', 'aria-busy': 'true' }, [1, 2, 3, 4, 5, 6, 7, 8].map(function () {
+			return h('div', { class: 'snn-a-kpi' }, skeleton(2));
+		}));
+		var customize = h('div', { class: 'snn-a-customize', hidden: true });
+		var status = h('span', { class: 'snn-a-muted', role: 'status' });
+		var overview = api('stats/overview', rp);
+
+		var toggle = h('button', { type: 'button', class: 'button', 'aria-expanded': 'false', onclick: function () {
+			customize.hidden = !customize.hidden;
+			toggle.setAttribute('aria-expanded', String(!customize.hidden));
+		} }, 'Customize cards');
+
+		root.appendChild(h('div', { class: 'snn-a-toolbar' }, [rangeControl(), toggle]));
+		root.appendChild(h('p', { class: 'snn-a-caption', text: 'Compared with the previous period of the same length.' }));
+		root.appendChild(kpis);
 		root.appendChild(customize);
 		root.appendChild(grid);
 
 		overview.then(function (data) {
 			var c = data.current;
 			var p = data.previous;
-			clear(metrics);
+			clear(kpis);
+			kpis.removeAttribute('aria-busy');
 			[
-				['Visitors', n(c.visitors), c.visitors, p.visitors],
-				['New visitors', n(c.new_visitors), c.new_visitors, p.new_visitors],
-				['Sessions', n(c.sessions), c.sessions, p.sessions],
-				['Views', n(c.views), c.views, p.views],
-				['Bounce rate', pct(c.bounce_rate), c.bounce_rate, p.bounce_rate],
-				['Avg. time', duration(c.avg_duration), c.avg_duration, p.avg_duration],
-				['Views / session', String(c.views_per_session), c.views_per_session, p.views_per_session],
-				['Events', n(c.events), c.events, p.events]
+				['Visitors', n(c.visitors), change(c.visitors, p.visitors)],
+				['New visitors', n(c.new_visitors), change(c.new_visitors, p.new_visitors)],
+				['Sessions', n(c.sessions), change(c.sessions, p.sessions)],
+				['Views', n(c.views), change(c.views, p.views)],
+				['Bounce rate', pct(c.bounce_rate), change(c.bounce_rate, p.bounce_rate, { invert: true, points: true })],
+				['Avg. time', duration(c.avg_duration), change(c.avg_duration, p.avg_duration)],
+				['Views per session', Number(c.views_per_session).toFixed(2), change(c.views_per_session, p.views_per_session)],
+				['Events', n(c.events), change(c.events, p.events)]
 			].forEach(function (m) {
-				metrics.appendChild(kpi(m[0], m[1], change(m[2], m[3])));
+				kpis.appendChild(kpi(m[0], m[1], m[2]));
 			});
 		}).catch(function (err) {
-			clear(metrics);
-			metrics.appendChild(failed(err));
+			clear(kpis);
+			kpis.appendChild(failed(err, render));
 		});
 
-		function mountCard(id, title, subtitle, link, load, wide) {
-			var body = h('div', {}, loading());
-			var box = card(title, [body], link, subtitle);
-			box.dataset.card = id;
-			if (wide) {
-				box.classList.add('wide');
-			}
-			grid.appendChild(box);
-			load(body).catch(function (err) {
-				clear(body);
-				body.appendChild(failed(err));
+		function mountCard(id, title, sub, link, load, wide) {
+			var content = h('div', {}, skeleton(4));
+			grid.appendChild(card(title, content, { id: id, sub: sub, link: link, wide: wide }));
+			load(content).catch(function (err) {
+				clear(content);
+				content.appendChild(failed(err));
 			});
 		}
 
-		mountCard('chart', 'Site traffic', period, null, function (body) {
+		mountCard('chart', 'Traffic over time', period, null, function (content) {
 			return overview.then(function (data) {
-				clear(body);
+				clear(content);
 				var box = chartBox(300);
-				body.appendChild(box);
-				lineChart(box.querySelector('canvas'), data.series.map(function (d) { return d.date; }), [
-					{ label: 'Views', color: '#f59e0b', data: data.series.map(function (d) { return d.views; }) },
-					{ label: 'Visitors', color: '#6d4fc2', data: data.series.map(function (d) { return d.visitors; }) }
+				content.appendChild(box);
+				lineChart(box.querySelector('canvas'), data.series.map(function (d) { return dayLabel(d.date); }), [
+					{ label: 'Visitors', color: COLOR_VISITORS, data: data.series.map(function (d) { return d.visitors; }), fill: true },
+					{ label: 'Views', color: COLOR_VIEWS, data: data.series.map(function (d) { return d.views; }), dash: [4, 3] }
 				]);
 			});
 		}, true);
 
-		mountCard('pages', 'Top pages', period, pageLink('snn-analytics-pages'), function (body) {
+		mountCard('pages', 'Top pages', period, pageLink('snn-analytics-pages'), function (content) {
 			return api('stats/pages', Object.assign({}, rp, { orderby: 'views', per_page: 10 })).then(function (data) {
-				clear(body);
-				body.appendChild(table(['Page', 'Views', 'Visitors'], data.rows.map(function (r) {
-					return [r.title || r.path, n(r.views), n(r.visitors)];
-				})));
+				clear(content);
+				content.appendChild(table(['Page', numCol('Views'), numCol('Visitors')], data.rows.map(function (r) {
+					return [pageCell(r), n(r.views), n(r.visitors)];
+				}), 'No page views in this range.'));
 			});
 		});
 
-		mountCard('geo', 'Geographic traffic', period, pageLink('snn-analytics-geo'), function (body) {
+		mountCard('geo', 'Geographic traffic', period, pageLink('snn-analytics-geo'), function (content) {
 			return Promise.all([api('stats/geo', rp), loadWorld()]).then(function (results) {
-				clear(body);
-				body.appendChild(worldMap(results[0].countries, results[1]));
+				clear(content);
+				if (!results[0].countries.length) {
+					content.appendChild(empty());
+					return;
+				}
+				content.appendChild(worldMap(results[0].countries, results[1]));
+				content.appendChild(mapLegend());
 			});
 		});
 
-		mountCard('newreturning', 'New vs. returning sessions', period, null, function (body) {
+		mountCard('newreturning', 'New vs. returning', period, null, function (content) {
 			return overview.then(function (data) {
-				clear(body);
+				clear(content);
 				var c = data.current;
-				if (!c.sessions) {
-					body.appendChild(empty());
-					return;
-				}
-				var box = chartBox(260);
-				body.appendChild(box);
-				doughnut(box.querySelector('canvas'), ['New sessions', 'Returning sessions'], [c.new_visitors, Math.max(0, c.sessions - c.new_visitors)]);
+				content.appendChild(breakdown(
+					['New visitors', 'Returning visitors'],
+					[c.new_visitors, Math.max(0, c.visitors - c.new_visitors)],
+					[PALETTE[0], PALETTE[5]]
+				));
 			});
 		});
 
-		mountCard('devices', 'Devices', period, pageLink('snn-analytics-devices'), function (body) {
+		mountCard('devices', 'Devices', period, pageLink('snn-analytics-devices'), function (content) {
 			return api('stats/devices', rp).then(function (data) {
-				clear(body);
-				if (!data.devices.length) {
-					body.appendChild(empty());
-					return;
-				}
-				var box = chartBox(260);
-				body.appendChild(box);
-				doughnut(box.querySelector('canvas'), data.devices.map(function (d) { return d.label; }), data.devices.map(function (d) { return d.sessions; }));
+				clear(content);
+				content.appendChild(breakdown(
+					data.devices.map(function (d) { return d.label; }),
+					data.devices.map(function (d) { return d.sessions; })
+				));
 			});
 		});
 
-		mountCard('sources', 'Traffic sources', period, pageLink('snn-analytics-referrers'), function (body) {
+		mountCard('sources', 'Traffic sources', period, pageLink('snn-analytics-referrers'), function (content) {
 			return api('stats/referrers', rp).then(function (data) {
-				clear(body);
+				clear(content);
 				var types = Object.keys(data.types);
-				if (!types.length) {
-					body.appendChild(empty());
-					return;
-				}
-				var box = chartBox(260);
-				body.appendChild(box);
-				doughnut(box.querySelector('canvas'), types.map(function (t) { return CHANNEL_TYPES[t] || 'Other'; }), types.map(function (t) { return data.types[t]; }));
+				content.appendChild(breakdown(
+					types.map(function (t) { return CHANNEL_TYPES[t] || 'Other'; }),
+					types.map(function (t) { return data.types[t]; })
+				));
 			});
 		});
 
-		mountCard('recent', 'Recent views', 'Most recent 10', pageLink('snn-analytics-journeys'), function (body) {
+		mountCard('recent', 'Recent views', 'The last 10 page views', pageLink('snn-analytics-journeys'), function (content) {
 			return api('stats/recent', { limit: 10 }).then(function (rows) {
-				clear(body);
-				body.appendChild(table(['Time', 'Page', 'Country', 'Device', 'Browser'], rows.map(function (r) {
-					return [
-						new Date(r.time * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-						r.title,
-						countryName(r.country),
-						r.device,
-						r.browser || r.os
-					];
+				clear(content);
+				content.appendChild(table(['Time', 'Page', 'Country', 'Device', 'Browser'], rows.map(function (r) {
+					return [clock(r.time), r.title, countryName(r.country), r.device, r.browser || r.os];
 				}), 'No views yet.'));
 			});
 		});
 
-		mountCard('realtime', 'Realtime', 'Last 5 minutes', pageLink('snn-analytics-realtime'), function (body) {
+		mountCard('realtime', 'Realtime', 'Last 5 minutes', pageLink('snn-analytics-realtime'), function (content) {
 			return api('stats/realtime').then(function (data) {
-				clear(body);
-				body.appendChild(h('p', {}, [h('strong', { text: n(data.active) }), ' visitors right now']));
-				body.appendChild(table(['Live page', 'Visitors'], data.pages.map(function (p) {
-					return [p.title || p.path, n(p.visitors)];
+				clear(content);
+				content.appendChild(liveCount(data.active));
+				content.appendChild(table(['Live page', numCol('Visitors')], data.pages.map(function (p) {
+					return [pageCell(p), n(p.visitors)];
 				}), 'Nobody is on the site right now.'));
 			});
 		});
 
-		mountCard('campaigns', 'Campaigns', period, pageLink('snn-analytics-campaigns'), function (body) {
-			return api('stats/campaigns', rp).then(function (data) {
-				clear(body);
-				body.appendChild(table(['Campaign', 'Sessions'], data.slice(0, 5).map(function (c) {
-					return [[c.source, c.medium, c.campaign].filter(Boolean).join(' / ') || 'Campaign', n(c.sessions)];
-				})));
+		mountCard('campaigns', 'Campaigns', period, pageLink('snn-analytics-campaigns'), function (content) {
+			return api('stats/campaigns', rp).then(function (rows) {
+				clear(content);
+				content.appendChild(table(['Campaign', numCol('Sessions')], rows.filter(isTagged).slice(0, 5).map(function (c) {
+					return [campaignName(c), n(c.sessions)];
+				}), 'No tagged campaign visits in this range. Build tagged links on the Campaigns screen.'));
 			});
 		});
 
-		mountCard('goals', 'Goals', period, pageLink('snn-analytics-goals'), function (body) {
+		mountCard('goals', 'Goals', period, pageLink('snn-analytics-goals'), function (content) {
 			return api('goals', rp).then(function (data) {
-				clear(body);
-				body.appendChild(table(['Goal', 'Conversions'], data.map(function (g) {
+				clear(content);
+				content.appendChild(table(['Goal', numCol('Conversions')], data.map(function (g) {
 					return [g.name, n(g.conversions)];
-				}), 'No goals yet.'));
+				}), 'No goals yet. Add one on the Goals & Funnels screen.'));
 			});
 		});
 
-		// Order and visibility, from the user's saved layout. Cards missing from it go to the end.
-		function placeCards() {
-			api('prefs/dashboard').then(function (layout) {
-				var order = layout.order || [];
-				var hidden = layout.hidden || [];
-				var rank = function (id) {
-					var i = order.indexOf(id);
-					return i < 0 ? 999 : i;
-				};
-				var cards = Array.prototype.slice.call(grid.children);
+		// ------------------------------------------------ layout and cards
 
-				cards.sort(function (a, b) {
-					return rank(a.dataset.card) - rank(b.dataset.card);
-				});
-				cards.forEach(function (c) {
-					grid.appendChild(c);
-					c.style.display = hidden.indexOf(c.dataset.card) >= 0 ? 'none' : '';
-				});
-				buildCustomize(layout);
-			}).catch(function () {});
+		/** Puts cards in the saved order and hides the ones the user turned off. */
+		function applyLayout(layout) {
+			var order = layout.order || [];
+			var hidden = layout.hidden || [];
+			var cards = Array.prototype.slice.call(grid.children);
+			var rank = function (id) {
+				var i = order.indexOf(id);
+				return i < 0 ? 999 : i;
+			};
+			cards.sort(function (a, b) {
+				return rank(a.getAttribute('data-card')) - rank(b.getAttribute('data-card'));
+			});
+			cards.forEach(function (c) {
+				grid.appendChild(c);
+				c.hidden = hidden.indexOf(c.getAttribute('data-card')) >= 0;
+			});
+			buildCustomize(hidden);
 		}
 
 		function saveLayout() {
 			var all = Array.prototype.slice.call(grid.children);
+			status.textContent = 'Saving…';
 			send('prefs/dashboard', {
-				order: all.map(function (c) { return c.dataset.card; }),
-				hidden: all.filter(function (c) { return c.style.display === 'none'; }).map(function (c) { return c.dataset.card; })
-			}).catch(function () {});
+				order: all.map(function (c) { return c.getAttribute('data-card'); }),
+				hidden: all.filter(function (c) { return c.hidden; }).map(function (c) { return c.getAttribute('data-card'); })
+			}).then(function () {
+				status.textContent = 'Layout saved.';
+			}).catch(function (err) {
+				status.textContent = 'Could not save the layout: ' + err.message;
+			});
 		}
 
-		function buildCustomize(layout) {
+		function buildCustomize(hidden) {
 			clear(customize);
-			var hidden = layout.hidden || [];
-			(cfg.cards || []).forEach(function (id) {
+			var reset = h('button', { type: 'button', class: 'button-link', onclick: function () {
+				applyLayout({ order: cfg.cards || [], hidden: [] });
+				saveLayout();
+			} }, 'Reset layout');
+			customize.appendChild(h('div', { class: 'snn-a-customize-head' }, [
+				h('p', { class: 'snn-a-muted', text: 'Turn cards on or off. Drag a card by its title to move it. Changes save automatically.' }),
+				reset
+			]));
+			customize.appendChild(h('div', { class: 'snn-a-toggles' }, (cfg.cards || []).map(function (id) {
 				var box = h('input', { type: 'checkbox', value: id });
 				box.checked = hidden.indexOf(id) < 0;
 				box.addEventListener('change', function () {
 					var target = grid.querySelector('[data-card="' + id + '"]');
 					if (target) {
-						target.style.display = box.checked ? '' : 'none';
+						target.hidden = !box.checked;
 					}
 					saveLayout();
 				});
-				customize.appendChild(h('label', { class: 'snn-a-check' }, [box, ' ' + id]));
-			});
+				return h('label', { class: 'snn-a-toggle' }, [box, h('span', { text: CARD_LABELS[id] || id })]);
+			})));
+			customize.appendChild(h('p', { class: 'snn-a-muted snn-a-status' }, [status]));
 		}
 
-		// Drag cards to reorder. The new order is saved when the drop finishes.
+		// Drag cards to reorder. Only the card title starts a drag, so links and buttons still work.
 		var dragging = null;
+		grid.addEventListener('mousedown', function (event) {
+			var box = event.target.closest('.snn-a-card');
+			if (box) {
+				box.draggable = !!event.target.closest('.snn-a-card-head') && !event.target.closest('a, button, input');
+			}
+		});
 		grid.addEventListener('dragstart', function (event) {
 			dragging = event.target.closest('.snn-a-card');
 			if (dragging) {
@@ -588,9 +790,12 @@
 			}
 		});
 		grid.addEventListener('dragover', function (event) {
+			if (!dragging) {
+				return;
+			}
 			event.preventDefault();
 			var over = event.target.closest('.snn-a-card');
-			if (dragging && over && over !== dragging) {
+			if (over && over !== dragging) {
 				var rect = over.getBoundingClientRect();
 				var after = event.clientY > rect.top + rect.height / 2;
 				grid.insertBefore(dragging, after ? over.nextSibling : over);
@@ -599,72 +804,88 @@
 		grid.addEventListener('dragend', function () {
 			if (dragging) {
 				dragging.classList.remove('is-dragging');
+				dragging.draggable = false;
 			}
 			dragging = null;
 			saveLayout();
 		});
-		grid.addEventListener('mousedown', function (event) {
-			var box = event.target.closest('.snn-a-card');
-			if (box) {
-				box.setAttribute('draggable', event.target.closest('a, button, input, select') ? 'false' : 'true');
-			}
-		});
 
-		placeCards();
-	}
-
-	function renderGeo(rp) {
-		var body = h('div', {}, loading());
-		root.appendChild(rangeControl());
-		root.appendChild(body);
-
-		Promise.all([api('stats/geo', rp), loadWorld()]).then(function (results) {
-			var data = results[0];
-			clear(body);
-			body.appendChild(card('Sessions by country', [worldMap(data.countries, results[1])]));
-			body.appendChild(h('div', { class: 'snn-a-split' }, [
-				card('Countries', [table(['Country', 'Sessions', 'Visitors', 'Views'], data.countries.map(function (c) {
-					return [countryName(c.code), n(c.sessions), n(c.visitors), n(c.views)];
-				}))]),
-				card('Cities', [table(['City', 'Region', 'Country', 'Sessions', 'Visitors'], data.cities.map(function (c) {
-					return [c.name, c.region, countryName(c.code), n(c.sessions), n(c.visitors)];
-				}), 'City data appears after the city database is installed in Settings.')])
-			]));
-		}).catch(function (err) {
-			clear(body);
-			body.appendChild(failed(err));
+		api('prefs/dashboard').then(applyLayout).catch(function () {
+			applyLayout({ order: cfg.cards || [], hidden: [] });
 		});
 	}
 
 	function renderRealtime() {
-		var body = h('div', {}, loading());
-		root.appendChild(h('p', { class: 'description' }, 'Refreshes every 10 seconds while this tab is open.'));
-		root.appendChild(body);
-
-		var timer = null;
-		var canvas = null;
+		var updated = h('span', { class: 'snn-a-muted', role: 'status' });
+		var content = h('div', {}, skeleton(6));
+		var ui = null;
 		var chart = null;
+		var timer = null;
+
+		root.appendChild(h('div', { class: 'snn-a-toolbar snn-a-toolbar-between' }, [
+			h('p', { class: 'snn-a-muted', text: 'Refreshes every 10 seconds while this tab is open.' }),
+			updated
+		]));
+		root.appendChild(content);
+
+		function build() {
+			clear(content);
+			var count = h('strong', { class: 'snn-a-live-count' });
+			var canvas = chartBox(220);
+			var pages = h('div', {});
+			var referrers = h('div', {});
+			var countries = h('div', {});
+			content.appendChild(h('div', { class: 'snn-a-live' }, [
+				h('span', { class: 'snn-a-live-dot', 'aria-hidden': 'true' }),
+				count,
+				h('span', { text: ' visitors active in the last 5 minutes' })
+			]));
+			content.appendChild(card('Views per minute', canvas, { sub: 'Last 30 minutes', wide: true }));
+			content.appendChild(h('div', { class: 'snn-a-split' }, [
+				card('Live pages', pages),
+				card('Live referrers', referrers),
+				card('Live countries', countries)
+			]));
+			ui = { count: count, canvas: canvas.querySelector('canvas'), pages: pages, referrers: referrers, countries: countries };
+		}
+
+		function paint(data) {
+			if (!ui) {
+				build();
+			}
+			ui.count.textContent = n(data.active);
+			clear(ui.pages);
+			ui.pages.appendChild(table(['Page', numCol('Visitors')], data.pages.map(function (p) {
+				return [pageCell(p), n(p.visitors)];
+			}), 'Nobody is on the site right now.'));
+			clear(ui.referrers);
+			ui.referrers.appendChild(table(['Source', numCol('Visitors')], data.referrers.map(function (r) {
+				return [r.domain, n(r.visitors)];
+			}), 'No visitors.'));
+			clear(ui.countries);
+			ui.countries.appendChild(table(['Country', numCol('Visitors')], data.countries.map(function (c) {
+				return [countryName(c.code), n(c.visitors)];
+			}), 'No visitors.'));
+
+			var labels = data.per_minute.map(function (m) { return clock(m.minute); });
+			var views = data.per_minute.map(function (m) { return m.views; });
+			// Update the existing chart in place, so the chart does not flicker every 10 seconds.
+			if (!chart) {
+				chart = lineChart(ui.canvas, labels, [{ label: 'Views', color: ACCENT, data: views, fill: true }]);
+			} else {
+				chart.data.labels = labels;
+				chart.data.datasets[0].data = views;
+				chart.update('none');
+			}
+			updated.textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+		}
 
 		function tick() {
-			api('stats/realtime').then(function (data) {
-				clear(body);
-				body.appendChild(h('p', { class: 'snn-a-big' }, [h('strong', { text: n(data.active) }), ' visitors active in the last 5 minutes']));
-				canvas = chartBox(200);
-				body.appendChild(card('Views per minute (last 30 min)', [canvas]));
-				if (chart) {
-					chart.destroy();
+			api('stats/realtime').then(paint).catch(function (err) {
+				if (!ui) {
+					clear(content);
+					content.appendChild(failed(err, tick));
 				}
-				chart = lineChart(canvas.querySelector('canvas'), data.per_minute.map(function (m) {
-					return new Date(m.minute * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-				}), [{ label: 'Views', color: '#2271b1', data: data.per_minute.map(function (m) { return m.views; }) }]);
-				body.appendChild(h('div', { class: 'snn-a-split' }, [
-					card('Live pages', [table(['Page', 'Visitors'], data.pages.map(function (p) { return [p.title || p.path, n(p.visitors)]; }))]),
-					card('Live referrers', [table(['Source', 'Visitors'], data.referrers.map(function (r) { return [r.domain, n(r.visitors)]; }))]),
-					card('Live countries', [table(['Country', 'Visitors'], data.countries.map(function (c) { return [countryName(c.code), n(c.visitors)]; }))])
-				]));
-			}).catch(function (err) {
-				clear(body);
-				body.appendChild(failed(err));
 			});
 		}
 
@@ -695,75 +916,132 @@
 		};
 	}
 
+	function renderGeo(rp) {
+		var body = h('div', {}, skeleton(8));
+		root.appendChild(h('div', { class: 'snn-a-toolbar' }, rangeControl()));
+		root.appendChild(body);
+
+		Promise.all([api('stats/geo', rp), loadWorld()]).then(function (results) {
+			var data = results[0];
+			clear(body);
+			if (!data.countries.length) {
+				body.appendChild(empty('No visits in this range yet.'));
+				return;
+			}
+			body.appendChild(card('Sessions by country', [worldMap(data.countries, results[1]), mapLegend()], { sub: rangeLabel(rp), wide: true }));
+			body.appendChild(h('div', { class: 'snn-a-split' }, [
+				card('Countries', table(['Country', numCol('Sessions'), numCol('Visitors'), numCol('Views')], data.countries.map(function (c) {
+					return [countryName(c.code), n(c.sessions), n(c.visitors), n(c.views)];
+				}))),
+				card('Cities', data.cities.length
+					? table(['City', 'Region', 'Country', numCol('Sessions'), numCol('Visitors')], data.cities.map(function (c) {
+						return [c.name, c.region, countryName(c.code), n(c.sessions), n(c.visitors)];
+					}))
+					: cityNote())
+			]));
+		}).catch(function (err) {
+			clear(body);
+			body.appendChild(failed(err, render));
+		});
+	}
+
 	function renderPages(rp) {
 		var state = { page: 1, orderby: 'views', order: 'desc', search: '' };
-		var body = h('div', {}, loading());
-		var search = h('input', { type: 'search', placeholder: 'Search title or path', 'aria-label': 'Search pages' });
 		var detail = h('div', { class: 'snn-a-detail' });
+		var results = h('div', {}, skeleton(6));
+		var input = h('input', { type: 'search', placeholder: 'Search by title or path', 'aria-label': 'Search pages' });
+		var form = h('form', { class: 'snn-a-search', onsubmit: function (event) {
+			event.preventDefault();
+			state.search = input.value.trim();
+			state.page = 1;
+			load();
+		} }, [input, h('button', { type: 'submit', class: 'button' }, 'Search')]);
 
-		root.appendChild(rangeControl());
-		root.appendChild(h('p', {}, [
-			search,
-			' ',
-			h('button', { type: 'button', class: 'button', onclick: function () {
-				state.search = search.value.trim();
-				state.page = 1;
-				load();
-			} }, 'Search')
-		]));
-		root.appendChild(body);
+		root.appendChild(h('div', { class: 'snn-a-toolbar' }, [rangeControl(), form]));
 		root.appendChild(detail);
+		root.appendChild(results);
 
-		var heads = [['title', 'Page'], ['views', 'Views'], ['visitors', 'Visitors'], ['duration', 'Avg. time'], ['entrances', 'Entrances'], ['exits', 'Exits']];
+		function sortHead(key, label, numeric) {
+			var active = state.orderby === key;
+			return h('th', { class: numeric ? 'num' : '', 'aria-sort': active ? (state.order === 'desc' ? 'descending' : 'ascending') : null }, [
+				h('button', { type: 'button', class: 'snn-a-sort', onclick: function () {
+					if (state.orderby === key) {
+						state.order = state.order === 'desc' ? 'asc' : 'desc';
+					} else {
+						state.orderby = key;
+						state.order = key === 'title' ? 'asc' : 'desc';
+					}
+					state.page = 1;
+					load();
+				} }, [label, active ? (state.order === 'desc' ? ' ↓' : ' ↑') : ''])
+			]);
+		}
 
 		function load() {
-			api('stats/pages', Object.assign({}, rp, state, { per_page: 25 })).then(function (data) {
-				clear(body);
-				var pages = Math.max(1, Math.ceil(data.total / 25));
-				body.appendChild(h('p', {}, 'Showing ' + n(data.rows.length) + ' of ' + n(data.total) + ' pages.'));
-				body.appendChild(h('table', { class: 'widefat striped snn-a-table' }, [
-					h('thead', {}, h('tr', {}, heads.map(function (head) {
-						var active = state.orderby === head[0];
-						return h('th', {}, h('a', { href: '#', onclick: function (event) {
-							event.preventDefault();
-							state.order = active && state.order === 'desc' ? 'asc' : 'desc';
-							state.orderby = head[0];
-							load();
-						} }, head[1] + (active ? (state.order === 'desc' ? ' ▼' : ' ▲') : '')));
-					}))),
+			clear(results);
+			results.appendChild(skeleton(6));
+			api('stats/pages', Object.assign({}, rp, state, { per_page: PER_PAGE })).then(function (data) {
+				clear(results);
+				var pages = Math.max(1, Math.ceil(data.total / PER_PAGE));
+				results.appendChild(h('p', { class: 'snn-a-muted', text: n(data.total) + ' pages' + (state.search ? ' matching “' + state.search + '”' : '') }));
+				if (!data.rows.length) {
+					results.appendChild(empty(state.search ? 'Nothing matches that search.' : 'No page views in this range.'));
+					return;
+				}
+				var heads = [
+					sortHead('title', 'Page', false),
+					sortHead('views', 'Views', true),
+					sortHead('visitors', 'Visitors', true),
+					sortHead('duration', 'Avg. time', true),
+					sortHead('entrances', 'Entrances', true),
+					sortHead('exits', 'Exits', true)
+				];
+				var wrap = h('div', { class: 'snn-a-scroll' }, h('table', { class: 'snn-a-table' }, [
+					h('thead', {}, h('tr', {}, heads)),
 					h('tbody', {}, data.rows.map(function (row) {
-						return h('tr', { class: 'snn-a-clickable', onclick: function () { showPage(row); } }, [
-							h('td', {}, [h('strong', { text: row.title || '(untitled)' }), h('br'), h('code', { text: row.path })]),
-							h('td', { text: n(row.views) }),
-							h('td', { text: n(row.visitors) }),
-							h('td', { text: duration(row.avg_time) }),
-							h('td', { text: n(row.entrances) }),
-							h('td', { text: n(row.exits) })
+						return h('tr', { class: 'is-selectable', tabindex: '0', onclick: function (event) { select(row, event.currentTarget); }, onkeydown: function (event) {
+							if (event.key === 'Enter') { select(row, event.currentTarget); }
+						} }, [
+							h('td', {}, pageCell(row)),
+							h('td', { class: 'num' }, n(row.views)),
+							h('td', { class: 'num' }, n(row.visitors)),
+							h('td', { class: 'num' }, duration(row.avg_time)),
+							h('td', { class: 'num' }, n(row.entrances)),
+							h('td', { class: 'num' }, n(row.exits))
 						]);
 					}))
 				]));
-				body.appendChild(h('p', {}, [
-					h('button', { type: 'button', class: 'button', disabled: state.page <= 1 ? true : null, onclick: function () { state.page--; load(); } }, '‹ Previous'),
-					' Page ' + state.page + ' of ' + pages + ' ',
-					h('button', { type: 'button', class: 'button', disabled: state.page >= pages ? true : null, onclick: function () { state.page++; load(); } }, 'Next ›')
-				]));
+				results.appendChild(wrap);
+				results.appendChild(pager(state.page, pages, function (page) { state.page = page; load(); }));
 			}).catch(function (err) {
-				clear(body);
-				body.appendChild(failed(err));
+				clear(results);
+				results.appendChild(failed(err, load));
 			});
+		}
+
+		function select(row, tr) {
+			Array.prototype.forEach.call(results.querySelectorAll('tr.is-selected'), function (el) { el.classList.remove('is-selected'); });
+			tr.classList.add('is-selected');
+			showPage(row);
 		}
 
 		function showPage(row) {
 			clear(detail);
 			var canvas = chartBox(240);
+			var close = h('button', { type: 'button', class: 'button-link', onclick: function () { clear(detail); } }, 'Close');
 			detail.appendChild(card(row.title || row.path, [
-				h('p', {}, [h('code', { text: row.path }), ' · ' + n(row.views) + ' views · ' + n(row.visitors) + ' visitors']),
+				h('p', { class: 'snn-a-stat-row' }, [
+					h('span', {}, [h('strong', { text: n(row.views) }), ' views']),
+					h('span', {}, [h('strong', { text: n(row.visitors) }), ' visitors']),
+					h('span', {}, [h('strong', { text: duration(row.avg_time) }), ' avg. time'])
+				]),
 				canvas
-			]));
+			], { sub: row.path, actions: close }));
+			detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
 			api('stats/page-series', Object.assign({}, rp, { id: row.id })).then(function (series) {
-				lineChart(canvas.querySelector('canvas'), series.map(function (d) { return d.date; }), [
-					{ label: 'Views', color: '#2271b1', data: series.map(function (d) { return d.views; }) },
-					{ label: 'Visitors', color: '#00a32a', data: series.map(function (d) { return d.visitors; }) }
+				lineChart(canvas.querySelector('canvas'), series.map(function (d) { return dayLabel(d.date); }), [
+					{ label: 'Views', color: COLOR_VIEWS, data: series.map(function (d) { return d.views; }), fill: true },
+					{ label: 'Visitors', color: COLOR_VISITORS, data: series.map(function (d) { return d.visitors; }), dash: [4, 3] }
 				]);
 			}).catch(function (err) {
 				detail.appendChild(failed(err));
@@ -774,22 +1052,23 @@
 	}
 
 	function renderReferrers(rp) {
-		var body = h('div', {}, loading());
-		root.appendChild(rangeControl());
+		var body = h('div', {}, skeleton(6));
+		root.appendChild(h('div', { class: 'snn-a-toolbar' }, rangeControl()));
 		root.appendChild(body);
 
 		api('stats/referrers', rp).then(function (data) {
 			clear(body);
-			var canvas = chartBox(260);
 			var types = Object.keys(data.types);
 			body.appendChild(h('div', { class: 'snn-a-split' }, [
-				card('Sources by type', [types.length ? canvas : h('p', { class: 'snn-a-empty', text: 'No data for this range yet.' })]),
-				card('Summary', [h('p', { text: 'Direct traffic has no referrer. Search, social and email come from the referrer domain.' })])
+				card('Channels', breakdown(
+					types.map(function (t) { return CHANNEL_TYPES[t] || 'Other'; }),
+					types.map(function (t) { return data.types[t]; })
+				), { sub: rangeLabel(rp) }),
+				card('How sources are grouped', [
+					h('p', { class: 'snn-a-muted', text: 'Direct means no referrer was sent, for example a typed URL or a bookmark. Search, social, referral, ad and email come from the referring domain.' })
+				])
 			]));
-			if (types.length) {
-				doughnut(canvas.querySelector('canvas'), types.map(function (t) { return CHANNEL_TYPES[t] || 'Other'; }), types.map(function (t) { return data.types[t]; }));
-			}
-			body.appendChild(card('Domains', [table(['Source', 'Type', 'Sessions', 'Visitors', 'Views', 'Bounce'], data.domains.map(function (d) {
+			body.appendChild(card('Domains', table(['Source', 'Channel', numCol('Sessions'), numCol('Visitors'), numCol('Views'), numCol('Bounce rate')], data.domains.map(function (d) {
 				return [
 					d.domain,
 					CHANNEL_TYPES[d.type] || 'Other',
@@ -798,166 +1077,228 @@
 					n(d.views),
 					d.sessions ? pct(100 * d.bounces / d.sessions) : '–'
 				];
-			}))]));
+			}), 'No referrers in this range.'), { sub: 'Sorted by sessions' }));
 		}).catch(function (err) {
 			clear(body);
-			body.appendChild(failed(err));
+			body.appendChild(failed(err, render));
 		});
 	}
 
-
 	function renderDevices(rp) {
-		var body = h('div', {}, loading());
-		root.appendChild(rangeControl());
+		var body = h('div', {}, skeleton(6));
+		root.appendChild(h('div', { class: 'snn-a-toolbar' }, rangeControl()));
 		root.appendChild(body);
 
 		api('stats/devices', rp).then(function (data) {
 			clear(body);
-			var canvas = chartBox(240);
 			body.appendChild(h('div', { class: 'snn-a-split' }, [
-				card('Device types', [data.devices.length ? canvas : h('p', { class: 'snn-a-empty', text: 'No data for this range yet.' })]),
-				card('Browsers', [table(['Browser', 'Sessions', 'Visitors'], data.browsers.map(function (b) { return [b.name, n(b.sessions), n(b.visitors)]; }))])
+				card('Device types', breakdown(
+					data.devices.map(function (d) { return d.label; }),
+					data.devices.map(function (d) { return d.sessions; })
+				), { sub: rangeLabel(rp) }),
+				card('Browsers', table(['Browser', numCol('Sessions'), numCol('Visitors')], data.browsers.map(function (b) {
+					return [b.name, n(b.sessions), n(b.visitors)];
+				})))
 			]));
-			if (data.devices.length) {
-				doughnut(canvas.querySelector('canvas'), data.devices.map(function (d) { return d.label; }), data.devices.map(function (d) { return d.sessions; }));
-			}
-			body.appendChild(card('Operating systems', [table(['OS', 'Sessions', 'Visitors'], data.os.map(function (o) { return [o.name, n(o.sessions), n(o.visitors)]; }))]));
+			body.appendChild(card('Operating systems', table(['OS', numCol('Sessions'), numCol('Visitors')], data.os.map(function (o) {
+				return [o.name, n(o.sessions), n(o.visitors)];
+			}))));
 		}).catch(function (err) {
 			clear(body);
-			body.appendChild(failed(err));
+			body.appendChild(failed(err, render));
 		});
 	}
 
 	function renderCampaigns(rp) {
-		var body = h('div', {}, loading());
-		root.appendChild(rangeControl());
+		var body = h('div', {}, skeleton(6));
+		root.appendChild(h('div', { class: 'snn-a-toolbar' }, rangeControl()));
 		root.appendChild(body);
-		root.appendChild(card('Campaign URL builder', [urlBuilder()]));
 
 		api('stats/campaigns', rp).then(function (rows) {
 			clear(body);
-			body.appendChild(card('Campaigns', [table(['Source', 'Medium', 'Campaign', 'Term', 'Content', 'Sessions', 'Visitors', 'Conversions'], rows.map(function (r) {
-				return [r.source, r.medium, r.campaign, r.term, r.content, n(r.sessions), n(r.visitors), n(r.conversions)];
-			}), 'No UTM campaigns in this range. Tag your links with the builder below.')]));
+			body.appendChild(card('Campaigns', table(['Source', 'Medium', 'Campaign', 'Term', 'Content', numCol('Sessions'), numCol('Visitors'), numCol('Conversions')], rows.map(function (r) {
+				return [
+					isTagged(r) ? (r.source || '–') : h('span', { class: 'snn-a-muted', text: 'Untagged visits' }),
+					r.medium,
+					r.campaign,
+					r.term,
+					r.content,
+					n(r.sessions),
+					n(r.visitors),
+					n(r.conversions)
+				];
+			}), 'No visits in this range.'), { sub: rangeLabel(rp) }));
 		}).catch(function (err) {
 			clear(body);
-			body.appendChild(failed(err));
+			body.appendChild(failed(err, render));
 		});
+
+		root.appendChild(card('Campaign URL builder', urlBuilder(), {
+			sub: 'Tag a link so its visits are counted as a campaign. Source and campaign are required.'
+		}));
 	}
 
 	function urlBuilder() {
-		var fields = {
-			url: h('input', { type: 'url', placeholder: 'https://example.com/landing/', class: 'regular-text' }),
-			utm_source: h('input', { type: 'text', placeholder: 'newsletter' }),
-			utm_medium: h('input', { type: 'text', placeholder: 'email' }),
-			utm_campaign: h('input', { type: 'text', placeholder: 'spring-sale' }),
-			utm_term: h('input', { type: 'text' }),
-			utm_content: h('input', { type: 'text' })
-		};
-		var output = h('input', { type: 'text', readonly: true, class: 'large-text' });
-
-		function build() {
-			var raw = fields.url.value.trim();
-			if (!raw) {
-				output.value = '';
-				return;
-			}
-			try {
-				var target = new URL(raw);
-				Object.keys(fields).forEach(function (key) {
-					if (key !== 'url' && fields[key].value.trim() !== '') {
-						target.searchParams.set(key, fields[key].value.trim().toLowerCase().replace(/\s+/g, '-'));
-					}
-				});
-				output.value = target.toString();
-			} catch (e) {
-				output.value = 'Enter a full URL starting with https://';
-			}
-		}
-
-		Object.keys(fields).forEach(function (key) {
-			fields[key].addEventListener('input', build);
+		var fields = [
+			['url', 'Destination URL', 'url', 'https://example.com/landing/', true],
+			['utm_source', 'Source', 'text', 'newsletter', false],
+			['utm_medium', 'Medium', 'text', 'email', false],
+			['utm_campaign', 'Campaign', 'text', 'spring-sale', false],
+			['utm_term', 'Term (optional)', 'text', '', false],
+			['utm_content', 'Content (optional)', 'text', '', false]
+		];
+		var inputs = {};
+		var grid = h('div', { class: 'snn-a-form-grid' });
+		fields.forEach(function (f) {
+			inputs[f[0]] = h('input', { type: f[2], placeholder: f[3], 'aria-label': f[1], autocomplete: 'off' });
+			grid.appendChild(h('label', { class: 'snn-a-field' + (f[4] ? ' is-full' : '') }, [h('span', { text: f[1] }), inputs[f[0]]]));
 		});
 
-		return h('div', { class: 'snn-a-builder' }, [
-			h('p', {}, [h('label', {}, ['Destination URL ', fields.url])]),
-			h('p', {}, [
-				h('label', {}, ['Source ', fields.utm_source]), ' ',
-				h('label', {}, ['Medium ', fields.utm_medium]), ' ',
-				h('label', {}, ['Campaign ', fields.utm_campaign])
-			]),
-			h('p', {}, [h('label', {}, ['Term ', fields.utm_term]), ' ', h('label', {}, ['Content ', fields.utm_content])]),
-			h('p', {}, [output, ' ', h('button', { type: 'button', class: 'button', onclick: function () {
-				if (output.value && navigator.clipboard) {
-					navigator.clipboard.writeText(output.value);
+		var hint = h('p', { class: 'snn-a-hint', role: 'status' });
+		var output = h('input', { type: 'text', readonly: true, 'aria-label': 'Tagged URL', placeholder: 'Your tagged URL appears here' });
+		var copy = h('button', { type: 'button', class: 'button', disabled: true }, 'Copy');
+
+		function clean(value) {
+			return value.trim().toLowerCase().replace(/\s+/g, '-');
+		}
+
+		function build() {
+			var raw = inputs.url.value.trim();
+			output.value = '';
+			copy.disabled = true;
+			if (!raw) {
+				hint.textContent = 'Enter the page you want to tag.';
+				return;
+			}
+			var target;
+			try {
+				target = new URL(raw);
+			} catch (e) {
+				hint.textContent = 'Enter a full address that starts with https://';
+				return;
+			}
+			if (!inputs.utm_source.value.trim() || !inputs.utm_campaign.value.trim()) {
+				hint.textContent = 'Add a source and a campaign name.';
+				return;
+			}
+			Object.keys(inputs).forEach(function (key) {
+				if (key !== 'url' && inputs[key].value.trim() !== '') {
+					target.searchParams.set(key, clean(inputs[key].value));
 				}
-			} }, 'Copy')]),
-			h('p', { class: 'description', text: 'Values are lowercased, and spaces become dashes, so campaign names stay consistent.' })
+			});
+			output.value = target.toString();
+			copy.disabled = false;
+			hint.textContent = 'Values are lowercased and spaces become dashes, so campaign names stay consistent.';
+		}
+
+		copy.addEventListener('click', function () {
+			var label = copy.textContent;
+			var done = function () {
+				copy.textContent = 'Copied';
+				window.setTimeout(function () { copy.textContent = label; }, 1500);
+			};
+			if (navigator.clipboard) {
+				navigator.clipboard.writeText(output.value).then(done, function () { output.select(); });
+			} else {
+				output.select();
+			}
+		});
+
+		Object.keys(inputs).forEach(function (key) {
+			inputs[key].addEventListener('input', build);
+		});
+		build();
+
+		return h('div', { class: 'snn-a-builder' }, [
+			grid,
+			h('div', { class: 'snn-a-output' }, [output, copy]),
+			hint
 		]);
 	}
 
 	function renderJourneys(rp) {
 		var state = { page: 1 };
-		var body = h('div', {}, loading());
 		var detail = h('div', { class: 'snn-a-detail' });
+		var results = h('div', {}, skeleton(6));
 
-		root.appendChild(rangeControl());
-		root.appendChild(body);
+		root.appendChild(h('div', { class: 'snn-a-toolbar' }, rangeControl()));
 		root.appendChild(detail);
+		root.appendChild(results);
 
 		function load() {
-			api('stats/journeys', Object.assign({}, rp, state, { per_page: 25 })).then(function (data) {
-				clear(body);
-				var pages = Math.max(1, Math.ceil(data.total / 25));
-				body.appendChild(h('p', {}, n(data.total) + ' sessions. Click one to see its timeline.'));
-				body.appendChild(table(['Started', 'Visitor', 'Entry', 'Exit', 'Referrer', 'Country', 'Views', 'Time', ''], data.rows.map(function (s) {
-					var open = h('button', { type: 'button', class: 'button', onclick: function () { showJourney(s.id); } }, 'Timeline');
-					return [when(s.started_at), '#' + s.visitor + (s['new'] ? ' (new)' : ''), s.entry, s.exit, s.referrer, countryName(s.country), n(s.views), duration(s.duration), open];
-				})));
-				body.appendChild(h('p', {}, [
-					h('button', { type: 'button', class: 'button', disabled: state.page <= 1 ? true : null, onclick: function () { state.page--; load(); } }, '‹ Previous'),
-					' Page ' + state.page + ' of ' + pages + ' ',
-					h('button', { type: 'button', class: 'button', disabled: state.page >= pages ? true : null, onclick: function () { state.page++; load(); } }, 'Next ›')
-				]));
+			clear(results);
+			results.appendChild(skeleton(6));
+			api('stats/journeys', Object.assign({}, rp, state, { per_page: PER_PAGE })).then(function (data) {
+				clear(results);
+				var pages = Math.max(1, Math.ceil(data.total / PER_PAGE));
+				results.appendChild(h('p', { class: 'snn-a-muted', text: n(data.total) + ' sessions. Select a row to see every page in that visit.' }));
+				if (!data.rows.length) {
+					results.appendChild(empty('No sessions in this range.'));
+					return;
+				}
+				results.appendChild(table(
+					['Started', 'Visitor', 'Entry page', 'Exit page', 'Source', 'Country', 'Device', numCol('Views'), numCol('Time')],
+					data.rows.map(function (s) {
+						return [
+							when(s.started_at),
+							h('span', { class: 'snn-a-badge ' + (s['new'] ? 'is-new' : '') , text: s['new'] ? 'New' : 'Returning' }),
+							s.entry,
+							s.exit,
+							s.referrer,
+							countryName(s.country),
+							DEVICE_LABELS[s.device] || 'Other',
+							n(s.views),
+							duration(s.duration)
+						];
+					}),
+					'No sessions in this range.',
+					function (index, tr) {
+						Array.prototype.forEach.call(results.querySelectorAll('tr.is-selected'), function (el) { el.classList.remove('is-selected'); });
+						tr.classList.add('is-selected');
+						showJourney(data.rows[index].id);
+					}
+				));
+				results.appendChild(pager(state.page, pages, function (page) { state.page = page; load(); }));
 			}).catch(function (err) {
-				clear(body);
-				body.appendChild(failed(err));
+				clear(results);
+				results.appendChild(failed(err, load));
 			});
 		}
 
 		function showJourney(id) {
 			clear(detail);
-			detail.appendChild(loading());
+			detail.appendChild(card('Visit', skeleton(5)));
+			detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
 			api('stats/journey', { id: id }).then(function (data) {
 				clear(detail);
 				var s = data.session;
-				detail.appendChild(card('Session #' + s.id + ' · visitor #' + s.visitor, [
-					h('p', {}, [
-						when(s.started_at), ' · ', duration(s.duration), ' · ' + s.views + ' views · ' + s.events + ' events',
-						s.bounce ? ' · bounce' : ''
+				var close = h('button', { type: 'button', class: 'button-link', onclick: function () { clear(detail); } }, 'Close');
+				detail.appendChild(card('Visit on ' + when(s.started_at), [
+					h('p', { class: 'snn-a-stat-row' }, [
+						h('span', {}, [h('strong', { text: duration(s.duration) }), ' duration']),
+						h('span', {}, [h('strong', { text: String(s.views) }), ' views']),
+						h('span', {}, [h('strong', { text: String(s.events) }), ' events']),
+						s.bounce ? h('span', { class: 'snn-a-badge', text: 'Bounced' }) : null
 					]),
 					h('ol', { class: 'snn-a-timeline' }, data.timeline.map(function (item) {
+						var time = h('span', { class: 'snn-a-time', text: new Date(item.at * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) });
 						if (item.type === 'view') {
 							return h('li', {}, [
-								h('span', { class: 'snn-a-time', text: new Date(item.at * 1000).toLocaleTimeString() }),
-								' Page: ', h('strong', { text: item.title || item.path }),
-								' ', h('code', { text: item.path }),
-								' · ' + duration(item.duration) + ' on page'
+								time,
+								h('strong', { text: item.title || item.path }),
+								h('span', { class: 'snn-a-muted', text: ' ' + item.path + ' · ' + duration(item.duration) + ' on page' })
 							]);
 						}
-						return h('li', {}, [
-							h('span', { class: 'snn-a-time', text: new Date(item.at * 1000).toLocaleTimeString() }),
-							' ' + item.label + ': ', h('strong', { text: item.value })
-						]);
+						return h('li', {}, [time, h('span', { text: item.label + ': ' }), h('strong', { text: item.value })]);
 					})),
-					data.others.length ? h('p', {}, 'Other sessions from this visitor:') : null,
-					data.others.length ? h('ul', {}, data.others.map(function (o) {
+					data.others.length ? h('h3', { class: 'snn-a-subhead', text: 'Other visits from this visitor' }) : null,
+					data.others.length ? h('ul', { class: 'snn-a-plain' }, data.others.map(function (o) {
 						return h('li', {}, [
 							h('a', { href: '#', onclick: function (event) { event.preventDefault(); showJourney(o.id); } }, when(o.started_at)),
-							' · ' + o.views + ' views · ' + duration(o.duration)
+							h('span', { class: 'snn-a-muted', text: ' · ' + o.views + ' views · ' + duration(o.duration) })
 						]);
 					})) : null
-				]));
+				], { actions: close }));
 			}).catch(function (err) {
 				clear(detail);
 				detail.appendChild(failed(err));
@@ -968,89 +1309,123 @@
 	}
 
 	function renderGoals(rp) {
-		var body = h('div', {}, loading());
-		root.appendChild(rangeControl());
+		var body = h('div', {}, skeleton(6));
+		root.appendChild(h('div', { class: 'snn-a-toolbar' }, rangeControl()));
 		root.appendChild(body);
 
 		function load() {
 			Promise.all([api('goals', rp), api('funnels', rp)]).then(function (results) {
 				clear(body);
-				body.appendChild(card('Goals', [goalsTable(results[0]), goalForm(load)]));
-				body.appendChild(card('Funnels', [funnelList(results[1], results[0], rp), funnelForm(results[0], load)]));
+				body.appendChild(card('Goals', [goalsTable(results[0], load), goalForm(load)], {
+					sub: 'A goal counts once per visit. Add a rule, then review its conversions here.'
+				}));
+				body.appendChild(card('Funnels', [funnelList(results[1], rp, load), funnelForm(results[0], load)], {
+					sub: 'Steps must happen in order, within the time window.'
+				}));
 			}).catch(function (err) {
 				clear(body);
-				body.appendChild(failed(err));
+				body.appendChild(failed(err, load));
 			});
 		}
 
 		load();
 	}
 
-	function goalsTable(goals) {
-		var types = { 1: 'Page', 2: 'Click', 3: 'Custom event' };
+	function goalsTable(goals, reload) {
+		var types = { 1: 'Page visited', 2: 'Click', 3: 'Custom event' };
 		var matches = { 1: 'equals', 2: 'contains', 3: 'starts with' };
 		if (!goals.length) {
-			return h('p', { class: 'snn-a-empty', text: 'No goals yet. Add one below.' });
+			return empty('No goals yet. Add one below.');
 		}
-		return table(['Goal', 'Type', 'Rule', 'Conversions', ''], goals.map(function (g) {
+		return table(['Goal', 'Type', 'Rule', numCol('Conversions'), ''], goals.map(function (g) {
+			var rule = g.type === 1 ? (matches[g.match] || '') + ' ' + g.value : g.value;
 			var del = h('button', { type: 'button', class: 'button-link-delete', onclick: function () {
-				if (window.confirm('Delete this goal and its conversions?')) {
-					send('goals/delete', { id: g.id }).then(function () { renderGoalsAgain(); }).catch(alertError);
+				if (window.confirm('Delete this goal and its conversions? This cannot be undone.')) {
+					send('goals/delete', { id: g.id }).then(reload).catch(function (err) { window.alert(err.message); });
 				}
 			} }, 'Delete');
-			return [g.name, types[g.type] || '', (g.type === 2 ? 'selector ' : matches[g.match] + ' ') + g.value, n(g.conversions), del];
+			return [g.name || 'Untitled goal', types[g.type] || '', rule, n(g.conversions), del];
 		}));
 	}
 
-	/** Re-renders the current screen after a save or delete, so nothing is shown twice. */
-	function renderGoalsAgain() {
-		render();
+	function formMessage() {
+		return h('p', { class: 'snn-a-hint is-error', role: 'alert' });
 	}
 
-	function goalForm() {
-		var name = h('input', { type: 'text', placeholder: 'Name (optional)' });
+	function goalForm(onSaved) {
+		var name = h('input', { type: 'text', placeholder: 'Name, for example Signed up' });
+		var value = h('input', { type: 'text', placeholder: '/thank-you/', class: 'regular-text' });
 		var type = h('select', {}, [
 			h('option', { value: '1' }, 'Page visited'),
 			h('option', { value: '2' }, 'Click (CSS selector)'),
-			h('option', { value: '3' }, 'Custom event (snnA.track)')
+			h('option', { value: '3' }, 'Custom event')
 		]);
 		var match = h('select', {}, [
 			h('option', { value: '1' }, 'equals'),
 			h('option', { value: '2' }, 'contains'),
 			h('option', { value: '3' }, 'starts with')
 		]);
-		var value = h('input', { type: 'text', placeholder: '/thank-you/ or .buy-button or signup', class: 'regular-text' });
+		var error = formMessage();
+		var hints = {
+			1: { placeholder: '/thank-you/', text: 'Matches the page path. Use “contains” to match a group of pages.' },
+			2: { placeholder: '.buy-button or a[href*="checkout"]', text: 'A CSS selector for the element a visitor clicks.' },
+			3: { placeholder: 'signup', text: 'Sent from your site with window.snnA.track("signup").' }
+		};
+		var hint = h('p', { class: 'snn-a-hint' }, hints[1].text);
+
+		type.addEventListener('change', function () {
+			var current = hints[type.value];
+			value.placeholder = current.placeholder;
+			hint.textContent = current.text;
+			match.disabled = type.value !== '1';
+		});
 
 		return h('details', { class: 'snn-a-add' }, [
 			h('summary', {}, 'Add a goal'),
-			h('p', {}, [name, ' ', type, ' ', match, ' ', value]),
-			h('p', { class: 'description', text: 'Page goals match the page path. Click goals use a CSS selector, for example .buy-button or a[href*="checkout"]. Custom events are sent with window.snnA.track("name").' }),
+			h('div', { class: 'snn-a-form-grid' }, [
+				h('label', { class: 'snn-a-field' }, [h('span', { text: 'Name' }), name]),
+				h('label', { class: 'snn-a-field' }, [h('span', { text: 'Type' }), type]),
+				h('label', { class: 'snn-a-field' }, [h('span', { text: 'Match' }), match]),
+				h('label', { class: 'snn-a-field is-full' }, [h('span', { text: 'Value' }), value])
+			]),
+			hint,
+			error,
 			h('p', {}, h('button', { type: 'button', class: 'button button-primary', onclick: function () {
+				error.textContent = '';
+				if (!value.value.trim()) {
+					error.textContent = 'Enter a value for this goal.';
+					return;
+				}
 				send('goals', {
-					name: name.value,
+					name: name.value.trim(),
 					type: Number(type.value),
 					match: Number(match.value),
-					value: value.value
-				}).then(function () { renderGoalsAgain(); }).catch(alertError);
+					value: value.value.trim()
+				}).then(onSaved).catch(function (err) { error.textContent = err.message; });
 			} }, 'Save goal'))
 		]);
 	}
 
-	function funnelList(funnels, goals, rp) {
+	function funnelList(funnels, rp, reload) {
 		if (!funnels.length) {
-			return h('p', { class: 'snn-a-empty', text: 'No funnels yet. A funnel shows how many sessions reach each goal, in order.' });
+			return empty('No funnels yet. A funnel shows how many visits reach each step, in order.');
 		}
-		return h('div', {}, funnels.map(function (f) {
-			var holder = h('div', { class: 'snn-a-funnel' }, loading());
+		return h('div', { class: 'snn-a-funnels' }, funnels.map(function (f) {
+			var holder = h('div', { class: 'snn-a-funnel' }, skeleton(3));
 			api('funnels/report', Object.assign({}, rp, { id: f.id })).then(function (report) {
 				clear(holder);
 				var max = report.steps.length ? Math.max(1, report.steps[0].sessions) : 1;
-				holder.appendChild(h('p', {}, [h('strong', { text: f.name }), ' · ' + f.window_days + ' day window']));
+				holder.appendChild(h('p', { class: 'snn-a-funnel-title' }, [
+					h('strong', { text: f.name }),
+					h('span', { class: 'snn-a-muted', text: ' · ' + f.window_days + ' day window' })
+				]));
 				report.steps.forEach(function (step, index) {
 					holder.appendChild(h('div', { class: 'snn-a-step' }, [
-						h('div', { class: 'snn-a-step-label', text: (index + 1) + '. ' + step.name }),
-						h('div', { class: 'snn-a-bar', style: 'width:' + Math.round(100 * step.sessions / max) + '%', text: n(step.sessions) + ' sessions' }),
-						h('div', { class: 'description', text: pct(step.rate_from_start) + ' of start' + (index ? ' · dropped ' + n(step.drop_from_prev) : '') })
+						h('div', { class: 'snn-a-step-head' }, [
+							h('span', { text: (index + 1) + '. ' + step.name }),
+							h('span', { class: 'snn-a-muted', text: n(step.sessions) + ' · ' + pct(step.rate_from_start) + ' of start' + (index ? ' · ' + n(step.drop_from_prev) + ' dropped' : '') })
+						]),
+						h('div', { class: 'snn-a-bar-track' }, h('div', { class: 'snn-a-bar', style: 'width:' + Math.max(2, Math.round(100 * step.sessions / max)) + '%' }))
 					]));
 				});
 			}).catch(function (err) {
@@ -1059,25 +1434,37 @@
 			});
 			var del = h('button', { type: 'button', class: 'button-link-delete', onclick: function () {
 				if (window.confirm('Delete this funnel?')) {
-					send('funnels/delete', { id: f.id }).then(function () { renderGoalsAgain(); }).catch(alertError);
+					send('funnels/delete', { id: f.id }).then(reload).catch(function (err) { window.alert(err.message); });
 				}
 			} }, 'Delete funnel');
-			return h('div', { class: 'snn-a-funnel-wrap' }, [holder, h('p', {}, del)]);
+			return h('div', { class: 'snn-a-funnel-wrap' }, [holder, h('p', { class: 'snn-a-funnel-actions' }, del)]);
 		}));
 	}
 
-	function funnelForm(goals) {
-		var name = h('input', { type: 'text', placeholder: 'Funnel name' });
-		var days = h('input', { type: 'number', min: 1, max: 365, value: 7, style: 'width:80px' });
+	function funnelForm(goals, onSaved) {
+		var name = h('input', { type: 'text', placeholder: 'Funnel name, for example Purchase' });
+		var days = h('input', { type: 'number', min: 1, max: 365, value: 7, 'aria-label': 'Window in days' });
+		var error = formMessage();
 		var steps = [];
-		var stepBox = h('div', {});
+		var stepBox = h('div', { class: 'snn-a-steps-form' });
 
 		function addStep() {
 			var select = h('select', {}, [h('option', { value: '' }, 'Choose a goal…')].concat(goals.map(function (g) {
-				return h('option', { value: String(g.id) }, g.name);
+				return h('option', { value: String(g.id) }, g.name || 'Untitled goal');
 			})));
 			steps.push(select);
-			stepBox.appendChild(h('p', {}, ['Step ' + steps.length + ': ', select]));
+			stepBox.appendChild(h('label', { class: 'snn-a-field' }, [h('span', { text: 'Step ' + steps.length }), select]));
+		}
+
+		function removeStep() {
+			if (steps.length > 2) {
+				steps.pop();
+				stepBox.removeChild(stepBox.lastChild);
+			}
+		}
+
+		if (!goals.length) {
+			return empty('Create at least two goals before you build a funnel.');
 		}
 
 		addStep();
@@ -1085,26 +1472,35 @@
 
 		return h('details', { class: 'snn-a-add' }, [
 			h('summary', {}, 'Add a funnel'),
-			h('p', {}, [name, ' Window (days) ', days]),
+			h('div', { class: 'snn-a-form-grid' }, [
+				h('label', { class: 'snn-a-field' }, [h('span', { text: 'Name' }), name]),
+				h('label', { class: 'snn-a-field' }, [h('span', { text: 'Window (days)' }), days])
+			]),
 			stepBox,
-			h('p', {}, [
-				h('button', { type: 'button', class: 'button', onclick: addStep }, 'Add step'), ' ',
-				h('button', { type: 'button', class: 'button button-primary', onclick: function () {
-					send('funnels', {
-						name: name.value,
-						window_days: Number(days.value),
-						steps: steps.map(function (s) { return Number(s.value); }).filter(Boolean)
-					}).then(function () { renderGoalsAgain(); }).catch(alertError);
-				} }, 'Save funnel')
-			])
+			h('p', { class: 'snn-a-actions' }, [
+				h('button', { type: 'button', class: 'button', onclick: addStep }, 'Add step'),
+				h('button', { type: 'button', class: 'button', onclick: removeStep }, 'Remove step')
+			]),
+			error,
+			h('p', {}, h('button', { type: 'button', class: 'button button-primary', onclick: function () {
+				error.textContent = '';
+				var chosen = steps.map(function (s) { return Number(s.value); }).filter(Boolean);
+				if (!name.value.trim()) {
+					error.textContent = 'Give the funnel a name.';
+					return;
+				}
+				if (chosen.length < 2) {
+					error.textContent = 'Choose at least two goals.';
+					return;
+				}
+				send('funnels', {
+					name: name.value.trim(),
+					window_days: Number(days.value),
+					steps: chosen
+				}).then(onSaved).catch(function (err) { error.textContent = err.message; });
+			} }, 'Save funnel'))
 		]);
 	}
-
-	function alertError(err) {
-		window.alert(err.message);
-	}
-
-	// --------------------------------------------------- settings tools
 
 	// ------------------------------------------------------------ import
 
@@ -1116,7 +1512,7 @@
 	};
 
 	function renderImport() {
-		var box = h('div', {}, loading());
+		var box = h('div', {}, skeleton(4));
 		root.appendChild(box);
 		var running = false;
 
@@ -1127,7 +1523,7 @@
 
 			if (!d.available) {
 				box.appendChild(card('Independent Analytics', [
-					h('p', { text: 'No Independent Analytics data was found on this site. Install and use that plugin first, then come back here.' })
+					empty('No Independent Analytics data was found on this site. Install and use that plugin first, then come back here.')
 				]));
 				return;
 			}
@@ -1135,26 +1531,30 @@
 			var busy = s.state === 'running';
 			var done = s.state === 'done';
 			var hasError = s.state === 'error';
-			var label = h('p', {}, [
-				h('strong', { text: 'Status: ' }),
-				s.state === 'running' ? 'Importing' : s.state === 'done' ? 'Finished' : s.state === 'error' ? 'Stopped' : 'Not started',
-				s.stage && busy ? ' · ' + (STAGE_NAMES[s.stage] || s.stage) : ''
-			]);
+			var stateLabel = busy ? 'Importing' : done ? 'Finished' : hasError ? 'Stopped' : 'Not started';
 
 			box.appendChild(card('Independent Analytics data', [
-				h('p', { text: 'Found about ' + n(d.sessions) + ' sessions, ' + n(d.views) + ' views and ' + n(d.clicks) + ' clicks. The numbers are estimates.' }),
-				h('p', { class: 'description', text: 'The importer only reads the old tables. They are never changed or deleted. Each step handles 5,000 rows, so the import works on shared hosting.' }),
-				label,
-				s.message ? h('p', { class: hasError ? 'snn-a-error' : 'description', text: s.message }) : null,
-				h('p', {}, [
+				h('div', { class: 'snn-a-stat-row' }, [
+					h('span', {}, [h('strong', { text: n(d.sessions) }), ' sessions']),
+					h('span', {}, [h('strong', { text: n(d.views) }), ' views']),
+					h('span', {}, [h('strong', { text: n(d.clicks) }), ' clicks'])
+				]),
+				h('p', { class: 'snn-a-muted', text: 'Counts are estimates. The importer only reads the old tables. It never changes or deletes them, and each step handles 5,000 rows so it works on shared hosting.' }),
+				h('div', { class: 'snn-a-import-state' }, [
+					h('span', { class: 'snn-a-badge ' + (done ? 'is-new' : hasError ? 'is-error' : ''), text: stateLabel }),
+					busy && s.stage ? h('span', { class: 'snn-a-muted', text: ' Working on ' + (STAGE_NAMES[s.stage] || s.stage) + '…' }) : null
+				]),
+				busy ? h('progress', { class: 'snn-a-progress', 'aria-label': 'Import in progress' }) : null,
+				s.message ? notice(s.message, hasError ? 'error' : 'info') : null,
+				h('div', { class: 'snn-a-actions' }, [
 					!busy && !done ? h('button', { type: 'button', class: 'button button-primary', disabled: cfg.canManage ? null : true, onclick: function () {
-						send('import/start').then(function (st) { paint({ detect: d, status: st }); runLoop(); }).catch(alertError);
+						send('import/start').then(function (st) { paint({ detect: d, status: st }); runLoop(); }).catch(function (err) { box.appendChild(notice(err.message, 'error')); });
 					} }, hasError ? 'Resume import' : 'Start import') : null,
 					busy ? h('button', { type: 'button', class: 'button', onclick: function () {
-						send('import/cancel').then(function (st) { running = false; paint({ detect: d, status: st }); }).catch(alertError);
-					} }, 'Cancel') : null,
-					done ? h('span', { class: 'description', text: 'Already imported. Use “Delete all data” in Settings to import again.' }) : null
-				])
+						send('import/cancel').then(function (st) { running = false; paint({ detect: d, status: st }); }).catch(function (err) { box.appendChild(notice(err.message, 'error')); });
+					} }, 'Cancel') : null
+				]),
+				done ? h('p', { class: 'snn-a-muted', text: 'Already imported. Use “Delete all data” under Settings to import again.' }) : null
 			]));
 
 			if (busy && !running) {
@@ -1186,7 +1586,7 @@
 				}).catch(function (err) {
 					running = false;
 					load();
-					alertError(err);
+					box.appendChild(notice(err.message, 'error'));
 				});
 			}());
 		}
@@ -1194,72 +1594,87 @@
 		function load() {
 			api('import').then(paint).catch(function (err) {
 				clear(box);
-				box.appendChild(failed(err));
+				box.appendChild(failed(err, load));
 			});
 		}
 
 		load();
 	}
 
-	function renderTools() {
-		var box = h('div', { class: 'snn-a-tools' }, loading());
-		tools.appendChild(box);
+	// ----------------------------------------------------- settings tools
 
-		var status = null;
+	function renderTools() {
+		var geoBox = h('div', {}, skeleton(3));
+		var totalsNote = h('div', {});
 		var poll = null;
 
-		function paint(state) {
-			status = state;
-			clear(box);
+		tools.appendChild(card('City database', geoBox, { sub: 'DB-IP Lite, free and licensed CC BY 4.0. Adds city data to the Geographic and Journeys screens.' }));
+
+		tools.appendChild(card('Daily totals', [
+			h('p', { class: 'snn-a-muted', text: 'Rebuilds every daily total from the raw visits. Run this after importing data or changing the timezone.' }),
+			totalsNote,
+			h('div', { class: 'snn-a-actions' }, h('button', { type: 'button', class: 'button', disabled: cfg.canManage ? null : true, onclick: function () {
+				clear(totalsNote);
+				send('admin/rebuild').then(function (r) {
+					totalsNote.appendChild(notice('Rebuilt ' + n(r.days) + ' days.', 'success'));
+				}).catch(function (err) {
+					totalsNote.appendChild(notice(err.message, 'error'));
+				});
+			} }, 'Rebuild daily totals'))
+		], { sub: 'Maintenance' }));
+
+		var confirmBox = h('input', { type: 'text', placeholder: 'Type DELETE', 'aria-label': 'Type DELETE to confirm', autocomplete: 'off' });
+		var deleteNote = h('div', {});
+		var deleteBtn = h('button', { type: 'button', class: 'button button-link-delete', disabled: true, onclick: function () {
+			send('admin/delete-data', { confirm: confirmBox.value }).then(function () {
+				deleteNote.appendChild(notice('All statistics were deleted. Reloading…', 'success'));
+				window.setTimeout(function () { window.location.reload(); }, 1200);
+			}).catch(function (err) {
+				deleteNote.appendChild(notice(err.message, 'error'));
+			});
+		} }, 'Delete all data');
+		confirmBox.addEventListener('input', function () {
+			deleteBtn.disabled = confirmBox.value !== 'DELETE';
+		});
+
+		tools.appendChild(card('Delete all data', [
+			h('p', { class: 'snn-a-danger-text', text: 'Deletes every visit, session, page, referrer, campaign and daily total. Goals, funnels and settings are kept.' }),
+			h('div', { class: 'snn-a-actions' }, [confirmBox, deleteBtn]),
+			deleteNote
+		], { sub: 'This cannot be undone.' }));
+
+		function paintGeo(state) {
+			clear(geoBox);
 			var busy = state.state === 'queued' || state.state === 'downloading';
-			var geoText = state.installed
-				? 'Installed (' + Math.round(state.size / 1048576) + ' MB). Cities are recorded for new sessions.'
+			var installedText = state.installed
+				? 'Installed, ' + Math.round(state.size / 1048576) + ' MB. New sessions get a city.'
 				: 'Not installed. Countries still work from CDN headers, but cities need this file.';
-
-			box.appendChild(card('City database (DB-IP Lite, free)', [
-				h('p', { text: geoText }),
-				state.message ? h('p', { class: state.state === 'error' ? 'snn-a-error' : 'description', text: state.message }) : null,
-				h('p', {}, [
-					h('button', { type: 'button', class: 'button button-primary', disabled: busy || !cfg.canManage ? true : null, onclick: function () {
-						send('geo/download').then(function (s) { paint(s); startPolling(); }).catch(alertError);
-					} }, state.installed ? 'Update database' : 'Download database'), ' ',
-					state.installed ? h('button', { type: 'button', class: 'button', disabled: busy ? true : null, onclick: function () {
-						if (window.confirm('Remove the city database?')) {
-							send('geo/remove').then(paint).catch(alertError);
-						}
-					} }, 'Remove') : null
-				]),
-				h('p', { class: 'description', text: 'Downloads from download.db-ip.com in the background. It is licensed CC BY 4.0, and attribution is shown here: IP geolocation by DB-IP.' })
-			]));
-
-			box.appendChild(card('Daily totals', [
-				h('p', { text: 'Rebuilds every daily total from the raw visits. Run this after importing data or changing the timezone.' }),
-				h('p', {}, h('button', { type: 'button', class: 'button', onclick: function () {
-					send('admin/rebuild').then(function (r) {
-						window.alert('Rebuilt ' + n(r.days) + ' days.');
-					}).catch(alertError);
-				} }, 'Rebuild daily totals'))
-			]));
-
-			var confirmBox = h('input', { type: 'text', placeholder: 'Type DELETE' });
-			box.appendChild(card('Delete all data', [
-				h('p', { class: 'snn-a-error', text: 'Deletes every visit, session, page, referrer, campaign and daily total. Goals, funnels and settings are kept.' }),
-				h('p', {}, [confirmBox, ' ', h('button', { type: 'button', class: 'button button-link-delete', onclick: function () {
-					send('admin/delete-data', { confirm: confirmBox.value }).then(function () {
-						window.alert('All statistics were deleted.');
-						window.location.reload();
-					}).catch(alertError);
-				} }, 'Delete all data')])
+			geoBox.appendChild(h('p', { text: installedText }));
+			if (busy) {
+				geoBox.appendChild(h('progress', { class: 'snn-a-progress', 'aria-label': 'Download in progress' }));
+			}
+			if (state.message) {
+				geoBox.appendChild(notice(state.message, state.state === 'error' ? 'error' : 'info'));
+			}
+			geoBox.appendChild(h('div', { class: 'snn-a-actions' }, [
+				h('button', { type: 'button', class: 'button button-primary', disabled: busy || !cfg.canManage ? true : null, onclick: function () {
+					send('geo/download').then(function (s) { paintGeo(s); startPolling(); }).catch(function (err) { geoBox.appendChild(notice(err.message, 'error')); });
+				} }, state.installed ? 'Update database' : 'Download database'),
+				state.installed ? h('button', { type: 'button', class: 'button', disabled: busy ? true : null, onclick: function () {
+					if (window.confirm('Remove the city database? Cities will stop being recorded.')) {
+						send('geo/remove').then(paintGeo).catch(function (err) { geoBox.appendChild(notice(err.message, 'error')); });
+					}
+				} }, 'Remove') : null
 			]));
 		}
 
 		function refresh() {
 			return api('geo').then(function (state) {
-				paint(state);
+				paintGeo(state);
 				return state;
 			}).catch(function (err) {
-				clear(box);
-				box.appendChild(failed(err));
+				clear(geoBox);
+				geoBox.appendChild(failed(err, refresh));
 			});
 		}
 
@@ -1313,12 +1728,6 @@
 		var view = root.getAttribute('data-view');
 		clear(root);
 
-		if (view === 'settings') {
-			if (tools) {
-				renderTools();
-			}
-			return;
-		}
 		if (views[view]) {
 			views[view](currentRange());
 		}

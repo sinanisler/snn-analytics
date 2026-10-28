@@ -162,7 +162,7 @@ final class Admin {
 					<th scope="row">Do not track these roles</th>
 					<td>
 						<?php foreach ( wp_roles()->get_names() as $role => $name ) : ?>
-							<label style="display:block;">
+							<label class="snn-a-check-row">
 								<input type="checkbox" name="exclude_roles[]" value="<?php echo esc_attr( $role ); ?>" <?php checked( in_array( $role, $s['exclude_roles'], true ) ); ?>>
 								<?php echo esc_html( translate_user_role( $name ) ); ?>
 							</label>
@@ -184,6 +184,7 @@ final class Admin {
 							<input type="checkbox" name="delete_on_uninstall" value="1" <?php checked( $s['delete_on_uninstall'] ); ?>>
 							Delete all data and tables when the plugin is deleted
 						</label>
+						<p class="description">Off by default, so your statistics survive a reinstall. Turn it on only if you want a clean removal.</p>
 					</td>
 				</tr>
 			</table>

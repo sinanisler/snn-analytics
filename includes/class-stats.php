@@ -106,6 +106,13 @@ final class Stats {
 
 	// ------------------------------------------------------------------ pages
 
+	/**
+	 * Titles were saved with HTML entities (for example &#8211; for an en dash), so decode them for display.
+	 */
+	public static function clean_title( string $title ): string {
+		return html_entity_decode( $title, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+	}
+
 	public static function pages( array $r, array $args ): array {
 		global $wpdb;
 
@@ -162,7 +169,7 @@ final class Stats {
 
 		return [
 			'id'          => (int) $row['id'],
-			'title'       => (string) $row['title'],
+			'title'       => self::clean_title( (string) $row['title'] ),
 			'path'        => (string) $row['path'],
 			'post_type'   => (string) $row['post_type'],
 			'views'       => $views,
@@ -439,7 +446,7 @@ final class Stats {
 				'views'  => (int) $row['views'],
 			], $per_minute ),
 			'pages'      => array_map( static fn( $row ) => [
-				'title'    => (string) $row['title'],
+				'title'    => self::clean_title( (string) $row['title'] ),
 				'path'     => (string) $row['path'],
 				'visitors' => (int) $row['visitors'],
 			], $live_pages ),
@@ -483,7 +490,7 @@ final class Stats {
 
 		return array_map( static fn( $row ) => [
 			'time'    => (int) $row['created_at'],
-			'title'   => (string) ( $row['title'] !== '' ? $row['title'] : $row['path'] ),
+			'title'   => self::clean_title( (string) ( $row['title'] !== '' ? $row['title'] : $row['path'] ) ),
 			'country' => (string) ( $row['country'] ?? '' ),
 			'device'  => $labels[ (int) $row['device'] ] ?? 'Unknown',
 			'browser' => (string) ( $row['browser'] ?? '' ),
@@ -542,8 +549,8 @@ final class Stats {
 				'bounce'      => (bool) $row['is_bounce'],
 				'new'         => (bool) $row['is_new'],
 				'device'      => (int) $row['device'],
-				'entry'       => (string) ( $row['entry_title'] ?: $row['entry_path'] ),
-				'exit'        => (string) ( $row['exit_title'] ?: $row['exit_path'] ),
+				'entry'       => self::clean_title( (string) ( $row['entry_title'] ?: $row['entry_path'] ) ),
+				'exit'        => self::clean_title( (string) ( $row['exit_title'] ?: $row['exit_path'] ) ),
 				'referrer'    => (string) ( $row['referrer'] ?? '' ) !== '' ? (string) $row['referrer'] : 'Direct',
 				'country'     => $row['country'] ?? '',
 			], $rows ),
@@ -586,7 +593,7 @@ final class Stats {
 			$timeline[] = [
 				'type'     => 'view',
 				'at'       => (int) $v['created_at'],
-				'title'    => (string) $v['title'],
+				'title'    => self::clean_title( (string) $v['title'] ),
 				'path'     => (string) $v['path'],
 				'duration' => (int) $v['duration'],
 				'seq'      => (int) $v['seq'],
