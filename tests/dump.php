@@ -23,7 +23,7 @@ if ( $vid ) {
 		if ( $s['campaign_id'] ) {
 			$s['utm_source'] = $wpdb->get_var( 'SELECT u.value FROM ' . $t( 'campaigns' ) . ' c JOIN ' . $t( 'utm_values' ) . ' u ON u.id = c.source_id WHERE c.id = ' . (int) $s['campaign_id'] );
 		}
-		$s['pages'] = $wpdb->get_results( 'SELECT p.path, v.seq, v.duration FROM ' . $t( 'views' ) . ' v JOIN ' . $t( 'pages' ) . ' p ON p.id = v.page_id WHERE v.session_id = ' . (int) $s['id'] . ' ORDER BY v.id', ARRAY_A );
+		$s['pages'] = $wpdb->get_results( 'SELECT p.path, v.seq, v.duration, HEX(tr.samples) AS trail FROM ' . $t( 'views' ) . ' v JOIN ' . $t( 'pages' ) . ' p ON p.id = v.page_id LEFT JOIN ' . $t( 'trails' ) . ' tr ON tr.view_id = v.id WHERE v.session_id = ' . (int) $s['id'] . ' ORDER BY v.id', ARRAY_A );
 		$s['ev']    = $wpdb->get_results( 'SELECT e.type, et.value FROM ' . $t( 'events' ) . ' e JOIN ' . $t( 'event_targets' ) . ' et ON et.id = e.target_id WHERE e.session_id = ' . (int) $s['id'] . ' ORDER BY e.id', ARRAY_A );
 	}
 	$out = $sessions;

@@ -304,19 +304,23 @@ final class Stats {
 
 	/**
 	 * Turns the hex of 6-byte samples back into [x, y, t, click] points. The tracker marks a click
-	 * by setting the top bit of x, which is free because x never goes above 10000.
+	 * by setting the top bit of x, which is free because x never goes above 10000. A sample with x
+	 * 0x7fff starts a later chunk: its t is the chunk's start in seconds, and the chunk's times count from there.
 	 */
 	private static function decode_samples( string $hex ): array {
-		return array_map( static function ( string $sample ): array {
+		$points = [];
+		$base   = 0;
+		foreach ( str_split( $hex, 12 ) as $sample ) {
 			$x = (int) hexdec( substr( $sample, 0, 4 ) );
+			$t = (int) hexdec( substr( $sample, 8, 4 ) );
+			if ( $x === 0x7fff ) {
+				$base = $t * 1000;
+				continue;
+			}
+			$points[] = [ $x & 0x7fff, (int) hexdec( substr( $sample, 4, 4 ) ), $base + $t, $x >= 0x8000 ? 1 : 0 ];
+		}
 
-			return [
-				$x & 0x7fff,
-				(int) hexdec( substr( $sample, 4, 4 ) ),
-				(int) hexdec( substr( $sample, 8, 4 ) ),
-				$x >= 0x8000 ? 1 : 0,
-			];
-		}, str_split( $hex, 12 ) );
+		return $points;
 	}
 
 	public static function page_series( int $page_id, array $r ): array {

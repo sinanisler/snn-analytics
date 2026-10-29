@@ -46,6 +46,9 @@ final class Maintenance {
 		// Cursor trails have their own retention, from 14 days to 10 years.
 		$days = max( 1, (int) $settings['cursor_retention_days'] );
 		self::delete_older_than( DB::table( 'trails' ), 'created_at', time() - $days * 86400, $stop );
+
+		// Activity whose page view never arrived (see Tracker::park).
+		self::delete_older_than( DB::table( 'pending' ), 'at', time() - Tracker::PARK_FOR, $stop );
 	}
 
 	private static function delete_older_than( string $table, string $column, int $cutoff, int $stop ): void {
@@ -156,7 +159,7 @@ final class Maintenance {
 
 	/** Every plugin table with the group it is shown under on the Settings screen. */
 	const TABLE_GROUPS = [
-		'Raw visits'    => [ 'views', 'events', 'event_targets', 'sessions', 'visitors', 'conversions', 'heat', 'trails' ],
+		'Raw visits'    => [ 'views', 'events', 'event_targets', 'sessions', 'visitors', 'conversions', 'heat', 'trails', 'pending' ],
 		'Lookups'       => [ 'pages', 'referrers', 'campaigns', 'utm_values', 'countries', 'cities', 'ua' ],
 		'Daily totals'  => [ 'd_site', 'd_pages', 'd_refs', 'd_geo', 'd_devices', 'd_camps', 'd_goals' ],
 		'Configuration' => [ 'goals', 'funnels', 'funnel_steps' ],
@@ -285,7 +288,7 @@ final class Maintenance {
 	public static function uninstall(): void {
 		global $wpdb;
 
-		foreach ( [ 'views', 'events', 'event_targets', 'sessions', 'visitors', 'conversions', 'pages', 'referrers', 'campaigns', 'utm_values', 'countries', 'cities', 'ua', 'heat', 'trails', 'goals', 'funnels', 'funnel_steps', 'd_site', 'd_pages', 'd_refs', 'd_geo', 'd_devices', 'd_camps', 'd_goals', 'debug_log' ] as $table ) {
+		foreach ( [ 'views', 'events', 'event_targets', 'sessions', 'visitors', 'conversions', 'pages', 'referrers', 'campaigns', 'utm_values', 'countries', 'cities', 'ua', 'heat', 'trails', 'goals', 'funnels', 'funnel_steps', 'd_site', 'd_pages', 'd_refs', 'd_geo', 'd_devices', 'd_camps', 'd_goals', 'debug_log', 'pending' ] as $table ) {
 			$wpdb->query( 'DROP TABLE IF EXISTS ' . DB::table( $table ) );
 		}
 

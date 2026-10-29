@@ -16,6 +16,9 @@ final class Tracker {
 	const RATE_LIMIT       = 120; // activity hits per page view per minute (APCu only)
 	const RATE_LIMIT_VIEWS = 600; // page views per visitor hash per minute (APCu only)
 	const MAX_VIEWS  = 2000;  // views per session before it stops counting
+	const TRAIL_MAX_HEX    = 86400; // 30 chunks of 240 samples, 12 hex characters each
+	const PARK_MAX         = 300;   // activity hits kept per page view while its page view has not arrived
+	const PARK_FOR         = 3600;  // seconds a parked hit waits for its page view
 
 	/** Payment and sign-in hosts that send a visitor back to the site in the middle of a visit. */
 	const ROUND_TRIP = '/(^|\.)(paypal|stripe|iyzipay|iyzico|klarna|mollie|adyen|payu|paytr|braintreegateway|squareup|authorize|2checkout|checkout|razorpay|mercadopago|sumup|wise)\.[a-z.]+$|^(checkout|pay|payment|payments|secure|3ds|acs|login|auth|accounts|signin|sso)\.|(^|\.)(accounts\.google|appleid\.apple|login\.microsoftonline|login\.live)\.com$/';
@@ -113,8 +116,9 @@ final class Tracker {
 
 			self::add_view( $session, $hit['vk'], $page_id, $now );
 			Goals::check_page( $session['id'], $hit['page']['path'], $now );
+			$replayed = self::replay( $hit['vk'], $now, $settings );
 
-			return [ 'ok', ( $fresh ? 'new session ' : 'session ' ) . $session['id'] . ', visitor ' . $visitor['id'] . ', ' . $hit['page']['path'] ];
+			return [ 'ok', ( $fresh ? 'new session ' : 'session ' ) . $session['id'] . ', visitor ' . $visitor['id'] . ', ' . $hit['page']['path'] . ( $replayed ? ', ' . $replayed . ' parked hits applied' : '' ) ];
 		} finally {
 			if ( $held ) {
 				self::unlock( $lock );
@@ -144,16 +148,76 @@ final class Tracker {
 
 		// The view key is random per page load, so it finds the view on its own. The visitor hash is not
 		// used here: the IP can change during a visit, and a page can stay open past the session timeout.
-		// A click right before leaving the page can arrive before the page view is stored (both are in flight at
-		// once), so wait up to one second for the view row instead of dropping the event.
+		// Activity can arrive before its page view (both in flight when the visitor leaves, a slow or busy
+		// server), so it is parked and the page view replays it.
 		$found = self::view_by_key( $hit['vk'] );
-		for ( $try = 0; $found === null && $try < 4; $try++ ) {
-			usleep( 250000 );
-			$found = self::view_by_key( $hit['vk'] );
-		}
 		if ( $found === null ) {
-			return [ 'no-view', 'waited ' . $try . ' retries' ];
+			return self::park( $hit, $now, $settings );
 		}
+
+		return self::apply( $hit, $found, $now, $settings );
+	}
+
+	/**
+	 * Keeps activity whose page view is not stored yet. If the view was stored meanwhile (another worker
+	 * on MySQL), the row is claimed back and applied here, so it is never left behind.
+	 */
+	private static function park( array $hit, int $now, array $settings ): array {
+		global $wpdb;
+
+		$table = DB::table( 'pending' );
+		$held  = (int) $wpdb->get_var( 'SELECT COUNT(*) FROM ' . $table . ' WHERE view_key = ' . DB::hex( $hit['vk'] ) );
+		if ( $held >= self::PARK_MAX ) {
+			return [ 'no-view', 'parking full' ];
+		}
+
+		$id = DB::insert( $table, [ 'view_key' => $hit['vk'], 'at' => $now, 'body' => (string) json_encode( $hit ) ] );
+		if ( mt_rand( 1, 200 ) === 1 ) {
+			$wpdb->query( $wpdb->prepare( "DELETE FROM {$table} WHERE at < %d LIMIT 500", $now - self::PARK_FOR ) );
+		}
+
+		$found = self::view_by_key( $hit['vk'] );
+		if ( $found !== null && self::claim( $id ) ) {
+			return self::apply( $hit, $found, $now, $settings );
+		}
+
+		return [ 'parked', 'row ' . $id ];
+	}
+
+	/** Deletes one parked row. True only for the request whose delete removed it, so it is applied once. */
+	private static function claim( int $id ): bool {
+		global $wpdb;
+
+		return (int) $wpdb->query( $wpdb->prepare( 'DELETE FROM ' . DB::table( 'pending' ) . ' WHERE id = %d', $id ) ) === 1;
+	}
+
+	/** Applies the activity that waited for a page view that is now stored. Returns how many were applied. */
+	private static function replay( string $vk, int $now, array $settings ): int {
+		global $wpdb;
+
+		$rows = $wpdb->get_results(
+			'SELECT id, body FROM ' . DB::table( 'pending' ) . ' WHERE view_key = ' . DB::hex( $vk ) . ' ORDER BY id',
+			ARRAY_A
+		);
+		$done = 0;
+		foreach ( (array) $rows as $row ) {
+			$hit = json_decode( (string) $row['body'], true );
+			if ( ! is_array( $hit ) || ! self::claim( (int) $row['id'] ) ) {
+				continue;
+			}
+			$found = self::view_by_key( $vk );
+			if ( $found !== null ) {
+				self::apply( $hit, $found, $now, $settings );
+				$done++;
+			}
+		}
+
+		return $done;
+	}
+
+	private static function apply( array $hit, array $found, int $now, array $settings ): array {
+		global $wpdb;
+
 		[ $view, $session ] = $found;
 		$note = 'view ' . $view['id'] . ', session ' . $session['id'];
 
@@ -221,11 +285,35 @@ final class Tracker {
 	}
 
 	/**
-	 * One mouse path per view, sent once. The page and device are stored with it, so a trail can be
-	 * read on its own. INSERT IGNORE keeps the first trail if a view sends a second one.
+	 * One mouse path per view, sent in chunks. The page and device are stored with it, so a trail can be
+	 * read on its own. A chunk after the first starts with a marker sample (x 0x7fff, then the chunk
+	 * number) and is appended. A chunk number that is already stored is a repeat and is ignored, and
+	 * INSERT IGNORE does the same for a repeated first chunk.
 	 */
 	private static function trail( array $hit, array $view, array $session, int $now ): void {
 		global $wpdb;
+
+		$part = self::trail_part( $hit['s'] );
+		$old  = $part === 0 ? null : $wpdb->get_var( $wpdb->prepare(
+			'SELECT HEX(samples) FROM ' . DB::table( 'trails' ) . ' WHERE view_id = %d',
+			$view['id']
+		) );
+
+		if ( $old !== null ) {
+			$old  = strtolower( (string) $old );
+			$last = 0;
+			foreach ( str_split( $old, 12 ) as $sample ) {
+				$last = max( $last, self::trail_part( $sample ) );
+			}
+			if ( $part <= $last || strlen( $old ) + strlen( $hit['s'] ) > self::TRAIL_MAX_HEX ) {
+				return;
+			}
+			$wpdb->query( $wpdb->prepare(
+				'UPDATE ' . DB::table( 'trails' ) . ' SET samples = ' . DB::hex( $old . $hit['s'] ) . ' WHERE view_id = %d',
+				$view['id']
+			) );
+			return;
+		}
 
 		$wpdb->query( $wpdb->prepare(
 			'INSERT IGNORE INTO ' . DB::table( 'trails' ) . ' (view_id, page_id, device, created_at, samples) VALUES (%d, %d, %d, %d, ' . DB::hex( $hit['s'] ) . ')',
@@ -234,6 +322,11 @@ final class Tracker {
 			$session['device'],
 			$now
 		) );
+	}
+
+	/** The chunk number in a marker sample, or 0 for a plain sample (the first chunk has no marker). */
+	private static function trail_part( string $sample ): int {
+		return strncmp( $sample, '7fff', 4 ) === 0 ? (int) hexdec( substr( $sample, 4, 4 ) ) : 0;
 	}
 
 	/**

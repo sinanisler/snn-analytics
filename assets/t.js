@@ -189,7 +189,7 @@
 		leaving = true;
 		note('pagehide', null, { viewSent: viewSent, viewStored: viewStored, waiting: waiting.length });
 		ping();
-		finishTrail();
+		sendTrail();
 	});
 
 	/** Keeps a number inside a range. */
@@ -342,11 +342,15 @@
 		}
 	}, { capture: true, passive: true });
 
-	// Pointer trails, only when the site turns them on. One trail per view: a sample every 250 ms while the
-	// pointer moves (mouse, pen or touch), at most 240 samples. It is sent once: when the tab is hidden,
-	// the page is left, or 60 seconds pass.
+	// Pointer trails, only when the site turns them on. A sample every 250 ms while the pointer moves
+	// (mouse, pen or touch). Samples go out in chunks of at most 60 seconds or 240 samples: when a chunk is
+	// full, the tab is hidden or the page is left. A chunk after the first starts with a marker sample
+	// (x 0x7fff, which a real x never reaches) holding its number and its start in seconds, so the server
+	// appends it to the view's trail. Recording stops after 30 chunks or 30 minutes.
 	var trail = null;
 	var trailStart = 0;
+	var trailBase = 0;
+	var trailPart = 0;
 	var trailTimer = 0;
 	var trailDirty = false;
 	var pointer = [0, 0];
@@ -354,13 +358,29 @@
 
 	function trackPointer(event) {
 		if (!trail) {
+			var now = Date.now();
+			trailStart = trailStart || now;
+			trailBase = Math.floor((now - trailStart) / 1000) * 1000;
+			if (trailBase >= 18e5) {
+				trailDone = true;
+				return;
+			}
 			trail = [];
-			trailStart = Date.now();
 			trailTimer = window.setInterval(takeSample, 250);
 		}
 		var width = document.documentElement.scrollWidth || 1;
 		pointer = [clamp(Math.round(event.pageX / width * 10000), 0, 10000), clamp(Math.round(event.pageY), 0, 65535)];
 		trailDirty = true;
+	}
+
+	/** Milliseconds since this chunk started. */
+	function trailTime() {
+		return clamp(Date.now() - trailStart - trailBase, 0, 65535);
+	}
+
+	/** The marker takes one place in every chunk after the first. */
+	function trailFull() {
+		return trail.length >= (trailPart ? 239 : 240) || trailTime() >= 60000;
 	}
 
 	document.addEventListener('pointermove', function (event) {
@@ -376,36 +396,40 @@
 			return;
 		}
 		trackPointer(event);
-		trail.push([pointer[0] | 0x8000, pointer[1], clamp(Date.now() - trailStart, 0, 60000)]);
+		if (!trail) {
+			return;
+		}
+		trail.push([pointer[0] | 0x8000, pointer[1], trailTime()]);
 		trailDirty = false;
-		if (trail.length >= 240) {
-			finishTrail();
+		if (trailFull()) {
+			sendTrail();
 		}
 	}, { passive: true });
 
 	function takeSample() {
-		var elapsed = Date.now() - trailStart;
 		if (trailDirty) {
-			trail.push([pointer[0], pointer[1], clamp(elapsed, 0, 60000)]);
+			trail.push([pointer[0], pointer[1], trailTime()]);
 			trailDirty = false;
 		}
-		if (trail.length >= 240 || elapsed >= 60000) {
-			finishTrail();
+		if (trailFull()) {
+			sendTrail();
 		}
 	}
 
-	/** Sends the samples as hex: 6 bytes each, x, y and t as 16-bit numbers. */
-	function finishTrail() {
-		if (trailDone) {
+	/** Sends the chunk as hex: 6 bytes per sample, x, y and t as 16-bit numbers. The next move starts a new chunk. */
+	function sendTrail() {
+		window.clearInterval(trailTimer);
+		if (!trail) {
 			return;
 		}
-		if (trail && trailDirty && trail.length < 240) {
-			trail.push([pointer[0], pointer[1], clamp(Date.now() - trailStart, 0, 60000)]);
-			trailDirty = false;
+		if (trailDirty && !trailFull()) {
+			trail.push([pointer[0], pointer[1], trailTime()]);
 		}
-		trailDone = true;
-		window.clearInterval(trailTimer);
-		if (trail && trail.length) {
+		trailDirty = false;
+		if (trail.length) {
+			if (trailPart) {
+				trail.unshift([0x7fff, trailPart, trailBase / 1000]);
+			}
 			var hex = '';
 			trail.forEach(function (p) {
 				p.forEach(function (v) {
@@ -413,13 +437,18 @@
 				});
 			});
 			send({ e: 'trail', vk: vk, s: hex });
+			trailPart++;
 		}
 		trail = null;
+		if (trailPart >= 30) {
+			trailDone = true;
+		}
 	}
 
+	// A hidden tab sends what it has and keeps recording when the visitor comes back.
 	document.addEventListener('visibilitychange', function () {
 		if (document.visibilityState === 'hidden') {
-			finishTrail();
+			sendTrail();
 		}
 	});
 
@@ -483,14 +512,23 @@
 	 * Vulnerability scanners and AI crawlers run real browsers: they load a page, never touch it and leave.
 	 * So the view is sent on a pointer, touch, wheel or key, or once the tab has been visible for 3 seconds,
 	 * so a reader who never touches the page still counts. A 404 needs a real interaction: that is where
-	 * scanners probe, and a person on a broken link moves or taps to leave it. Then the view they landed on
+	 * scanners probe, and a person on a broken link moves or taps to leave it. So does a headless window
+	 * (see headless()). Then the view they landed on
 	 * is sent with everything that waited for it. Scroll does not count, because the browser restores it
 	 * by itself on reload. A prerendered tab is hidden, so its clock starts only when it is shown.
 	 */
+	// Headless browsers make the window exactly the size of the screen. A real browser has a toolbar (and a
+	// phone a status bar), so only a fullscreen window matches, and a fullscreen reader still counts on the
+	// first move or tap. Those windows need an interaction, like a 404.
 	var gateTimer = 0;
+	function headless() {
+		var scr = window.screen || {};
+		return scr.width === window.innerWidth && scr.height === window.innerHeight;
+	}
+
 	function arm() {
 		window.clearTimeout(gateTimer);
-		if (!viewSent && cfg.pg && cfg.pg.k !== '404' && document.visibilityState === 'visible') {
+		if (!viewSent && cfg.pg && cfg.pg.k !== '404' && !headless() && document.visibilityState === 'visible') {
 			gateTimer = window.setTimeout(human, 3000);
 		}
 	}
@@ -532,6 +570,8 @@
 			since = document.visibilityState === 'visible' ? Date.now() : 0;
 			trailDone = !cfg.cur;
 			trail = null;
+			trailStart = 0;
+			trailPart = 0;
 			trailDirty = false;
 			pageview();
 		}

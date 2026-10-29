@@ -47,7 +47,7 @@ const cdp = (method, params = {}, sessionId) => new Promise((res, rej) => {
 let ipCounter = Math.floor(Math.random() * 200) + 1;
 const runTag = Math.floor(Math.random() * 250) + 1;
 
-async function tab() {
+async function tab(opts = {}) {
 	const ip = `10.${runTag}.${Math.floor(Math.random() * 250)}.${ipCounter++}`;
 	const { browserContextId } = await cdp('Target.createBrowserContext');
 	const { targetId } = await cdp('Target.createTarget', { url: 'about:blank', browserContextId });
@@ -55,6 +55,8 @@ async function tab() {
 	await cdp('Page.enable', {}, s);
 	await cdp('Network.enable', {}, s);
 	await cdp('Network.setExtraHTTPHeaders', { headers: { 'CF-Connecting-IP': ip } }, s);
+	// A real browser window is smaller than the screen. One that matches it looks headless (see t.js).
+	await cdp('Emulation.setDeviceMetricsOverride', { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false, screenWidth: opts.screen ? 1280 : 1920, screenHeight: opts.screen ? 720 : 1080 }, s);
 	const waitLoad = () => new Promise((r) => {
 		const l = (m) => { if (m.sessionId === s && m.method === 'Page.loadEventFired') { listeners.splice(listeners.indexOf(l), 1); r(); } };
 		listeners.push(l);
@@ -86,8 +88,12 @@ async function tab() {
 			await evalJs('history.back()');
 			await Promise.race([done, sleep(3000)]);
 		},
-		async move() {
-			await cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 50, y: 50 }, s);
+		async move(x = 50, y = 50) {
+			await cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y }, s);
+		},
+		// Hides and shows the tab, as switching to another tab and back does.
+		async hide(hidden) {
+			await evalJs(`Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => '${hidden ? 'hidden' : 'visible'}' }); document.dispatchEvent(new Event('visibilitychange'))`);
 		},
 		eval: evalJs,
 		// Holds every page view answer until release(), so activity stays queued behind it.
@@ -125,9 +131,9 @@ function db(ip) {
 }
 
 const results = [];
-async function scenario(name, fn, check) {
+async function scenario(name, fn, check, opts) {
 	if (only && !name.includes(only)) return;
-	const t = await tab();
+	const t = await tab(opts);
 	let data, err;
 	try {
 		await fn(t);
@@ -332,7 +338,12 @@ await scenario('events queued at pagehide are sent even if tab says visible', as
 	await release();
 	await sleep(1500);
 	if (!t.leftEarly) throw new Error('event stayed queued after pagehide');
-}, (S) => [expect(S.length === 1, 'view stored after release')]);
+}, (S) => [
+	expect(S.length === 1, 'view stored after release'),
+	// Both events reached the server before their page view: they wait in the parking table and are applied with it.
+	expect(['before-leave', 'just-before-leave'].every((v) => S[0]?.ev.some((e) => e.value === v)), `both events stored, got ${JSON.stringify(S[0]?.ev)}`),
+	expect(S[0]?.pages[0]?.duration > 0, `time on page from the parked ping, got ${S[0]?.pages[0]?.duration}`),
+]);
 
 // 16. Checkout round trip: Google visitor goes to PayPal and comes back. Must stay the Google session.
 await scenario('return from PayPal keeps the original session and source', async (t) => {
@@ -385,6 +396,56 @@ await scenario('pages after a campaign landing stay in its session', async (t) =
 	await t.click('a[href="http://localhost:8883/5-2/"]');
 	await sleep(3500);
 }, (S) => [expect(S.length === 1 && S[0].pages.length === 3 && S[0].utm_source === 'newsletter', `1 newsletter session with 3 views, got ${JSON.stringify(S.map((s) => [s.utm_source, s.pages.length]))}`)]);
+
+// Trails: the samples of a view, decoded the way Stats::decode_samples does. Points are [x, y, t, click].
+function trail(hex) {
+	const points = [];
+	let base = 0;
+	for (const sample of (hex || '').toLowerCase().match(/.{12}/g) || []) {
+		const [x, y, t] = [0, 4, 8].map((i) => parseInt(sample.slice(i, i + 4), 16));
+		if (x === 0x7fff) base = t * 1000;
+		else points.push([x & 0x7fff, y, base + t, x >= 0x8000 ? 1 : 0]);
+	}
+	return points;
+}
+
+await scenario('window the size of the screen is not counted without interaction', async (t) => {
+	await t.go(SITE + '/');
+	await sleep(4500);
+}, (S) => [expect(S.length === 0, `no session, got ${S.length}`)], { screen: true });
+
+await scenario('window the size of the screen is counted after a mouse move', async (t) => {
+	await t.go(SITE + '/');
+	await sleep(500);
+	await t.move();
+	await sleep(2000);
+}, (S) => [expect(S.length === 1 && S[0].pages.length === 1, `1 session with 1 view, got ${JSON.stringify(S)}`)], { screen: true });
+
+await scenario('trail survives a tab switch and covers more than 60 seconds', async (t) => {
+	await t.go(SITE + '/');
+	await t.move(100, 100);
+	await t.click('body', { waitNav: false });
+	for (let i = 0; i < 20; i++) { await t.move(100 + i * 10, 200); await sleep(250); }
+	await t.hide(true);
+	await sleep(1500);
+	await t.hide(false);
+	for (let i = 0; i < 280; i++) { await t.move(300 + (i % 50) * 10, 300); await sleep(250); }
+	await sleep(1000);
+	await t.hide(true);
+	await sleep(1500);
+}, (S) => {
+	const p = trail(S[0]?.pages[0]?.trail);
+	const last = p.length ? p[p.length - 1][2] : 0;
+	const ordered = p.every((q, i) => !i || q[2] >= p[i - 1][2]);
+	return [
+		expect(S.length === 1, `1 session, got ${S.length}`),
+		expect(p.length > 250, `more than 250 samples, got ${p.length}`),
+		expect(last > 65000, `trail longer than 65 s, got ${last} ms`),
+		expect(ordered, 'sample times in order'),
+		expect(p.some((q) => q[3]), 'click kept in trail'),
+		expect(p.every((q) => q[0] <= 10000), 'no marker leaks into points'),
+	];
+});
 
 ws.close();
 chrome.kill();

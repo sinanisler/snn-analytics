@@ -341,7 +341,7 @@ final class Admin {
 					<?php self::toggle( 'heatmap', (bool) $s['heatmap'], 'Record clicks' ); ?>
 				<?php self::row_end(); ?>
 
-				<?php self::row( 'Cursor trails', 'Off by default. Each view keeps one path of at most 60 seconds, sampled four times a second. Visitors are not identified by it.' ); ?>
+				<?php self::row( 'Cursor trails', 'Off by default. Each view keeps one path of up to 30 minutes, sampled four times a second while the pointer moves. Visitors are not identified by it.' ); ?>
 					<?php self::toggle( 'cursor_trails', (bool) $s['cursor_trails'], 'Record pointer movement' ); ?>
 				<?php self::row_end(); ?>
 
