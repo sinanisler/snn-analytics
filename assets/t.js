@@ -533,8 +533,9 @@
 		}
 	}
 
-	function human() {
-		if (viewSent || !pending) {
+	function human(event) {
+		// Events made by a script (lazy loaders, theme code, bots) are not a person.
+		if (viewSent || !pending || (event && event.isTrusted === false)) {
 			return;
 		}
 		viewSent = true;
