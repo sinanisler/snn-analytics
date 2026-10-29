@@ -215,8 +215,11 @@ final class Admin {
 
 	// ----------------------------------------------------------- settings
 
-	/** Start of one setting: title and help on the left, the control on the right. */
-	private static function row( string $title, string $help = '', string $for = '' ): void {
+	/**
+	 * Start of one setting: title and help on the left, the control on the right. $note is HTML that
+	 * is already escaped (see Scale::warning), shown under the help text.
+	 */
+	private static function row( string $title, string $help = '', string $for = '', string $note = '' ): void {
 		?>
 		<div class="snn-a-row">
 			<div class="snn-a-row-text">
@@ -228,6 +231,7 @@ final class Admin {
 				<?php if ( $help !== '' ) : ?>
 					<p class="snn-a-row-help"><?php echo esc_html( $help ); ?></p>
 				<?php endif; ?>
+				<?php echo $note; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- built and escaped by Scale. ?>
 			</div>
 			<div class="snn-a-row-control">
 		<?php
@@ -337,11 +341,11 @@ final class Admin {
 					<?php self::select( 'retention_months', $retention, (int) $s['retention_months'] ); ?>
 				<?php self::row_end(); ?>
 
-				<?php self::row( 'Click heatmap', 'Counts only, per page, day and device. No click is stored on its own. Shown on the Heatmaps screen.' ); ?>
+				<?php self::row( 'Click heatmap', 'Counts only, per page, day and device. No click is stored on its own. Shown on the Heatmaps screen.', '', Scale::warning( 'heat' ) ); ?>
 					<?php self::toggle( 'heatmap', (bool) $s['heatmap'], 'Record clicks' ); ?>
 				<?php self::row_end(); ?>
 
-				<?php self::row( 'Cursor trails', 'Off by default. Each view keeps one path of up to 30 minutes, sampled four times a second while the pointer moves. Visitors are not identified by it.' ); ?>
+				<?php self::row( 'Cursor trails', 'Off by default. Each view keeps one path of up to 30 minutes, sampled four times a second while the pointer moves. Visitors are not identified by it.', '', Scale::warning( 'trails' ) ); ?>
 					<?php self::toggle( 'cursor_trails', (bool) $s['cursor_trails'], 'Record pointer movement' ); ?>
 				<?php self::row_end(); ?>
 

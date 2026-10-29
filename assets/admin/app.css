@@ -1652,6 +1652,125 @@
 	max-width: 980px;
 	margin: 16px 0 8px;
 }
+/* Warnings for the heavy optional data, with a popup chart of how it grows. */
+.snn-a .snn-a-scale-warn {
+	margin-top: 10px;
+	padding: 10px 12px;
+	border-left: 3px solid var(--sa-bad);
+	border-radius: 0 6px 6px 0;
+	background: rgba(179, 45, 46, 0.06);
+}
+.snn-a .snn-a-scale-title {
+	margin: 0 0 4px;
+	font-weight: 600;
+	color: var(--sa-bad);
+}
+.snn-a .snn-a-scale-text,
+.snn-a .snn-a-scale-live {
+	margin: 0 0 6px;
+	font-size: 13px;
+}
+.snn-a .snn-a-scale-live {
+	font-weight: 600;
+}
+.snn-a .snn-a-qwrap {
+	position: relative;
+	display: inline-block;
+}
+.snn-a .snn-a-q {
+	appearance: none;
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: 1px solid var(--sa-bad);
+	border-radius: 50%;
+	background: var(--sa-surface);
+	color: var(--sa-bad);
+	font-size: 13px;
+	font-weight: 600;
+	line-height: 1;
+	cursor: help;
+}
+.snn-a .snn-a-q:focus-visible {
+	outline: 2px solid var(--sa-accent);
+	outline-offset: 2px;
+}
+.snn-a .snn-a-pop {
+	display: none;
+	position: absolute;
+	z-index: 50;
+	top: calc(100% + 8px);
+	left: 0;
+	width: min(460px, 86vw);
+	padding: 14px;
+	border: 1px solid var(--sa-line);
+	border-radius: 10px;
+	background: var(--sa-surface);
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+	color: var(--sa-text);
+	font-size: 13px;
+	font-weight: 400;
+	line-height: 1.5;
+	text-align: left;
+}
+.snn-a .snn-a-qwrap:hover .snn-a-pop,
+.snn-a .snn-a-qwrap:focus-within .snn-a-pop {
+	display: block;
+}
+.snn-a .snn-a-pop-title {
+	margin: 0 0 8px;
+	font-weight: 600;
+}
+.snn-a .snn-a-scale-svg {
+	display: block;
+	width: 100%;
+	height: auto;
+}
+.snn-a .snn-a-scale-svg text {
+	font-size: 8px;
+	fill: var(--sa-muted);
+}
+.snn-a .snn-a-scale-legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 14px;
+	margin: 8px 0;
+	padding: 0;
+	list-style: none;
+	font-size: 12px;
+}
+.snn-a .snn-a-scale-legend li {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+.snn-a .snn-a-swatch {
+	display: inline-block;
+	width: 10px;
+	height: 10px;
+	border-radius: 2px;
+}
+.snn-a .snn-a-scale-table {
+	width: 100%;
+	margin: 8px 0;
+	border-collapse: collapse;
+	font-size: 12px;
+}
+.snn-a .snn-a-scale-table th,
+.snn-a .snn-a-scale-table td {
+	padding: 4px 6px;
+	border-bottom: 1px solid var(--sa-line-soft);
+	text-align: right;
+}
+.snn-a .snn-a-scale-table th[scope="row"] {
+	text-align: left;
+}
+.snn-a .snn-a-pop-note {
+	margin: 8px 0 0;
+	color: var(--sa-muted);
+	font-size: 12px;
+}
+
 .snn-a .snn-a-set {
 	background: var(--sa-surface);
 	border: 1px solid var(--sa-line);
