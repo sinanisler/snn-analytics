@@ -3395,10 +3395,20 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 		countries: 'countries', cities: 'cities', resources: 'pages', referrers: 'referrers',
 		campaigns: 'campaigns', device_types: 'device types', device_oss: 'operating systems',
 		device_browsers: 'browsers', visitors: 'visitors', sessions: 'sessions', views: 'views',
-		clicks: 'clicks', totals: 'totals', rollup: 'daily totals'
+		clicks: 'clicks', totals: 'totals', rollup: 'daily totals',
+		locations: 'cities', browsers: 'browsers', platforms: 'operating systems', devices: 'device types'
 	};
 
+	var IMPORT_SOURCES = [
+		{ title: 'Independent Analytics data', api: 'import', prefix: 'import/', missing: 'No Independent Analytics data was found on this site. Install and use that plugin first, then come back here.' },
+		{ title: 'Burst Statistics data', api: 'import/burst', prefix: 'import/burst/', missing: 'No Burst Statistics data was found on this site. Install and use that plugin first, then come back here.' }
+	];
+
 	function renderImport() {
+		IMPORT_SOURCES.forEach(renderImportSource);
+	}
+
+	function renderImportSource(src) {
 		var box = h('div', {}, skeleton(4));
 		root.appendChild(box);
 		var running = false;
@@ -3409,8 +3419,8 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 			var s = data.status || {};
 
 			if (!d.available) {
-				box.appendChild(card('Independent Analytics', [
-					empty('No Independent Analytics data was found on this site. Install and use that plugin first, then come back here.')
+				box.appendChild(card(src.title, [
+					empty(src.missing)
 				]));
 				return;
 			}
@@ -3420,11 +3430,11 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 			var hasError = s.state === 'error';
 			var stateLabel = busy ? 'Importing' : done ? 'Finished' : hasError ? 'Stopped' : 'Not started';
 
-			box.appendChild(card('Independent Analytics data', [
+			box.appendChild(card(src.title, [
 				h('div', { class: 'snn-a-stat-row' }, [
 					h('span', {}, [h('strong', { text: n(d.sessions) }), ' sessions']),
 					h('span', {}, [h('strong', { text: n(d.views) }), ' views']),
-					h('span', {}, [h('strong', { text: n(d.clicks) }), ' clicks'])
+					d.clicks === undefined ? null : h('span', {}, [h('strong', { text: n(d.clicks) }), ' clicks'])
 				]),
 				h('p', { class: 'snn-a-muted', text: 'Counts are estimates. The importer only reads the old tables. It never changes or deletes them, and each step handles 5,000 rows so it works on shared hosting.' }),
 				h('div', { class: 'snn-a-import-state' }, [
@@ -3435,10 +3445,10 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 				s.message ? notice(s.message, hasError ? 'error' : 'info') : null,
 				h('div', { class: 'snn-a-actions' }, [
 					!busy && !done ? h('button', { type: 'button', class: 'button button-primary', disabled: cfg.canManage ? null : true, onclick: function () {
-						send('import/start').then(function (st) { paint({ detect: d, status: st }); runLoop(); }).catch(function (err) { box.appendChild(notice(err.message, 'error')); });
+						send(src.prefix + 'start').then(function (st) { paint({ detect: d, status: st }); runLoop(); }).catch(function (err) { box.appendChild(notice(err.message, 'error')); });
 					} }, hasError ? 'Resume import' : 'Start import') : null,
 					busy ? h('button', { type: 'button', class: 'button', onclick: function () {
-						send('import/cancel').then(function (st) { running = false; paint({ detect: d, status: st }); }).catch(function (err) { box.appendChild(notice(err.message, 'error')); });
+						send(src.prefix + 'cancel').then(function (st) { running = false; paint({ detect: d, status: st }); }).catch(function (err) { box.appendChild(notice(err.message, 'error')); });
 					} }, 'Cancel') : null
 				]),
 				done ? h('p', { class: 'snn-a-muted', text: 'Already imported. Use “Delete all data” under Settings to import again.' }) : null
@@ -3459,9 +3469,9 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 				if (!running) {
 					return;
 				}
-				send('import/step').then(function (st) {
+				send(src.prefix + 'step').then(function (st) {
 					if (st.state === 'running') {
-						api('import').then(function (data) {
+						api(src.api).then(function (data) {
 							data.status = st;
 							paint(data);
 						});
@@ -3479,7 +3489,7 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 		}
 
 		function load() {
-			api('import').then(paint).catch(function (err) {
+			api(src.api).then(paint).catch(function (err) {
 				clear(box);
 				box.appendChild(failed(err, load));
 			});

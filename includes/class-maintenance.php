@@ -82,6 +82,7 @@ final class Maintenance {
 
 		// A finished import would otherwise refuse to run again, and its maps are gone.
 		delete_option( Importer::OPTION );
+		delete_option( Burst_Importer::OPTION );
 
 		self::clear_visitor_counts();
 	}
@@ -292,7 +293,7 @@ final class Maintenance {
 			$wpdb->query( 'DROP TABLE IF EXISTS ' . DB::table( $table ) );
 		}
 
-		foreach ( [ Settings::SETTINGS, Settings::SECRETS, DB::OPTION, Geo::STATUS, 'snn_a_import', self::HISTORY ] as $option ) {
+		foreach ( [ Settings::SETTINGS, Settings::SECRETS, DB::OPTION, Geo::STATUS, 'snn_a_import', Burst_Importer::OPTION, self::HISTORY ] as $option ) {
 			delete_option( $option );
 		}
 

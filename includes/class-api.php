@@ -118,6 +118,11 @@ final class API {
 		$post( '/import/start', [ self::class, 'import_start' ], $admin );
 		$post( '/import/step', [ self::class, 'import_step' ], $admin );
 		$post( '/import/cancel', [ self::class, 'import_cancel' ], $admin );
+
+		$get( '/import/burst', [ self::class, 'import_burst_status' ], [], $admin );
+		$post( '/import/burst/start', [ self::class, 'import_burst_start' ], $admin );
+		$post( '/import/burst/step', [ self::class, 'import_burst_step' ], $admin );
+		$post( '/import/burst/cancel', [ self::class, 'import_burst_cancel' ], $admin );
 	}
 
 	// ------------------------------------------------------------- helpers
@@ -497,6 +502,22 @@ final class API {
 
 	public static function import_cancel(): \WP_REST_Response {
 		return self::ok( Importer::cancel() );
+	}
+
+	public static function import_burst_status(): \WP_REST_Response {
+		return self::ok( [ 'detect' => Burst_Importer::detect(), 'status' => Burst_Importer::status() ] );
+	}
+
+	public static function import_burst_start(): \WP_REST_Response {
+		return self::ok( Burst_Importer::start() );
+	}
+
+	public static function import_burst_step(): \WP_REST_Response {
+		return self::ok( Burst_Importer::step() );
+	}
+
+	public static function import_burst_cancel(): \WP_REST_Response {
+		return self::ok( Burst_Importer::cancel() );
 	}
 
 	/** JSON body or form fields, whichever the request used. */
