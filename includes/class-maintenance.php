@@ -296,6 +296,8 @@ final class Maintenance {
 			delete_option( $option );
 		}
 
-		delete_metadata( 'user', 0, 'snn_a_dashboard_layout', '', true );
+		foreach ( [ 'snn_a_dashboard_layout', 'snn_a_marks', 'snn_a_views' ] as $meta ) {
+			delete_metadata( 'user', 0, $meta, '', true );
+		}
 	}
 }

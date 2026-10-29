@@ -149,6 +149,78 @@
 .snn-a .snn-a-custom input[type="date"] {
 	min-height: 30px;
 }
+
+/* ------------------------------------------------- marks and saved views */
+
+.snn-a .snn-a-marks {
+	margin: 0 0 12px;
+}
+.snn-a .snn-a-marks-bar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 12px;
+}
+.snn-a .snn-a-marks-bar .snn-a-muted {
+	font-size: 13px;
+}
+.snn-a .snn-a-marks-form {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin-top: 10px;
+}
+.snn-a .snn-a-marks-form input[type="date"],
+.snn-a .snn-a-marks-form input[type="text"] {
+	min-height: 30px;
+}
+.snn-a .snn-a-marks-form input[type="text"] {
+	flex: 1 1 240px;
+	min-width: 200px;
+}
+.snn-a .snn-a-marks-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	list-style: none;
+	margin: 10px 0 0;
+	padding: 0;
+}
+.snn-a .snn-a-marks-list li {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	border: 1px solid var(--sa-line);
+	border-radius: 999px;
+	padding: 3px 6px 3px 12px;
+	font-size: 13px;
+}
+.snn-a .snn-a-views-wrap {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.snn-a .snn-a-views {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+.snn-a .snn-a-views select {
+	min-height: 30px;
+	max-width: 320px;
+}
+.snn-a .snn-a-views-form {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+.snn-a .snn-a-views-form input[type="text"] {
+	min-height: 30px;
+	min-width: 220px;
+}
 .snn-a .snn-a-search {
 	display: flex;
 	gap: 8px;

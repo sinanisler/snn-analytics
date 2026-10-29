@@ -16,6 +16,9 @@ final class API {
 	const NS  = 'snn-a/v1';
 	const CAP = 'snn_a_view';
 
+	const MARK_LIMIT = 100;
+	const VIEW_LIMIT = 30;
+
 	public static function register(): void {
 		add_action( 'rest_api_init', [ self::class, 'routes' ] );
 	}
@@ -96,6 +99,12 @@ final class API {
 
 		$get( '/prefs/dashboard', [ self::class, 'get_layout' ], [], $for( 'dashboard' ) );
 		$post( '/prefs/dashboard', [ self::class, 'save_layout' ], $for( 'dashboard' ) );
+
+		// Marks and saved views are personal, so anyone who can see the reports can keep their own.
+		$get( '/prefs/marks', [ self::class, 'get_marks' ], [], $any );
+		$post( '/prefs/marks', [ self::class, 'save_marks' ], $any );
+		$get( '/prefs/views', [ self::class, 'get_views' ], [], $any );
+		$post( '/prefs/views', [ self::class, 'save_views' ], $any );
 
 		$get( '/admin/db-stats', [ self::class, 'db_stats' ], [], $admin );
 		$post( '/admin/rebuild', [ self::class, 'rebuild' ], $admin );
@@ -285,6 +294,143 @@ final class API {
 			'hidden' => is_array( $saved ) ? ( $saved['hidden'] ?? [] ) : [],
 			'sizes'  => is_array( $saved ) ? ( $saved['sizes'] ?? [] ) : [],
 		];
+	}
+
+	// ------------------------------------------------------- marks and views
+
+	public static function get_marks(): \WP_REST_Response {
+		return self::ok( [ 'marks' => self::saved_list( 'snn_a_marks' ) ] );
+	}
+
+	/** Replaces the user's marks. Each mark is a day (YYYY-MM-DD) with a short label. */
+	public static function save_marks( \WP_REST_Request $req ): \WP_REST_Response {
+		$marks = [];
+
+		foreach ( self::items( self::body( $req ), 'marks' ) as $mark ) {
+			if ( count( $marks ) >= self::MARK_LIMIT ) {
+				break;
+			}
+			if ( ! is_array( $mark ) ) {
+				continue;
+			}
+
+			$date  = self::text( $mark, 'date' );
+			$label = mb_substr( trim( sanitize_text_field( self::text( $mark, 'label' ) ) ), 0, 80 );
+
+			if ( ! self::is_day( $date ) || $label === '' ) {
+				continue;
+			}
+
+			$marks[] = [ 'id' => self::item_id( $mark ), 'date' => $date, 'label' => $label ];
+		}
+
+		usort( $marks, static fn( array $a, array $b ) => strcmp( $a['date'], $b['date'] ) );
+
+		update_user_meta( get_current_user_id(), 'snn_a_marks', $marks );
+
+		return self::ok( [ 'marks' => $marks ] );
+	}
+
+	public static function get_views(): \WP_REST_Response {
+		return self::ok( [ 'views' => self::saved_list( 'snn_a_views' ) ] );
+	}
+
+	/** Replaces the user's saved views. A view is a stats screen, a name, and the choices behind it. */
+	public static function save_views( \WP_REST_Request $req ): \WP_REST_Response {
+		$views = [];
+
+		foreach ( self::items( self::body( $req ), 'views' ) as $view ) {
+			if ( count( $views ) >= self::VIEW_LIMIT ) {
+				break;
+			}
+			if ( ! is_array( $view ) ) {
+				continue;
+			}
+
+			$page = sanitize_key( self::text( $view, 'page' ) );
+			$name = mb_substr( trim( sanitize_text_field( self::text( $view, 'name' ) ) ), 0, 60 );
+
+			if ( $name === '' || ! self::is_stats_screen( $page ) ) {
+				continue;
+			}
+
+			$views[] = [
+				'id'     => self::item_id( $view ),
+				'name'   => $name,
+				'page'   => $page,
+				'params' => self::view_params( self::items( $view, 'params' ) ),
+			];
+		}
+
+		update_user_meta( get_current_user_id(), 'snn_a_views', $views );
+
+		return self::ok( [ 'views' => $views ] );
+	}
+
+	private static function saved_list( string $meta ): array {
+		$saved = get_user_meta( get_current_user_id(), $meta, true );
+
+		return is_array( $saved ) ? array_values( $saved ) : [];
+	}
+
+	/** The list under $key in a request body, or an empty list when it is missing or not a list. */
+	private static function items( array $body, string $key ): array {
+		return is_array( $body[ $key ] ?? null ) ? $body[ $key ] : [];
+	}
+
+	/** A text field from a request item. Anything that is not a plain value counts as empty. */
+	private static function text( array $item, string $key ): string {
+		return is_scalar( $item[ $key ] ?? null ) ? (string) $item[ $key ] : '';
+	}
+
+	/** Keeps the id the browser gave a mark or view, or makes a new one. */
+	private static function item_id( array $item ): string {
+		$id = substr( preg_replace( '/[^A-Za-z0-9]/', '', self::text( $item, 'id' ) ), 0, 32 );
+
+		return $id !== '' ? $id : wp_generate_password( 12, false );
+	}
+
+	private static function is_day( string $date ): bool {
+		if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date ) ) {
+			return false;
+		}
+
+		[ $year, $month, $day ] = array_map( 'intval', explode( '-', $date ) );
+
+		return checkdate( $month, $day, $year );
+	}
+
+	/** Only the screens that show a date range can be saved as a view. Settings, Import and Realtime cannot. */
+	private static function is_stats_screen( string $page ): bool {
+		return isset( Admin::SCREENS[ $page ] ) && Admin::SCREENS[ $page ][2] === Admin::MENU_CAP && $page !== 'snn-analytics-realtime';
+	}
+
+	/** The choices a saved view remembers. Anything else is dropped. */
+	private static function view_params( array $in ): array {
+		$out = [];
+
+		$range = self::text( $in, 'range' );
+		if ( in_array( $range, [ 'today', '7d', '30d', '90d', '12m', 'custom' ], true ) ) {
+			$out['range'] = $range;
+		}
+
+		foreach ( [ 'from', 'to' ] as $key ) {
+			if ( self::is_day( self::text( $in, $key ) ) ) {
+				$out[ $key ] = self::text( $in, $key );
+			}
+		}
+
+		$ids = array_values( array_filter( array_map( 'intval', explode( ',', self::text( $in, 'ids' ) ) ), static fn( int $id ) => $id > 0 ) );
+		if ( $ids ) {
+			$out['ids'] = implode( ',', array_slice( $ids, 0, 4 ) );
+		}
+
+		$metric = self::text( $in, 'metric' );
+		if ( in_array( $metric, [ 'views', 'visitors' ], true ) ) {
+			$out['metric'] = $metric;
+		}
+
+		return $out;
 	}
 
 	// -------------------------------------------------------------- admin

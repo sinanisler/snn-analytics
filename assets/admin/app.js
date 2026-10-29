@@ -431,6 +431,268 @@
 		]);
 	}
 
+	// ------------------------------------------------- marks and saved views
+
+	var MARK_COLOR = '#b26a00';
+	var MARK_LIMIT = 100;
+	var VIEW_LIMIT = 30;
+	var VIEW_PAGE_LABELS = { 'snn-analytics': 'Dashboard', 'snn-analytics-pages': 'Pages', 'snn-analytics-compare': 'Compare' };
+
+	/** Your date marks, from the server. Anyone who can see the reports can keep their own. */
+	function loadMarks() {
+		return api('prefs/marks').then(function (data) {
+			return data.marks;
+		});
+	}
+
+	/** Where each mark sits on a chart: the index of its day, for the days the chart shows. */
+	function markPositions(dates, marks) {
+		return marks.map(function (mark) {
+			return { index: dates.indexOf(mark.date), label: mark.label };
+		}).filter(function (mark) {
+			return mark.index !== -1;
+		});
+	}
+
+	/** A dashed line and a label for each mark. Drawn after the data, so the lines stay on top. */
+	function markLines(positions) {
+		return {
+			id: 'snnMarks',
+			afterDatasetsDraw: function (chart) {
+				var area = chart.chartArea;
+				var ctx = chart.ctx;
+				ctx.save();
+				ctx.font = '12px ' + window.Chart.defaults.font.family;
+				ctx.textBaseline = 'top';
+				positions.forEach(function (mark, i) {
+					var x = chart.scales.x.getPixelForValue(mark.index);
+					var nearRight = x > area.right - 140;
+					ctx.beginPath();
+					ctx.setLineDash([4, 3]);
+					ctx.strokeStyle = MARK_COLOR;
+					ctx.lineWidth = 1;
+					ctx.moveTo(x, area.top);
+					ctx.lineTo(x, area.bottom);
+					ctx.stroke();
+					ctx.setLineDash([]);
+					ctx.fillStyle = MARK_COLOR;
+					ctx.textAlign = nearRight ? 'right' : 'left';
+					// Labels alternate between two rows, so neighbouring marks do not sit on each other.
+					ctx.fillText(mark.label, x + (nearRight ? -4 : 4), area.top + (i % 2) * 16);
+				});
+				ctx.restore();
+			}
+		};
+	}
+
+	function today() {
+		var d = new Date();
+		return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+	}
+
+	function markDate(day) {
+		return new Date(day + 'T00:00:00').toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
+	}
+
+	/**
+	 * The "Mark a day" control under a chart, with the list of marks. Clicking a day on the chart
+	 * calls open(day) to fill the form in. Saving or removing a mark reloads the view, so the chart
+	 * shows it at once.
+	 */
+	function marksEditor(marks, reload) {
+		var error = h('p', { class: 'snn-a-hint is-error', role: 'alert' });
+		var date = h('input', { type: 'date', 'aria-label': 'Date to mark' });
+		var label = h('input', { type: 'text', maxlength: '80', placeholder: 'What happened that day?', 'aria-label': 'Label for this day' });
+		var form = h('div', { class: 'snn-a-marks-form', hidden: true }, [
+			date,
+			label,
+			h('button', { type: 'button', class: 'button button-primary', onclick: save }, 'Save mark'),
+			h('button', { type: 'button', class: 'button-link', onclick: close }, 'Cancel')
+		]);
+		var toggle = h('button', { type: 'button', class: 'button', 'aria-expanded': 'false', onclick: function () {
+			if (form.hidden) {
+				open(today());
+			} else {
+				close();
+			}
+		} }, '+ Mark a day');
+
+		function open(day) {
+			date.value = day || today();
+			error.textContent = '';
+			form.hidden = false;
+			toggle.setAttribute('aria-expanded', 'true');
+			label.focus();
+		}
+
+		function close() {
+			form.hidden = true;
+			toggle.setAttribute('aria-expanded', 'false');
+			label.value = '';
+			error.textContent = '';
+		}
+
+		function write(list) {
+			error.textContent = '';
+			send('prefs/marks', { marks: list }).then(reload).catch(function (err) {
+				error.textContent = err.message;
+			});
+		}
+
+		function save() {
+			var text = label.value.trim();
+			if (!date.value) {
+				error.textContent = 'Choose a date.';
+			} else if (!text) {
+				error.textContent = 'Write a short label for this day.';
+			} else if (marks.length >= MARK_LIMIT) {
+				error.textContent = 'You can keep up to ' + MARK_LIMIT + ' marks. Remove one first.';
+			} else {
+				write(marks.concat([{ id: '', date: date.value, label: text }]));
+			}
+		}
+
+		function remove(mark) {
+			write(marks.filter(function (m) { return m.id !== mark.id; }));
+		}
+
+		var list = h('ul', { class: 'snn-a-marks-list' }, marks.length
+			? marks.map(function (mark) {
+				return h('li', {}, [
+					h('span', { text: markDate(mark.date) + ' · ' + mark.label }),
+					h('button', { type: 'button', class: 'button-link-delete', 'aria-label': 'Remove mark: ' + mark.label, onclick: function () { remove(mark); } }, 'Remove')
+				]);
+			})
+			: h('li', { class: 'snn-a-muted', text: 'No marks yet.' }));
+
+		return {
+			node: h('div', { class: 'snn-a-marks' }, [
+				h('div', { class: 'snn-a-marks-bar' }, [toggle, h('span', { class: 'snn-a-muted', text: 'Or click a day on the chart.' })]),
+				form,
+				error,
+				list
+			]),
+			open: open
+		};
+	}
+
+	/** "Dashboard · Last 7 days" style text for a saved view's range. */
+	function viewRangeText(params) {
+		return rangeLabel({ range: params.range || '30d', from: params.from || '', to: params.to || '' });
+	}
+
+	function viewUrl(view) {
+		return cfg.pageUrl + view.page + '&' + new URLSearchParams(view.params).toString();
+	}
+
+	/**
+	 * Saved views: a name for the current page, its date range and its choices, so it can be opened
+	 * again later. The list is personal, like the dashboard layout.
+	 */
+	function savedViews() {
+		var views = [];
+		var status = h('span', { class: 'snn-a-muted', role: 'status' });
+		var select = h('select', { 'aria-label': 'Saved views', onchange: sync });
+		var open = h('button', { type: 'button', class: 'button', onclick: function () {
+			var view = views[Number(select.value)];
+			if (view) {
+				window.location.href = viewUrl(view);
+			}
+		} }, 'Open');
+		var remove = h('button', { type: 'button', class: 'button-link-delete', onclick: removeSelected }, 'Delete');
+		var nameInput = h('input', { type: 'text', maxlength: '60', placeholder: 'Name this view', 'aria-label': 'Name for this view' });
+		var form = h('div', { class: 'snn-a-views-form', hidden: true }, [
+			nameInput,
+			h('button', { type: 'button', class: 'button button-primary', onclick: saveCurrent }, 'Save view'),
+			h('button', { type: 'button', class: 'button-link', onclick: function () { form.hidden = true; } }, 'Cancel')
+		]);
+
+		function sync() {
+			var picked = select.value !== '';
+			open.disabled = !picked;
+			remove.disabled = !picked;
+		}
+
+		function fill(list) {
+			views = list;
+			clear(select);
+			select.appendChild(h('option', { value: '', text: views.length ? 'Saved views' : 'No saved views yet' }));
+			views.forEach(function (view, i) {
+				select.appendChild(h('option', { value: String(i), text: view.name + ' · ' + (VIEW_PAGE_LABELS[view.page] || view.page) + ' · ' + viewRangeText(view.params) }));
+			});
+			select.disabled = !views.length;
+			sync();
+		}
+
+		function write(list, done) {
+			send('prefs/views', { views: list }).then(function (data) {
+				fill(data.views);
+				done();
+			}).catch(function (err) {
+				status.textContent = err.message;
+			});
+		}
+
+		function saveCurrent() {
+			var name = nameInput.value.trim();
+			if (!name) {
+				status.textContent = 'Give the view a name.';
+				nameInput.focus();
+				return;
+			}
+			if (views.length >= VIEW_LIMIT) {
+				status.textContent = 'You can keep up to ' + VIEW_LIMIT + ' saved views. Delete one first.';
+				return;
+			}
+
+			var current = currentRange();
+			var params = { range: current.range };
+			if (current.range === 'custom') {
+				params.from = current.from;
+				params.to = current.to;
+			}
+			['ids', 'metric'].forEach(function (key) {
+				if (urlParam(key)) {
+					params[key] = urlParam(key);
+				}
+			});
+
+			var page = urlParam('page') || 'snn-analytics';
+			write(views.concat([{ id: '', name: name, page: page, params: params }]), function () {
+				nameInput.value = '';
+				form.hidden = true;
+				status.textContent = 'Saved.';
+			});
+		}
+
+		function removeSelected() {
+			var view = views[Number(select.value)];
+			if (!view || !window.confirm('Delete the saved view “' + view.name + '”?')) {
+				return;
+			}
+			write(views.filter(function (v) { return v.id !== view.id; }), function () {
+				status.textContent = 'Deleted.';
+			});
+		}
+
+		fill([]);
+		api('prefs/views').then(function (data) {
+			fill(data.views);
+		}).catch(function (err) {
+			status.textContent = 'Could not load saved views: ' + err.message;
+		});
+
+		return h('div', { class: 'snn-a-views-wrap' }, [
+			h('div', { class: 'snn-a-views' }, [h('span', { class: 'snn-a-muted', text: 'Saved views' }), select, open, remove, h('button', { type: 'button', class: 'button', onclick: function () {
+				form.hidden = !form.hidden;
+				if (!form.hidden) {
+					nameInput.focus();
+				}
+			} }, 'Save this view'), status]),
+			form
+		]);
+	}
+
 	// -------------------------------------------------------- components
 
 	function numCol(label) {
@@ -581,7 +843,11 @@
 		return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
 	}
 
-	function lineChart(canvas, labels, sets) {
+	/**
+	 * opts.marks: where the date marks sit (see markPositions). opts.onDayClick(index): called when a day is clicked.
+	 */
+	function lineChart(canvas, labels, sets, opts) {
+		opts = opts || {};
 		var chart = new window.Chart(canvas, {
 			type: 'line',
 			data: {
@@ -611,8 +877,15 @@
 				scales: {
 					x: { grid: { display: false }, ticks: { maxTicksLimit: 8, maxRotation: 0, autoSkipPadding: 12 } },
 					y: { beginAtZero: true, grid: { color: '#f0f0f1' }, ticks: { precision: 0 } }
-				}
-			}
+				},
+				onClick: opts.onDayClick ? function (event, elements, clicked) {
+					var hit = clicked.getElementsAtEventForMode(event, 'index', { intersect: false }, true);
+					if (hit.length) {
+						opts.onDayClick(hit[0].index);
+					}
+				} : undefined
+			},
+			plugins: [markLines(opts.marks || [])]
 		});
 		charts.push(chart);
 		return chart;
@@ -789,7 +1062,7 @@
 			toggle.classList.toggle('button-primary', editing);
 			toggle.setAttribute('aria-expanded', String(editing));
 		} }, 'Edit layout');
-		root.appendChild(h('div', { class: 'snn-a-toolbar' }, [rangeControl(), toggle]));
+		root.appendChild(h('div', { class: 'snn-a-toolbar' }, [rangeControl(), savedViews(), toggle]));
 		root.appendChild(h('p', { class: 'snn-a-caption', text: 'Compared with the previous period of the same length.' }));
 		root.appendChild(kpis);
 		root.appendChild(customize);
@@ -915,14 +1188,21 @@
 		}
 
 		mountCard('chart', 'Traffic over time', period, null, function (content) {
-			return overview.then(function (data) {
+			return Promise.all([overview, loadMarks()]).then(function (loaded) {
+				var data = loaded[0];
+				var dates = data.series.map(function (d) { return d.date; });
 				clear(content);
+				var editor = marksEditor(loaded[1], render);
 				var box = chartBox(300);
+				content.appendChild(editor.node);
 				content.appendChild(box);
 				lineChart(box.querySelector('canvas'), data.series.map(function (d) { return dayLabel(d.date); }), [
 					{ label: 'Visitors', color: COLOR_VISITORS, data: data.series.map(function (d) { return d.visitors; }), fill: true },
 					{ label: 'Views', color: COLOR_VIEWS, data: data.series.map(function (d) { return d.views; }), dash: [4, 3] }
-				]);
+				], {
+					marks: markPositions(dates, loaded[1]),
+					onDayClick: function (index) { editor.open(dates[index]); }
+				});
 			});
 		});
 
@@ -1965,7 +2245,7 @@
 			load();
 		} }, [input, h('button', { type: 'submit', class: 'button' }, 'Search')]);
 
-		root.appendChild(h('div', { class: 'snn-a-toolbar' }, [rangeControl(), form]));
+		root.appendChild(h('div', { class: 'snn-a-toolbar' }, [rangeControl(), savedViews(), form]));
 		root.appendChild(detail);
 		root.appendChild(results);
 
@@ -2050,11 +2330,18 @@
 				])
 			], { sub: row.path, actions: close }));
 			detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
-			api('stats/page-series', Object.assign({}, rp, { id: row.id })).then(function (series) {
+			Promise.all([api('stats/page-series', Object.assign({}, rp, { id: row.id })), loadMarks()]).then(function (loaded) {
+				var series = loaded[0];
+				var dates = series.map(function (d) { return d.date; });
+				var editor = marksEditor(loaded[1], render);
+				canvas.parentNode.insertBefore(editor.node, canvas);
 				lineChart(canvas.querySelector('canvas'), series.map(function (d) { return dayLabel(d.date); }), [
 					{ label: 'Views', color: COLOR_VIEWS, data: series.map(function (d) { return d.views; }), fill: true },
 					{ label: 'Visitors', color: COLOR_VISITORS, data: series.map(function (d) { return d.visitors; }), dash: [4, 3] }
-				]);
+				], {
+					marks: markPositions(dates, loaded[1]),
+					onDayClick: function (index) { editor.open(dates[index]); }
+				});
 			}).catch(function (err) {
 				detail.appendChild(failed(err));
 			});
@@ -3206,12 +3493,13 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 	 */
 	function renderCompare(rp) {
 		var slots = (urlParam('ids') || '').split(',').map(Number).filter(Boolean).slice(0, 4);
-		var chartMetric = 'views';
+		var chartMetric = urlParam('metric') === 'visitors' ? 'visitors' : 'views';
 		var pickers = h('div', { class: 'snn-a-slots' });
 		var results = h('div', {});
 		var pageRows = [];
+		var marks = [];
 
-		root.appendChild(h('div', { class: 'snn-a-toolbar' }, rangeControl()));
+		root.appendChild(h('div', { class: 'snn-a-toolbar' }, [rangeControl(), savedViews()]));
 		root.appendChild(h('p', { class: 'snn-a-caption', text: 'Pick two to four pages. The best value in each row is highlighted, and the arrows show the change against the previous period.' }));
 		root.appendChild(pickers);
 		root.appendChild(results);
@@ -3328,14 +3616,19 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 					type: 'button',
 					class: 'snn-a-seg' + (chartMetric === o[0] ? ' is-active' : ''),
 					'aria-pressed': chartMetric === o[0] ? 'true' : 'false',
-					onclick: function () { chartMetric = o[0]; paint(data); }
+					onclick: function () { chartMetric = o[0]; setUrlParam('metric', o[0] === 'views' ? null : o[0]); paint(data); }
 				}, o[1]);
 			}));
-			results.appendChild(card('Over time', canvas, { sub: 'Per day', actions: seg }));
+			var dates = data[0].series.map(function (d) { return d.date; });
+			var editor = marksEditor(marks, render);
+			results.appendChild(card('Over time', [editor.node, canvas], { sub: 'Per day', actions: seg }));
 			charts.splice(0).forEach(function (chart) { chart.destroy(); });
-			lineChart(canvas.querySelector('canvas'), data[0].series.map(function (d) { return dayLabel(d.date); }), data.map(function (p, i) {
+			lineChart(canvas.querySelector('canvas'), dates.map(dayLabel), data.map(function (p, i) {
 				return { label: SLOT_LETTERS[i] + ' · ' + (p.title || p.path), color: SLOT_COLORS[i], data: p.series.map(function (d) { return d[chartMetric]; }) };
-			}));
+			}), {
+				marks: markPositions(dates, marks),
+				onDayClick: function (index) { editor.open(dates[index]); }
+			});
 		}
 
 		function load() {
@@ -3346,7 +3639,10 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 			}
 			clear(results);
 			results.appendChild(skeleton(6));
-			api('stats/compare', Object.assign({}, rp, { ids: slots.join(',') })).then(paint).catch(function (err) {
+			Promise.all([api('stats/compare', Object.assign({}, rp, { ids: slots.join(',') })), loadMarks()]).then(function (loaded) {
+				marks = loaded[1];
+				paint(loaded[0]);
+			}).catch(function (err) {
 				clear(results);
 				results.appendChild(failed(err, load));
 			});
