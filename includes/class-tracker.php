@@ -294,22 +294,23 @@ final class Tracker {
 		global $wpdb;
 
 		$part = self::trail_part( $hit['s'] );
-		$old  = $part === 0 ? null : $wpdb->get_var( $wpdb->prepare(
+		$old  = $wpdb->get_var( $wpdb->prepare(
 			'SELECT HEX(samples) FROM ' . DB::table( 'trails' ) . ' WHERE view_id = %d',
 			$view['id']
 		) );
 
+		// Chunks can arrive out of order (a parked chunk, a slow request), so they are kept sorted by number.
+		// A chunk number that is already stored is a repeat.
 		if ( $old !== null ) {
-			$old  = strtolower( (string) $old );
-			$last = 0;
-			foreach ( str_split( $old, 12 ) as $sample ) {
-				$last = max( $last, self::trail_part( $sample ) );
-			}
-			if ( $part <= $last || strlen( $old ) + strlen( $hit['s'] ) > self::TRAIL_MAX_HEX ) {
+			$old    = strtolower( (string) $old );
+			$chunks = self::trail_chunks( $old );
+			if ( isset( $chunks[ $part ] ) || strlen( $old ) + strlen( $hit['s'] ) > self::TRAIL_MAX_HEX ) {
 				return;
 			}
+			$chunks[ $part ] = $hit['s'];
+			ksort( $chunks );
 			$wpdb->query( $wpdb->prepare(
-				'UPDATE ' . DB::table( 'trails' ) . ' SET samples = ' . DB::hex( $old . $hit['s'] ) . ' WHERE view_id = %d',
+				'UPDATE ' . DB::table( 'trails' ) . ' SET samples = ' . DB::hex( implode( '', $chunks ) ) . ' WHERE view_id = %d',
 				$view['id']
 			) );
 			return;
@@ -322,6 +323,20 @@ final class Tracker {
 			$session['device'],
 			$now
 		) );
+	}
+
+	/** A stored trail split into its chunks, keyed by chunk number. Each chunk keeps its marker sample. */
+	private static function trail_chunks( string $hex ): array {
+		$chunks = [];
+		$part   = 0;
+		foreach ( str_split( $hex, 12 ) as $sample ) {
+			if ( strncmp( $sample, '7fff', 4 ) === 0 ) {
+				$part = self::trail_part( $sample );
+			}
+			$chunks[ $part ] = ( $chunks[ $part ] ?? '' ) . $sample;
+		}
+
+		return $chunks;
 	}
 
 	/** The chunk number in a marker sample, or 0 for a plain sample (the first chunk has no marker). */
