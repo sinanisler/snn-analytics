@@ -1528,6 +1528,22 @@
 	border-radius: 5px;
 	background: linear-gradient(90deg, #2563eb, #10b981, #facc15, #f97316, #dc2626);
 }
+.snn-a .snn-a-heatcontrols {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px 16px;
+	margin: 0 0 12px;
+}
+.snn-a .snn-a-heat-control {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--sa-muted);
+}
+.snn-a .snn-a-heat-control input[type="range"] {
+	width: 140px;
+}
 .snn-a .snn-a-cursor {
 	position: absolute;
 	width: 22px;

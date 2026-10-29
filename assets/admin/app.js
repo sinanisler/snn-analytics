@@ -773,10 +773,9 @@
 		]);
 	}
 
-	/** Segmented control for the device filter on the heatmap and the trails. */
-	function deviceSegment(current, pick) {
-		var options = [[0, 'All devices'], [1, 'Desktop'], [2, 'Mobile'], [3, 'Tablet']];
-		return h('div', { class: 'snn-a-segment', role: 'group', 'aria-label': 'Device' }, options.map(function (option) {
+	/** Segmented control: one button per [value, label] option, with the current value pressed. */
+	function segment(label, options, current, pick) {
+		return h('div', { class: 'snn-a-segment', role: 'group', 'aria-label': label }, options.map(function (option) {
 			var active = current === option[0];
 			return h('button', {
 				type: 'button',
@@ -785,6 +784,37 @@
 				onclick: function () { pick(option[0]); }
 			}, option[1]);
 		}));
+	}
+
+	/** Segmented control for the device filter on the heatmap and the trails. */
+	function deviceSegment(current, pick) {
+		return segment('Device', [[0, 'All devices'], [1, 'Desktop'], [2, 'Mobile'], [3, 'Tablet']], current, pick);
+	}
+
+	/** A number from the address bar, kept inside its range. Anything missing or not a number gives the fallback. */
+	function numberParam(name, low, high, fallback) {
+		var raw = urlParam(name);
+		var value = raw === null || raw === '' ? NaN : Number(raw);
+		return isNaN(value) ? fallback : Math.min(high, Math.max(low, value));
+	}
+
+	/** The heat map look, read from the address bar so a view can be shared. Missing values use the defaults. */
+	function readHeatLook() {
+		var palette = urlParam('hpal');
+		return {
+			style: urlParam('hstyle') === 'dots' ? 'dots' : HEAT_LOOK.style,
+			palette: Object.prototype.hasOwnProperty.call(HEAT_PALETTES, palette) ? palette : HEAT_LOOK.palette,
+			opacity: numberParam('hop', 10, 100, HEAT_LOOK.opacity),
+			size: numberParam('hsize', 50, 250, HEAT_LOOK.size),
+			min: numberParam('hmin', 1, 20, HEAT_LOOK.min)
+		};
+	}
+
+	/** Writes the look to the address bar. Values left at their default are removed, so the link stays short. */
+	function saveHeatLook(look) {
+		Object.keys(HEAT_LOOK_PARAMS).forEach(function (key) {
+			setUrlParam(HEAT_LOOK_PARAMS[key], look[key] === HEAT_LOOK[key] ? null : look[key]);
+		});
 	}
 
 	function card(title, body, opts) {
@@ -1646,31 +1676,70 @@
 		};
 	}
 
-	/** Blue to red, by how many clicks a spot has compared with the busiest one. */
-	var HEAT_STOPS = [[0, [37, 99, 235]], [0.35, [16, 185, 129]], [0.6, [250, 204, 21]], [0.8, [249, 115, 22]], [1, [220, 38, 38]]];
+	/**
+	 * Colour schemes for the heat map. Each runs from the fewest clicks (first stop) to the most (last).
+	 * The classic one is blue to red, by how many clicks a spot has compared with the busiest one.
+	 */
+	var HEAT_PALETTES = {
+		classic: { label: 'Blue to red', stops: [[0, [37, 99, 235]], [0.35, [16, 185, 129]], [0.6, [250, 204, 21]], [0.8, [249, 115, 22]], [1, [220, 38, 38]]] },
+		fire: { label: 'Yellow to dark red', stops: [[0, [254, 240, 138]], [0.5, [249, 115, 22]], [1, [127, 29, 29]]] },
+		ocean: { label: 'Light to navy', stops: [[0, [186, 230, 253]], [0.5, [14, 165, 233]], [1, [30, 27, 75]]] },
+		mono: { label: 'One colour', stops: [[0, [191, 219, 254]], [1, [29, 78, 216]]] }
+	};
+	var HEAT_LOOK = { style: 'heat', palette: 'classic', opacity: 80, size: 100, min: 1 };
+	var HEAT_LOOK_PARAMS = { style: 'hstyle', palette: 'hpal', opacity: 'hop', size: 'hsize', min: 'hmin' };
 
-	function heatColor(v) {
-		for (var i = 1; i < HEAT_STOPS.length; i++) {
-			if (v <= HEAT_STOPS[i][0]) {
-				var a = HEAT_STOPS[i - 1];
-				var b = HEAT_STOPS[i];
+	function heatColor(stops, v) {
+		for (var i = 1; i < stops.length; i++) {
+			if (v <= stops[i][0]) {
+				var a = stops[i - 1];
+				var b = stops[i];
 				var f = (v - a[0]) / (b[0] - a[0]);
 				return a[1].map(function (c, k) { return Math.round(c + (b[1][k] - c) * f); });
 			}
 		}
-		return HEAT_STOPS[HEAT_STOPS.length - 1][1];
+		return stops[stops.length - 1][1];
+	}
+
+	function paletteGradient(palette) {
+		return 'linear-gradient(90deg, ' + palette.stops.map(function (stop) {
+			return 'rgb(' + stop[1].join(',') + ') ' + Math.round(stop[0] * 100) + '%';
+		}).join(', ') + ')';
 	}
 
 	/**
-	 * Each cell adds a soft spot to an alpha layer; the summed alpha is then mapped to colours, so
-	 * spots that overlap get hotter instead of just darker.
+	 * Heat: each cell adds a soft spot to an alpha layer; the summed alpha is then mapped to colours, so
+	 * spots that overlap get hotter instead of just darker. Dots: each cell is a solid disc instead.
+	 * look: style, palette, opacity (%), size (% of the default) and min (hide cells with fewer clicks).
 	 */
-	function drawHeat(ctx, width, cells, max) {
+	function drawHeat(ctx, width, cells, max, look) {
+		var palette = HEAT_PALETTES[look.palette] || HEAT_PALETTES.classic;
+		var shown = cells.filter(function (cell) { return cell[2] >= look.min; });
 		var colW = width / 50;
-		var radius = Math.max(18, colW * 1.4);
+		var scale = look.size / 100;
+		var opacity = look.opacity / 100;
+
+		if (look.style === 'dots') {
+			var dot = Math.max(3, colW * 0.5 * scale);
+			ctx.save();
+			// Quietest first, so the busiest dots are drawn on top.
+			shown.slice().reverse().forEach(function (cell) {
+				var x = (cell[0] + 0.5) * colW;
+				var y = cell[1] * 40 + 20;
+				var rgb = heatColor(palette.stops, Math.sqrt(cell[2] / max));
+				ctx.fillStyle = 'rgba(' + rgb.join(',') + ',' + opacity.toFixed(3) + ')';
+				ctx.beginPath();
+				ctx.arc(x, y, dot, 0, Math.PI * 2);
+				ctx.fill();
+			});
+			ctx.restore();
+			return;
+		}
+
+		var radius = Math.max(18, colW * 1.4) * scale;
 		ctx.save();
 		ctx.globalCompositeOperation = 'source-over';
-		cells.forEach(function (cell) {
+		shown.forEach(function (cell) {
 			var x = (cell[0] + 0.5) * colW;
 			var y = cell[1] * 40 + 20;
 			var strength = Math.max(0.08, Math.sqrt(cell[2] / max));
@@ -1689,11 +1758,11 @@
 			if (!alpha) {
 				continue;
 			}
-			var rgb = heatColor(Math.min(1, alpha / 255));
+			var rgb = heatColor(palette.stops, Math.min(1, alpha / 255));
 			px[i] = rgb[0];
 			px[i + 1] = rgb[1];
 			px[i + 2] = rgb[2];
-			px[i + 3] = Math.min(210, 60 + alpha);
+			px[i + 3] = Math.min(255, 60 + alpha) * opacity;
 		}
 		ctx.putImageData(image, 0, 0);
 	}
@@ -1755,7 +1824,7 @@
 
 	/** Shared shell for the heatmap and trail screens: range, page and device, then the stage. */
 	function mapScreen(rp, kind) {
-		var state = { page: Number(urlParam('pid')) || 0, device: Number(urlParam('device')) || 0, showPage: true };
+		var state = { page: Number(urlParam('pid')) || 0, device: Number(urlParam('device')) || 0, showPage: true, look: readHeatLook() };
 		var rows = [];
 		var bar = h('div', { class: 'snn-a-toolbar' });
 		var body = h('div', {}, skeleton(6));
@@ -1839,16 +1908,64 @@
 				return;
 			}
 			var lowest = data.cells.reduce(function (most, c) { return Math.max(most, c[1]); }, 0);
+			var look = state.look;
+			var scale = h('span', { class: 'snn-a-heatscale', 'aria-hidden': 'true' });
+			var controls = h('div', { class: 'snn-a-heatcontrols' });
+
+			function setLook(key, value) {
+				look[key] = value;
+				saveHeatLook(look);
+				scale.style.background = paletteGradient(HEAT_PALETTES[look.palette]);
+				if (stage) {
+					stage.redraw();
+				}
+			}
+
+			function slider(label, key, low, high, unit) {
+				var out = h('span', { class: 'snn-a-muted', text: look[key] + unit });
+				var input = h('input', { type: 'range', min: String(low), max: String(high), step: '1', value: String(look[key]), oninput: function () {
+					out.textContent = input.value + unit;
+					setLook(key, Number(input.value));
+				} });
+				return h('label', { class: 'snn-a-heat-control' }, [h('span', { text: label }), input, out]);
+			}
+
+			function reset() {
+				Object.keys(HEAT_LOOK).forEach(function (key) { setLook(key, HEAT_LOOK[key]); });
+				drawControls();
+			}
+
+			function drawControls() {
+				var colours = h('select', { 'aria-label': 'Colours', onchange: function () { setLook('palette', colours.value); } },
+					Object.keys(HEAT_PALETTES).map(function (key) {
+						return h('option', { value: key, text: HEAT_PALETTES[key].label, selected: key === look.palette ? true : null });
+					}));
+				clear(controls);
+				controls.appendChild(segment('Style', [['heat', 'Heat'], ['dots', 'Dots']], look.style, function (value) {
+					setLook('style', value);
+					drawControls();
+				}));
+				controls.appendChild(h('label', { class: 'snn-a-heat-control' }, [h('span', { text: 'Colours' }), colours]));
+				controls.appendChild(slider('Opacity', 'opacity', 10, 100, '%'));
+				controls.appendChild(slider('Size', 'size', 50, 250, '%'));
+				controls.appendChild(slider('Hide spots under', 'min', 1, 20, ' clicks'));
+				controls.appendChild(h('button', { type: 'button', class: 'button', onclick: reset }, 'Reset look'));
+			}
+
 			body.appendChild(intro(row, n(data.total) + ' clicks in this range'));
+			drawControls();
+			body.appendChild(controls);
+			scale.style.background = paletteGradient(HEAT_PALETTES[look.palette]);
 			body.appendChild(h('div', { class: 'snn-a-heatlegend' }, [
 				h('span', { text: 'Fewer clicks' }),
-				h('span', { class: 'snn-a-heatscale', 'aria-hidden': 'true' }),
+				scale,
 				h('span', { text: 'More clicks' })
 			]));
 			stage = pageStage(row.path, state.device, function (ctx, width) {
-				drawHeat(ctx, width, data.cells, data.max);
+				drawHeat(ctx, width, data.cells, data.max, look);
 			}, { minHeight: (lowest + 2) * 40, showPage: state.showPage });
 			body.appendChild(stage.el);
+			body.appendChild(h('p', { class: 'snn-a-muted snn-a-stage-note', text: 'Each spot covers 2% of the page width and 40 px of height, so a click can sit up to about 20 px from its spot.' }));
 			body.appendChild(note());
 		}
 
