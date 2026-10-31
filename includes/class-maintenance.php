@@ -157,6 +157,7 @@ final class Maintenance {
 
 	const HISTORY      = 'snn_a_db_history';
 	const HISTORY_DAYS = 180;
+	const PROJECT_DAYS = 365;
 
 	/** Every plugin table with the group it is shown under on the Settings screen. */
 	const TABLE_GROUPS = [
@@ -164,6 +165,7 @@ final class Maintenance {
 		'Lookups'       => [ 'pages', 'referrers', 'campaigns', 'utm_values', 'countries', 'cities', 'ua' ],
 		'Daily totals'  => [ 'd_site', 'd_pages', 'd_refs', 'd_geo', 'd_devices', 'd_camps', 'd_goals' ],
 		'Configuration' => [ 'goals', 'funnels', 'funnel_steps' ],
+		'Debug log'     => [ 'debug_log' ],
 	];
 
 	/**
@@ -171,6 +173,7 @@ final class Maintenance {
 	 * today's snapshot, so the history fills in even when the daily job has not run yet.
 	 *
 	 * Sizes come from information_schema and are null where the database cannot report them (SQLite).
+	 * Growth and the projection are worked out here too, so the Settings screen only shows them.
 	 */
 	public static function db_stats(): array {
 		global $wpdb;
@@ -201,6 +204,9 @@ final class Maintenance {
 		$total_rows  = 0;
 		$sized       = $info !== [];
 
+		// Bytes by how the table ages, which decides how it grows. See project().
+		$by_age = [ 'raw' => 0, 'trails' => 0, 'capped' => 0, 'growing' => 0 ];
+
 		foreach ( $names as $full => [ $group, $short ] ) {
 			$est = isset( $info[ $full ] ) ? (int) $info[ $full ]['estimate'] : null;
 
@@ -222,8 +228,21 @@ final class Maintenance {
 			$data  = $sized && isset( $info[ $full ] ) ? (int) $info[ $full ]['data_bytes'] : null;
 			$index = $sized && isset( $info[ $full ] ) ? (int) $info[ $full ]['index_bytes'] : null;
 
-			$total_bytes += (int) $data + (int) $index;
+			$bytes        = (int) $data + (int) $index;
+			$total_bytes += $bytes;
 			$total_rows  += $rows;
+
+			// Raw rows and trails leave after their retention, and the debug log is capped by row count.
+			// Everything else only grows.
+			if ( isset( self::RAW[ $short ] ) ) {
+				$by_age['raw'] += $bytes;
+			} elseif ( $short === 'trails' ) {
+				$by_age['trails'] += $bytes;
+			} elseif ( $short === 'debug_log' ) {
+				$by_age['capped'] += $bytes;
+			} else {
+				$by_age['growing'] += $bytes;
+			}
 
 			$tables[] = [
 				'name'   => $short,
@@ -242,7 +261,64 @@ final class Maintenance {
 			$tables = array_map( static fn( $t ) => [ 'data' => null, 'index' => null, 'bytes' => null ] + $t, $tables );
 		}
 
-		$history = self::snapshot( $sized ? $total_bytes : null, $total_rows );
+		$oldest = [ 'raw' => null, 'trails' => null ];
+		if ( $sized ) {
+			foreach ( self::RAW as $table => $column ) {
+				$min = $wpdb->get_var( "SELECT MIN({$column}) FROM " . DB::table( $table ) );
+				if ( $min !== null ) {
+					$oldest['raw'] = $oldest['raw'] === null ? (int) $min : min( $oldest['raw'], (int) $min );
+				}
+			}
+			$min              = $wpdb->get_var( 'SELECT MIN(created_at) FROM ' . DB::table( 'trails' ) );
+			$oldest['trails'] = $min === null ? null : (int) $min;
+		}
+
+		$history = self::snapshot( $sized ? $total_bytes : null, $total_rows, $sized ? $by_age['growing'] : null );
+
+		// Growth uses every reading in the history, not only the first and the last.
+		$bytes_points   = [];
+		$rows_points    = [];
+		$growing_points = [];
+		foreach ( $history as $row ) {
+			$rows_points[] = [ $row['day'], $row['rows'] ];
+			if ( $row['bytes'] !== null ) {
+				$bytes_points[] = [ $row['day'], $row['bytes'] ];
+			}
+			if ( $row['growing'] !== null ) {
+				$growing_points[] = [ $row['day'], $row['growing'] ];
+			}
+		}
+
+		$growth     = [ 'bytes_per_day' => null, 'rows_per_day' => self::slope( $rows_points ) ];
+		$projection = null;
+
+		if ( $sized ) {
+			$settings                = Settings::get();
+			$months                  = (int) $settings['retention_months'];
+			$growth['bytes_per_day'] = self::slope( $bytes_points );
+			$growing_rate            = self::slope( $growing_points );
+
+			// The projection needs the growing tables' own rate, which the history only has from the second day.
+			if ( $growing_rate !== null ) {
+				$windows = [
+					[
+						'bytes'  => $by_age['raw'],
+						'window' => $months > 0 ? $months * 30.44 : 0,
+						'age'    => self::age_days( $oldest['raw'] ),
+					],
+					[
+						'bytes'  => $by_age['trails'],
+						'window' => max( 1, (int) $settings['cursor_retention_days'] ),
+						'age'    => self::age_days( $oldest['trails'] ),
+					],
+				];
+
+				$projection = [
+					'days'  => self::PROJECT_DAYS,
+					'bytes' => self::project( $by_age['growing'], $growing_rate, $by_age['capped'], $windows, self::PROJECT_DAYS ),
+				];
+			}
+		}
 
 		$views = DB::table( 'views' );
 		$first = $wpdb->get_var( "SELECT MIN(created_at) FROM {$views}" );
@@ -253,16 +329,18 @@ final class Maintenance {
 			'total_rows'  => $total_rows,
 			'oldest_view' => $first ? (int) $first : null,
 			'history'     => $history,
+			'growth'      => $growth,
+			'projection'  => $projection,
 		];
 	}
 
 	/** Saves today's totals into the history and returns it, oldest first. Only the latest reading of a day is kept. */
-	public static function snapshot( ?int $bytes = null, ?int $rows = null ): array {
+	public static function snapshot( ?int $bytes = null, ?int $rows = null, ?int $growing = null ): array {
 		$history = Store::read( self::HISTORY );
 		$today   = Ranges::day_of( time() );
 
 		if ( $rows !== null ) {
-			$history[ $today ] = [ 'bytes' => $bytes, 'rows' => $rows ];
+			$history[ $today ] = [ 'bytes' => $bytes, 'rows' => $rows, 'growing' => $growing ];
 		}
 
 		krsort( $history );
@@ -276,13 +354,68 @@ final class Maintenance {
 		$out = [];
 		foreach ( $history as $day => $entry ) {
 			$out[] = [
-				'date'  => gmdate( 'Y-m-d', (int) $day * 86400 ),
-				'bytes' => isset( $entry['bytes'] ) ? (int) $entry['bytes'] : null,
-				'rows'  => (int) ( $entry['rows'] ?? 0 ),
+				'day'     => (int) $day,
+				'date'    => gmdate( 'Y-m-d', (int) $day * 86400 ),
+				'bytes'   => isset( $entry['bytes'] ) ? (int) $entry['bytes'] : null,
+				'rows'    => (int) ( $entry['rows'] ?? 0 ),
+				'growing' => isset( $entry['growing'] ) ? (int) $entry['growing'] : null,
 			];
 		}
 
 		return $out;
+	}
+
+	/**
+	 * Least-squares slope of the points: the change per day across all of them. Points are [day, value].
+	 * Null with fewer than two days.
+	 */
+	public static function slope( array $points ): ?float {
+		$count = count( $points );
+		if ( $count < 2 ) {
+			return null;
+		}
+
+		$mean_x = array_sum( array_column( $points, 0 ) ) / $count;
+		$mean_y = array_sum( array_column( $points, 1 ) ) / $count;
+		$num    = 0.0;
+		$den    = 0.0;
+
+		foreach ( $points as [ $x, $y ] ) {
+			$num += ( $x - $mean_x ) * ( $y - $mean_y );
+			$den += ( $x - $mean_x ) ** 2;
+		}
+
+		return $den > 0 ? $num / $den : null;
+	}
+
+	/**
+	 * Size in $days from what is measured now.
+	 *
+	 * Growing tables keep their measured rate. A windowed table keeps the average it has per day of history it
+	 * holds, and stops adding once that history fills its window. Capped tables do not change.
+	 * Under a day of history counts as a day, so a few hours of data cannot turn into a large daily rate.
+	 *
+	 * @param array<int, array{bytes: int, window: float, age: float}> $windows Current bytes, window in days (0 keeps
+	 *                                                                           everything) and age of the oldest row in days.
+	 */
+	public static function project( int $growing, float $rate, int $capped, array $windows, int $days ): int {
+		$total = $growing + $rate * $days + $capped;
+
+		foreach ( $windows as $w ) {
+			$held_now = max( 1.0, self::held( $w['age'], $w['window'] ) );
+			$total   += $w['bytes'] * self::held( $w['age'] + $days, $w['window'] ) / $held_now;
+		}
+
+		return (int) max( 0, round( $total ) );
+	}
+
+	/** Days of history a window holds: its age, capped at the window. */
+	private static function held( float $age, float $window ): float {
+		return $window > 0 ? min( $age, $window ) : $age;
+	}
+
+	private static function age_days( ?int $oldest ): float {
+		return $oldest === null ? 0.0 : max( 0.0, ( time() - $oldest ) / 86400 );
 	}
 
 	/** Removes everything on uninstall when the admin asked for it. */

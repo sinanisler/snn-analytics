@@ -495,6 +495,44 @@
 	min-width: 0;
 }
 
+/* Folding cards: the header is the toggle. Closed, only the header shows. */
+.snn-a .snn-a-card.snn-a-card-collapsible {
+	padding-bottom: 0;
+}
+.snn-a .snn-a-collapse > summary {
+	list-style: none;
+	cursor: pointer;
+}
+.snn-a .snn-a-collapse > summary::-webkit-details-marker {
+	display: none;
+}
+.snn-a .snn-a-collapse > summary:focus-visible {
+	outline: 2px solid var(--sa-accent);
+	outline-offset: 2px;
+	border-radius: 4px;
+}
+.snn-a .snn-a-collapse:not([open]) > summary {
+	border-bottom: 0;
+	padding-bottom: 18px;
+}
+.snn-a .snn-a-collapse[open] > .snn-a-card-body {
+	padding-bottom: 20px;
+}
+.snn-a .snn-a-chev {
+	flex: none;
+	width: 7px;
+	height: 7px;
+	margin: 7px 4px 0 12px;
+	border-right: 2px solid var(--sa-muted);
+	border-bottom: 2px solid var(--sa-muted);
+	transform: rotate(45deg);
+	transition: transform .15s ease;
+}
+.snn-a .snn-a-collapse[open] > summary .snn-a-chev {
+	margin-top: 10px;
+	transform: rotate(-135deg);
+}
+
 /* ------------------------------------------------------------ tables */
 
 .snn-a .snn-a-scroll {

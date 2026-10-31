@@ -839,6 +839,28 @@
 		return section;
 	}
 
+	/** A card whose header folds the body away. onOpen runs once, the first time the card opens. */
+	function collapsibleCard(title, sub, body, onOpen) {
+		var details = h('details', { class: 'snn-a-collapse' }, [
+			h('summary', { class: 'snn-a-card-head' }, [
+				h('span', { class: 'snn-a-card-title' }, [
+					h('h2', { text: title }),
+					h('span', { class: 'snn-a-card-sub', text: sub })
+				]),
+				h('span', { class: 'snn-a-chev', 'aria-hidden': 'true' })
+			]),
+			h('div', { class: 'snn-a-card-body' }, body)
+		]);
+		details.addEventListener('toggle', function () {
+			if (details.open && onOpen) {
+				var run = onOpen;
+				onOpen = null;
+				run();
+			}
+		});
+		return h('section', { class: 'snn-a-card snn-a-card-collapsible', 'aria-label': title }, details);
+	}
+
 	function kpi(label, value, delta) {
 		return h('div', { class: 'snn-a-kpi' }, [
 			h('div', { class: 'snn-a-kpi-label' }, [label, tipFor(label)]),
@@ -3811,6 +3833,13 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 		return (Math.round(bytes / 107374182.4) / 10) + ' GB';
 	}
 
+	/** A change per day. Shrinking shows a minus sign instead of being hidden as zero. */
+	function rateText(perDay, sized) {
+		var amount = Math.abs(perDay);
+		var text = sized ? bytesText(amount) : n(Math.round(amount)) + ' rows';
+		return perDay <= -1 ? '−' + text : text;
+	}
+
 	/** Size and row count of every table, and how the total has grown day by day. */
 	function databaseCard() {
 		var body = h('div', {}, skeleton(5));
@@ -3820,33 +3849,38 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 			var history = data.history || [];
 			var sized = data.total_bytes !== null;
 			var measure = sized ? 'bytes' : 'rows';
-			var first = history[0];
-			var last = history[history.length - 1];
-			var span = history.length > 1
-				? Math.max(1, Math.round((Date.parse(last.date) - Date.parse(first.date)) / 86400000))
-				: 0;
-			var perDay = span ? (last[measure] - first[measure]) / span : null;
+			// The server works out the growth from every reading and the projection from the table rates.
+			var growth = sized ? data.growth.bytes_per_day : data.growth.rows_per_day;
 
 			var facts = [
 				['Total size', sized ? bytesText(data.total_bytes) : 'Not reported by this database'],
 				['Total rows', n(data.total_rows)],
 				['Oldest visit', data.oldest_view ? new Date(data.oldest_view * 1000).toLocaleDateString() : 'None yet'],
-				['Growth per day', perDay === null ? 'Needs two days of history' : (sized ? bytesText(Math.max(0, perDay)) : n(Math.max(0, Math.round(perDay))) + ' rows')]
+				['Net growth per day', growth === null ? 'Needs two days of history' : rateText(growth, sized)]
 			];
-			if (perDay !== null && sized && perDay > 0 && data.total_bytes) {
-				facts.push(['In 12 months', '≈ ' + bytesText(data.total_bytes + perDay * 365)]);
+			if (data.projection) {
+				facts.push(['In 12 months', '≈ ' + bytesText(data.projection.bytes)]);
 			}
 
 			body.appendChild(h('dl', { class: 'snn-a-facts' }, facts.map(function (f) {
 				return h('div', {}, [h('dt', { text: f[0] }), h('dd', { text: f[1] })]);
 			})));
+			if (data.projection) {
+				body.appendChild(h('p', { class: 'snn-a-hint', text: 'Assumes the current growth continues. Raw visits and trails stop growing once they fill their retention period.' }));
+			}
 
 			if (history.length > 1) {
 				var canvas = chartBox(180);
-				body.appendChild(h('p', { class: 'snn-a-caption', text: sized ? 'Database size per day' : 'Rows per day' }));
+				body.appendChild(h('p', { class: 'snn-a-caption', text: sized ? 'Database size by day' : 'Total rows by day' }));
 				body.appendChild(canvas);
 				lineChart(canvas.querySelector('canvas'), history.map(function (d) { return dayLabel(d.date); }), [
-					{ label: sized ? 'MB' : 'Rows', color: ACCENT, fill: true, data: history.map(function (d) { return sized ? Math.round(d.bytes / 10485.76) / 100 : d.rows; }) }
+					{ label: sized ? 'MB' : 'Rows', color: ACCENT, fill: true, data: history.map(function (d) {
+						if (!sized) {
+							return d.rows;
+						}
+						// A day without a size reading is a gap in the line, not an empty database.
+						return d.bytes === null ? null : Math.round(d.bytes / 10485.76) / 100;
+					}) }
 				]);
 			} else {
 				body.appendChild(h('p', { class: 'snn-a-hint', text: 'The size is recorded once a day. The growth chart appears after the second day.' }));
@@ -3891,9 +3925,8 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 			});
 		}
 
-		load();
-
-		return card('Database', body, { sub: 'How much space your statistics use and how fast they grow. Row counts marked ≈ are estimates.' });
+		// Folded by default. The numbers are fetched the first time someone opens it.
+		return collapsibleCard('Database', 'How much space your statistics use and how fast they grow. Row counts marked ≈ are estimates.', body, load);
 	}
 
 	// --------------------------------------------------------------- start
