@@ -47,8 +47,10 @@ final class Menu_Icons {
 			return 'dashicons-' . $icon['dashicon'];
 		}
 
+		// svg-painter.js rewrites every fill="..." in a menu icon to the menu colour, which fills the outline.
+		// fill-opacity keeps the fill invisible, and the painter leaves it alone.
 		$svg = sprintf(
-			'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="%d" stroke-linecap="round" stroke-linejoin="round">%s</svg>',
+			'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill-opacity="0" stroke="#fff" stroke-width="%d" stroke-linecap="round" stroke-linejoin="round">%s</svg>',
 			$icon['stroke'],
 			$icon['paths']
 		);
