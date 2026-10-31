@@ -310,7 +310,17 @@ final class Admin {
 
 			<?php self::section( 'Appearance', 'How SNN Analytics looks in the WordPress admin.' ); ?>
 				<?php self::row( 'Menu icon', 'The icon beside SNN Analytics in the admin menu. Dashicons follow the menu colours. The outline icons are always white.' ); ?>
-					<fieldset class="snn-a-icons">
+					<?php $current = Menu_Icons::sanitize( (string) $s['menu_icon'] ); $now = Menu_Icons::ICONS[ $current ]; ?>
+					<details class="snn-a-icon-picker">
+						<summary class="snn-a-icon-current">
+							<span class="snn-a-icon-chip"><?php echo Menu_Icons::preview( $current ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- built and escaped by Menu_Icons::preview. ?></span>
+							<span class="snn-a-icon-text">
+								<span class="snn-a-icon-name"><?php echo esc_html( $now['label'] ); ?></span>
+								<span class="snn-a-icon-source"><?php echo esc_html( $now['source'] ); ?></span>
+							</span>
+							<span class="snn-a-chev" aria-hidden="true"></span>
+						</summary>
+						<fieldset class="snn-a-icons">
 						<legend class="screen-reader-text">Menu icon</legend>
 						<?php foreach ( Menu_Icons::ICONS as $key => $icon ) : ?>
 							<label class="snn-a-icon">
@@ -325,6 +335,7 @@ final class Admin {
 							</label>
 						<?php endforeach; ?>
 					</fieldset>
+					</details>
 				<?php self::row_end(); ?>
 			</section>
 

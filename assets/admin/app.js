@@ -4047,6 +4047,41 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 		}
 	}
 
+	/**
+	 * Menu icon picker on Settings. The closed picker shows the chosen icon. Picking another one
+	 * shows it there and closes the list. Save settings still has to be pressed to keep it.
+	 */
+	function initIconPicker() {
+		document.addEventListener('change', function (event) {
+			var input = event.target;
+			var picker = input.closest ? input.closest('.snn-a-icon-picker') : null;
+			if (!picker) {
+				return;
+			}
+			var option = input.closest('.snn-a-icon');
+			var shown = picker.querySelector('.snn-a-icon-current');
+			shown.querySelector('.snn-a-icon-chip').replaceWith(option.querySelector('.snn-a-icon-chip').cloneNode(true));
+			shown.querySelector('.snn-a-icon-name').textContent = option.querySelector('.snn-a-icon-name').textContent;
+			shown.querySelector('.snn-a-icon-source').textContent = option.querySelector('.snn-a-icon-source').textContent;
+			picker.open = false;
+		});
+	}
+	/** Closes every open icon picker, except one that contains the element passed in. */
+	function closeIconPickers(keep) {
+		document.querySelectorAll('.snn-a-icon-picker[open]').forEach(function (picker) {
+			if (!picker.contains(keep)) {
+				picker.open = false;
+			}
+		});
+	}
+	document.addEventListener('click', function (event) { closeIconPickers(event.target); });
+	document.addEventListener('keydown', function (event) {
+		if (event.key === 'Escape') {
+			closeIconPickers(null);
+		}
+	});
+	initIconPicker();
+
 	if (root && root.getAttribute('data-view') === 'settings') {
 		clear(root);
 		if (tools) {
