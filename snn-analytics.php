@@ -20,7 +20,7 @@ foreach ( [
 	'class-store', 'class-settings', 'class-db', 'class-validator', 'class-ua', 'class-bot',
 	'class-mmdb', 'class-geo', 'class-ranges', 'class-goals', 'class-debug', 'class-tracker', 'class-frontend',
 	'class-rest', 'class-rollup', 'class-stats', 'class-access', 'class-api', 'class-maintenance', 'class-importer', 'class-importer-burst', 'class-scale',
-	'class-admin', 'class-widget',
+	'class-menu-icons', 'class-admin', 'class-widget',
 ] as $snn_a_file ) {
 	require_once __DIR__ . '/includes/' . $snn_a_file . '.php';
 }

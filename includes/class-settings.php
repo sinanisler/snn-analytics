@@ -32,6 +32,7 @@ final class Settings {
 			'tz_offset'           => 0,      // site UTC offset in seconds, kept current so the tracker can number days
 			'debug_until'         => 0,      // unix time debug mode switches itself off; 0 is off
 			'role_access'         => [],     // feature => roles allowed to see it (administrators always can)
+			'menu_icon'           => Menu_Icons::DEFAULT, // admin menu icon, a key of Menu_Icons::ICONS
 		];
 	}
 

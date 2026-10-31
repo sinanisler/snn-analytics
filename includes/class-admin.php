@@ -14,9 +14,6 @@ final class Admin {
 	const MANAGE_CAP    = 'manage_options';
 	const SLUG          = 'snn-analytics';
 
-	/** Menu icon: Lucide chart-no-axes-combined (ISC). The stroke is white, like the other menu icons. */
-	const MENU_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16v5"/><path d="M16 14.639V21"/><path d="M20 10.656V21"/><path d="m22 3-8.646 8.646a.5.5 0 0 1-.708 0L9.354 8.354a.5.5 0 0 0-.707 0L2 15"/><path d="M4 18.463V21"/><path d="M8 14.656V21"/></svg>';
-
 	/** Dashboard cards, in default order. Users can reorder and hide them. */
 	const CARDS = [ 'chart', 'realtime', 'geo', 'pages', 'newreturning', 'devices', 'sources', 'recent', 'campaigns', 'goals' ];
 
@@ -111,13 +108,8 @@ final class Admin {
 		}
 	}
 
-	/** WordPress draws a base64 SVG as a background image, so the colour is set inside the SVG. */
-	public static function menu_icon(): string {
-		return 'data:image/svg+xml;base64,' . base64_encode( self::MENU_ICON_SVG );
-	}
-
 	public static function menu(): void {
-		add_menu_page( 'SNN Analytics', 'SNN Analytics', self::MENU_CAP, self::SLUG, [ self::class, 'screen' ], self::menu_icon(), 3 );
+		add_menu_page( 'SNN Analytics', 'SNN Analytics', self::MENU_CAP, self::SLUG, [ self::class, 'screen' ], Menu_Icons::value( Settings::get()['menu_icon'] ), 3 );
 
 		foreach ( self::SCREENS as $slug => [ $view, $title, $cap ] ) {
 			// An empty parent keeps a top-bar screen reachable by URL without listing it in the sidebar.
@@ -316,6 +308,26 @@ final class Admin {
 			<input type="hidden" name="action" value="snn_a_save_settings">
 			<?php wp_nonce_field( 'snn_a_save_settings' ); ?>
 
+			<?php self::section( 'Appearance', 'How SNN Analytics looks in the WordPress admin.' ); ?>
+				<?php self::row( 'Menu icon', 'The icon beside SNN Analytics in the admin menu. Dashicons follow the menu colours. The outline icons are always white.' ); ?>
+					<fieldset class="snn-a-icons">
+						<legend class="screen-reader-text">Menu icon</legend>
+						<?php foreach ( Menu_Icons::ICONS as $key => $icon ) : ?>
+							<label class="snn-a-icon">
+								<input type="radio" name="menu_icon" value="<?php echo esc_attr( $key ); ?>" <?php checked( $s['menu_icon'], $key ); ?>>
+								<span class="snn-a-icon-box">
+									<span class="snn-a-icon-chip"><?php echo Menu_Icons::preview( $key ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- built and escaped by Menu_Icons::preview. ?></span>
+									<span class="snn-a-icon-text">
+										<span class="snn-a-icon-name"><?php echo esc_html( $icon['label'] ); ?></span>
+										<span class="snn-a-icon-source"><?php echo esc_html( $icon['source'] ); ?></span>
+									</span>
+								</span>
+							</label>
+						<?php endforeach; ?>
+					</fieldset>
+				<?php self::row_end(); ?>
+			</section>
+
 			<?php self::section( 'Privacy and tracking', 'Decide who is counted and how visitors are recognised.' ); ?>
 				<?php self::row( 'Visitor salt rotation', 'Visitors are identified by a salted hash of the IP, browser, OS and device type. Never by stored IPs. Each rotation makes returning visitors count as new.', 'salt_rotation' ); ?>
 					<?php self::select( 'salt_rotation', $rotations, $s['salt_rotation'] ); ?>
@@ -454,6 +466,7 @@ final class Admin {
 			'exclude_roles'         => $excluded,
 			'session_timeout'       => $timeout,
 			'delete_on_uninstall'   => isset( $_POST['delete_on_uninstall'] ),
+			'menu_icon'             => Menu_Icons::sanitize( sanitize_key( (string) wp_unslash( $_POST['menu_icon'] ?? '' ) ) ),
 			'role_access'           => Access::sanitize( wp_unslash( $_POST['role_access'] ?? [] ) ),
 		] );
 
