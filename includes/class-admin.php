@@ -14,8 +14,8 @@ final class Admin {
 	const MANAGE_CAP    = 'manage_options';
 	const SLUG          = 'snn-analytics';
 
-	/** Menu icon: Lucide chart-no-axes-combined (ISC). The stroke is WordPress's inactive menu colour. */
-	const MENU_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#a7aaad" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16v5"/><path d="M16 14.639V21"/><path d="M20 10.656V21"/><path d="m22 3-8.646 8.646a.5.5 0 0 1-.708 0L9.354 8.354a.5.5 0 0 0-.707 0L2 15"/><path d="M4 18.463V21"/><path d="M8 14.656V21"/></svg>';
+	/** Menu icon: Lucide chart-no-axes-combined (ISC). The stroke is white, like the other menu icons. */
+	const MENU_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16v5"/><path d="M16 14.639V21"/><path d="M20 10.656V21"/><path d="m22 3-8.646 8.646a.5.5 0 0 1-.708 0L9.354 8.354a.5.5 0 0 0-.707 0L2 15"/><path d="M4 18.463V21"/><path d="M8 14.656V21"/></svg>';
 
 	/** Dashboard cards, in default order. Users can reorder and hide them. */
 	const CARDS = [ 'chart', 'realtime', 'geo', 'pages', 'newreturning', 'devices', 'sources', 'recent', 'campaigns', 'goals' ];
