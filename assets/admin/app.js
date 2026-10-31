@@ -2053,12 +2053,15 @@
 
 	function renderReplay(rp) {
 		var state = { page: 1 };
-		var player = h('div', { class: 'snn-a-detail' });
 		var results = h('div', {}, skeleton(6));
+		// Only used for a visit from the address bar that is not on the current page of the list.
+		var above = h('div', { class: 'snn-a-detail' });
+		var wanted = Number(urlParam('session')) || null;
 		var stop = null;
+		var active = null;
 
 		root.appendChild(h('div', { class: 'snn-a-toolbar' }, rangeControl()));
-		root.appendChild(player);
+		root.appendChild(above);
 		root.appendChild(results);
 
 		teardown = function () {
@@ -2068,6 +2071,7 @@
 		};
 
 		function load() {
+			stopReplay();
 			clear(results);
 			results.appendChild(skeleton(6));
 			api('stats/journeys', Object.assign({}, rp, state, { per_page: PER_PAGE })).then(function (data) {
@@ -2092,41 +2096,89 @@
 						];
 					}),
 					'No sessions in this range.',
-					function (index) { open(data.rows[index].id); }
+					function (index, tr) {
+						// A second click on the open row closes it.
+						if (active && tr.classList.contains('is-selected')) {
+							closeReplay();
+						} else {
+							openReplay(data.rows[index].id, tr);
+						}
+					}
 				));
-				results.appendChild(pager(state.page, pages, function (page) { state.page = page; load(); }));
+				results.appendChild(pager(state.page, pages, function (page) {
+					closeReplay();
+					state.page = page;
+					load();
+				}));
+				if (wanted) {
+					openWanted(data.rows);
+				}
 			}).catch(function (err) {
 				clear(results);
 				results.appendChild(failed(err, load));
 			});
 		}
 
-		function open(id) {
+		/** Opens the visit from the address bar, once: under its row when it is on this page, above the list when not. */
+		function openWanted(rows) {
+			var id = wanted;
+			var index = -1;
+			wanted = null;
+			rows.forEach(function (s, i) {
+				if (Number(s.id) === id) {
+					index = i;
+				}
+			});
+			openReplay(id, index === -1 ? null : results.querySelector('tr[data-index="' + index + '"]'));
+		}
+
+		/** Opens a visit under the row that was clicked, and marks that row. Without a row it opens above the list. */
+		function openReplay(id, tr) {
+			stopReplay();
+			setUrlParam('session', id);
+			var box = above;
+			if (tr) {
+				box = h('td', { class: 'snn-a-detail-cell', colspan: String(tr.cells.length) });
+				Array.prototype.forEach.call(results.querySelectorAll('tr.is-selected'), function (el) { el.classList.remove('is-selected'); });
+				tr.classList.add('is-selected');
+				tr.parentNode.insertBefore(h('tr', { class: 'snn-a-detail-row' }, box), tr.nextSibling);
+			}
+			active = box;
+			box.appendChild(skeleton(6));
+			(tr || above).scrollIntoView({ behavior: 'smooth', block: 'start' });
+			api('stats/journey', { id: id }).then(function (data) {
+				if (active !== box) {
+					return;
+				}
+				clear(box);
+				stop = replayPlayer(box, data, closeReplay);
+			}).catch(function (err) {
+				if (active !== box) {
+					return;
+				}
+				clear(box);
+				box.appendChild(failed(err));
+				box.appendChild(h('button', { type: 'button', class: 'button-link', onclick: closeReplay }, 'Close'));
+			});
+		}
+
+		/** Stops the open visit and takes its row out. The row that was clicked keeps its mark. */
+		function stopReplay() {
 			if (stop) {
 				stop();
 				stop = null;
 			}
-			setUrlParam('session', id);
-			clear(player);
-			player.appendChild(skeleton(6));
-			player.scrollIntoView({ behavior: 'smooth', block: 'start' });
-			api('stats/journey', { id: id }).then(function (data) {
-				clear(player);
-				stop = replayPlayer(player, data, function () {
-					stop = null;
-					clear(player);
-					setUrlParam('session', null);
-				});
-			}).catch(function (err) {
-				clear(player);
-				player.appendChild(failed(err));
-			});
+			active = null;
+			clear(above);
+			Array.prototype.forEach.call(results.querySelectorAll('tr.snn-a-detail-row'), function (el) { el.parentNode.removeChild(el); });
+		}
+
+		function closeReplay() {
+			stopReplay();
+			setUrlParam('session', null);
 		}
 
 		load();
-		if (urlParam('session')) {
-			open(Number(urlParam('session')));
-		}
 	}
 
 	/**
@@ -2214,6 +2266,7 @@
 				+ (step.trail.length ? '' : ' · no cursor trail for this view');
 
 			clear(log);
+			log.scrollTop = 0;
 			step.events.forEach(function (e) {
 				log.appendChild(h('li', { 'data-at': String(eventOffset(e)) }, [
 					h('span', { class: 'snn-a-time', text: mmss(eventOffset(e)) }),
@@ -2287,12 +2340,41 @@
 			}
 			shownClicks = clicks.length;
 			stage.redraw();
+			var reached = null;
 			Array.prototype.forEach.call(log.children, function (li) {
 				var at = li.getAttribute('data-at');
-				li.classList.toggle('is-done', at !== null && Number(at) <= time);
+				var done = at !== null && Number(at) <= time;
+				li.classList.toggle('is-done', done);
+				if (done) {
+					reached = li;
+				}
 			});
+			markAction(reached);
 			scrub.value = String(Math.round(time / length * 1000));
 			clockLabel.textContent = mmss(time) + ' / ' + mmss(length);
+		}
+
+		/** Marks the latest action the playback has reached. The list scrolls, not the page, so the mark stays in view. */
+		function markAction(item) {
+			var current = log.querySelector('.is-current');
+			if (current === item) {
+				return;
+			}
+			if (current) {
+				current.classList.remove('is-current');
+			}
+			if (!item) {
+				log.scrollTop = 0;
+				return;
+			}
+			item.classList.add('is-current');
+			var top = item.offsetTop;
+			var bottom = top + item.offsetHeight;
+			if (top < log.scrollTop) {
+				log.scrollTop = top;
+			} else if (bottom > log.scrollTop + log.clientHeight) {
+				log.scrollTop = bottom - log.clientHeight;
+			}
 		}
 
 		function tick(now) {

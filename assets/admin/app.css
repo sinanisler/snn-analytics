@@ -1677,6 +1677,7 @@
 	margin-top: 0;
 }
 .snn-a .snn-a-replay-log {
+	position: relative;
 	margin: 0;
 	padding: 0;
 	list-style: none;
@@ -1684,13 +1685,20 @@
 	overflow: auto;
 }
 .snn-a .snn-a-replay-log li {
-	padding: 6px 0;
+	padding: 6px 8px;
 	border-bottom: 1px solid var(--sa-line-soft);
 	color: var(--sa-muted);
 	overflow-wrap: anywhere;
 }
 .snn-a .snn-a-replay-log li.is-done {
 	color: var(--sa-text);
+}
+/* The latest action the playback has reached. The list scrolls to keep it in view. */
+.snn-a .snn-a-replay-log li.is-current {
+	border-color: transparent;
+	border-radius: 4px;
+	background: color-mix(in srgb, var(--sa-accent) 12%, transparent);
+	box-shadow: inset 3px 0 0 var(--sa-accent);
 }
 @media (max-width: 960px) {
 	.snn-a .snn-a-replay-body {
