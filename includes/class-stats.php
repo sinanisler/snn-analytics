@@ -654,10 +654,11 @@ final class Stats {
 			$now - 1800
 		), ARRAY_A );
 
+		// Each active session's current page, so a visitor who has sat on one page for over 30 minutes still shows.
 		$live_pages = $wpdb->get_results( $wpdb->prepare(
-			"SELECT p.title, p.path, COUNT(DISTINCT v.session_id) AS visitors
-			 FROM {$views} v JOIN {$pages} p ON p.id = v.page_id
-			 WHERE v.created_at >= %d GROUP BY p.id, p.title, p.path ORDER BY visitors DESC LIMIT 10",
+			"SELECT p.title, p.path, COUNT(DISTINCT s.visitor_id) AS visitors
+			 FROM {$sessions} s JOIN {$pages} p ON p.id = s.exit_page_id
+			 WHERE s.last_seen >= %d GROUP BY p.id, p.title, p.path ORDER BY visitors DESC LIMIT 10",
 			$now - 1800
 		), ARRAY_A );
 
