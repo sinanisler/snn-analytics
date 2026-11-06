@@ -286,9 +286,10 @@ final class Tracker {
 
 	/**
 	 * One mouse path per view, sent in chunks. The page and device are stored with it, so a trail can be
-	 * read on its own. A chunk after the first starts with a marker sample (x 0x7fff, then the chunk
-	 * number) and is appended. A chunk number that is already stored is a repeat and is ignored, and
-	 * INSERT IGNORE does the same for a repeated first chunk.
+	 * read on its own. A chunk that is not the first, or that starts after the first second of the view,
+	 * begins with a marker sample (x 0x7fff, then the chunk number and its start in seconds) and is appended.
+	 * A chunk number that is already stored is a repeat and is ignored, and INSERT IGNORE does the same
+	 * for a repeated first chunk.
 	 */
 	private static function trail( array $hit, array $view, array $session, int $now ): void {
 		global $wpdb;

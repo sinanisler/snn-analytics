@@ -1572,9 +1572,11 @@
 
 	/*
 	 * Heatmaps, cursor trails and replays draw on top of the real page. The page is loaded in an
-	 * iframe at the width of the device (with ?snn_a_preview=1, so the load is not tracked), and a
-	 * canvas of the same size sits over it. Clicks are stored on a grid of 50 columns across the page
-	 * width and 40 px rows; trail points as a share of the width (per 10000) and px from the top.
+	 * iframe (with ?snn_a_preview=1, so the load is not tracked) and a canvas of the same size sits
+	 * over it. A trail point is a share of the page width (per 10000) and px from the top, so it only
+	 * lines up when the page is laid out at the window width it was recorded at. Replays use that width.
+	 * Heatmap clicks are stored with no width (50 columns, 40 px rows), so that screen falls back to
+	 * DEVICE_WIDTHS.
 	 */
 	var DEVICE_WIDTHS = { 0: 1280, 1: 1280, 2: 390, 3: 820 };
 	// The canvas is drawn at half size, so a long page does not need a huge bitmap.
@@ -1600,14 +1602,21 @@
 		return cfg.site + path + (path.indexOf('?') === -1 ? '?' : '&') + 'snn_a_preview=1';
 	}
 
+	/** A window width recorded with a visit, or 0 when it is missing or not a plausible width. */
+	function viewWidth(value) {
+		var px = Math.round(Number(value));
+		return px >= 240 && px <= 4000 ? px : 0;
+	}
+
 	/**
-	 * The page at device width, scaled down to fit, with a canvas on top. draw(ctx, width, height) is
-	 * called with the context in page pixels each time the page height is known or changes.
-	 * opts: minHeight (px the data needs), showPage (false draws on a blank sheet).
+	 * The page scaled down to fit, with a canvas on top. draw(ctx, width, height) is called with the context
+	 * in page pixels each time the page height is known or changes.
+	 * opts: width (the window width the data was recorded at; the device width is used when it is missing),
+	 * minHeight (px the data needs), showPage (false draws on a blank sheet).
 	 */
 	function pageStage(path, device, draw, opts) {
 		opts = opts || {};
-		var width = DEVICE_WIDTHS[device] || DEVICE_WIDTHS[0];
+		var width = viewWidth(opts.width) || DEVICE_WIDTHS[device] || DEVICE_WIDTHS[0];
 		var height = Math.min(STAGE_MAX_HEIGHT, Math.max(800, opts.minHeight || 0));
 		var scale = 1;
 		var showPage = opts.showPage !== false;
@@ -2263,7 +2272,8 @@
 			renderChips();
 
 			info.textContent = (step.title || step.path) + ' · ' + step.path + ' · on the page ' + duration(step.duration)
-				+ (step.trail.length ? '' : ' · no cursor trail for this view');
+				+ (step.trail.length ? '' : ' · no cursor trail for this view')
+				+ (viewWidth(s.viewport && s.viewport[0]) ? '' : ' · window size not recorded for this visit, so marks may be off');
 
 			clear(log);
 			log.scrollTop = 0;
@@ -2280,9 +2290,10 @@
 
 			var lowest = step.trail.reduce(function (most, p) { return Math.max(most, p[1]); }, 0);
 			clear(stageBox);
+			// The page is laid out at the window width the visit had, the one the trail was recorded at.
 			stage = pageStage(step.path, s.device, function (ctx, width) {
 				drawTrail(ctx, width, step.trail, 'rgba(34,113,177,0.55)', time);
-			}, { minHeight: lowest + 400 });
+			}, { minHeight: lowest + 400, width: s.viewport ? s.viewport[0] : 0 });
 			stage.sheet.appendChild(cursor);
 			stageBox.appendChild(stage.el);
 			frame();

@@ -344,9 +344,10 @@
 
 	// Pointer trails, only when the site turns them on. A sample every 250 ms while the pointer moves
 	// (mouse, pen or touch). Samples go out in chunks of at most 60 seconds or 240 samples: when a chunk is
-	// full, the tab is hidden or the page is left. A chunk after the first starts with a marker sample
-	// (x 0x7fff, which a real x never reaches) holding its number and its start in seconds, so the server
-	// appends it to the view's trail. Recording stops after 30 chunks or 30 minutes.
+	// full, the tab is hidden or the page is left. A chunk that is not the first, or that starts after the first
+	// second of the view, begins with a marker sample (x 0x7fff, which a real x never reaches) holding its number
+	// and its start in seconds, so the server appends it to the view's trail with the right times.
+	// Recording stops after 30 chunks or 30 minutes.
 	var trail = null;
 	var trailStart = 0;
 	var trailBase = 0;
@@ -378,9 +379,14 @@
 		return clamp(Date.now() - trailStart - trailBase, 0, 65535);
 	}
 
-	/** The marker takes one place in every chunk after the first. */
+	/** A chunk carries a marker when it is not the first, or when it starts after the first second of the view. */
+	function marked() {
+		return trailPart > 0 || trailBase > 0;
+	}
+
+	/** The marker takes one place in a marked chunk. */
 	function trailFull() {
-		return trail.length >= (trailPart ? 239 : 240) || trailTime() >= 60000;
+		return trail.length >= (marked() ? 239 : 240) || trailTime() >= 60000;
 	}
 
 	document.addEventListener('pointermove', function (event) {
@@ -427,7 +433,7 @@
 		}
 		trailDirty = false;
 		if (trail.length) {
-			if (trailPart) {
+			if (marked()) {
 				trail.unshift([0x7fff, trailPart, trailBase / 1000]);
 			}
 			var hex = '';
@@ -541,6 +547,9 @@
 		viewSent = true;
 		note('view-released', pending, { held: waiting.length });
 		window.clearTimeout(gateTimer);
+		// The server times the view from this moment, so the cursor trail starts here too. Starting it at the first
+		// pointer move would move the cursor late against the logged actions when the visitor scrolls or types first.
+		trailStart = trailStart || Date.now();
 		var key = vk;
 		deliver(pending).then(function () {
 			flush(key);
