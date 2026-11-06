@@ -114,7 +114,7 @@ final class Tracker {
 				$session = self::new_session( $visitor, $referrer_id, $campaign_id, $page_id, $now, $info, $server, $hit );
 			}
 
-			self::add_view( $session, $hit['vk'], $page_id, $now );
+			self::add_view( $session, $hit['vk'], $page_id, $now, $hit['lw'], $hit['vh'] );
 			Goals::check_page( $session['id'], $hit['page']['path'], $now );
 			$replayed = self::replay( $hit['vk'], $now, $settings );
 
@@ -274,14 +274,23 @@ final class Tracker {
 		global $wpdb;
 
 		$wpdb->query( $wpdb->prepare(
-			'INSERT INTO ' . DB::table( 'heat' ) . ' (day, page_id, device, x, y, clicks) VALUES (%d, %d, %d, %d, %d, 1)
+			'INSERT INTO ' . DB::table( 'heat' ) . ' (day, page_id, device, width, x, y, clicks) VALUES (%d, %d, %d, %d, %d, %d, 1)
 			 ON DUPLICATE KEY UPDATE clicks = clicks + 1',
 			self::day( $now, $settings ),
 			$view['page_id'],
 			$session['device'],
+			self::width_bucket( $hit['w'] ),
 			$hit['x'],
 			$hit['y']
 		) );
+	}
+
+	/**
+	 * The page width a click belongs to, rounded to 20 px. Visitors whose windows differ by a scrollbar or a
+	 * few pixels share one grid, and the grid is drawn at this width. 0 when the width was not sent.
+	 */
+	public static function width_bucket( ?int $width ): int {
+		return $width === null ? 0 : intdiv( $width + 10, 20 ) * 20;
 	}
 
 	/**
@@ -467,7 +476,11 @@ final class Tracker {
 		return [ 'id' => $id, 'views' => 0, 'started_at' => $now ];
 	}
 
-	private static function add_view( array $session, string $vk, int $page_id, int $now ): void {
+	/**
+	 * Stores the page view. layout_w and view_h are the width the page was laid out at and the window height
+	 * when the visitor started, so the replay can lay the page out the same way. Null for an older script.
+	 */
+	private static function add_view( array $session, string $vk, int $page_id, int $now, ?int $layout_w, ?int $view_h ): void {
 		global $wpdb;
 
 		$views = $session['views'] + 1;
@@ -479,6 +492,8 @@ final class Tracker {
 			'created_at' => $now,
 			'duration'   => 0,
 			'seq'        => $views,
+			'layout_w'   => $layout_w,
+			'view_h'     => $view_h,
 		] );
 
 		$wpdb->query( $wpdb->prepare(

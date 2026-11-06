@@ -248,32 +248,72 @@ final class Stats {
 
 	/**
 	 * Click positions for one page, summed over the range. $device 0 means every device.
-	 * Cells are ordered by clicks, so the first one is the strongest.
+	 * Clicks are kept per window width (see Tracker::width_bucket), so one grid is drawn at one width.
+	 * $width picks the grid; when it is null, or has no clicks, the width with the most clicks is used.
+	 * Cells are ordered by clicks, so the first one is the strongest. "widths" lists every width with its clicks.
 	 */
-	public static function heatmap( int $page_id, array $r, int $device ): array {
+	public static function heatmap( int $page_id, array $r, int $device, ?int $width = null ): array {
 		global $wpdb;
 
 		$heat  = DB::table( 'heat' );
 		$where = 'page_id = %d AND day BETWEEN %d AND %d AND (%d = 0 OR device = %d)';
 		$args  = [ $page_id, $r['from'], $r['to'], $device, $device ];
 
+		$widths = array_map(
+			static fn( $row ) => [ 'width' => (int) $row['width'], 'clicks' => (int) $row['clicks'] ],
+			$wpdb->get_results( $wpdb->prepare(
+				"SELECT width, SUM(clicks) AS clicks FROM {$heat} WHERE {$where} GROUP BY width ORDER BY clicks DESC",
+				...$args
+			), ARRAY_A )
+		);
+
+		$known  = array_column( $widths, 'width' );
+		$chosen = $width !== null && in_array( $width, $known, true ) ? $width : ( $known[0] ?? 0 );
+
+		$grid = "{$where} AND width = %d";
 		$rows = $wpdb->get_results( $wpdb->prepare(
-			"SELECT x, y, SUM(clicks) AS clicks FROM {$heat} WHERE {$where} GROUP BY x, y ORDER BY clicks DESC LIMIT 5000",
-			...$args
+			"SELECT x, y, SUM(clicks) AS clicks FROM {$heat} WHERE {$grid} GROUP BY x, y ORDER BY clicks DESC LIMIT 5000",
+			...[ ...$args, $chosen ]
 		), ARRAY_A );
 
 		$total = (int) $wpdb->get_var( $wpdb->prepare(
-			"SELECT COALESCE(SUM(clicks), 0) FROM {$heat} WHERE {$where}",
-			...$args
+			"SELECT COALESCE(SUM(clicks), 0) FROM {$heat} WHERE {$grid}",
+			...[ ...$args, $chosen ]
 		) );
 
 		$cells = array_map( static fn( $row ) => [ (int) $row['x'], (int) $row['y'], (int) $row['clicks'] ], $rows );
 
 		return [
-			'cells' => $cells,
-			'max'   => $cells === [] ? 0 : $cells[0][2],
-			'total' => $total,
+			'cells'  => $cells,
+			'max'    => $cells === [] ? 0 : $cells[0][2],
+			'total'  => $total,
+			'width'  => $chosen,
+			'widths' => $widths,
+			'view_h' => $chosen > 0 ? self::common_view_height( $page_id, $chosen, $r ) : null,
 		];
+	}
+
+	/**
+	 * The window height most visits to this page had at this width. A page with sections sized to the window
+	 * is drawn at this height. Null when no visit at that width recorded it.
+	 */
+	private static function common_view_height( int $page_id, int $width, array $r ): ?int {
+		global $wpdb;
+
+		$views = DB::table( 'views' );
+		$h     = $wpdb->get_var( $wpdb->prepare(
+			"SELECT view_h FROM {$views}
+			 WHERE page_id = %d AND created_at >= %d AND created_at < %d
+			   AND layout_w BETWEEN %d AND %d AND view_h IS NOT NULL
+			 GROUP BY view_h ORDER BY COUNT(*) DESC LIMIT 1",
+			$page_id,
+			Ranges::day_start( $r['from'] ),
+			Ranges::day_start( $r['to'] + 1 ),
+			$width - 10,
+			$width + 9
+		) );
+
+		return $h === null ? null : (int) $h;
 	}
 
 	/**
@@ -284,13 +324,18 @@ final class Stats {
 		global $wpdb;
 
 		$table = DB::table( 'trails' );
+		$views = DB::table( 'views' );
 		$from  = Ranges::day_start( $r['from'] );
 		$to    = Ranges::day_start( $r['to'] + 1 );
 		$where = 'page_id = %d AND created_at >= %d AND created_at < %d AND (%d = 0 OR device = %d)';
 		$args  = [ $page_id, $from, $to, $device, $device ];
 
+		// The page width and window height of each trail's view. A trail lines up only at that size.
 		$rows = $wpdb->get_results( $wpdb->prepare(
-			"SELECT HEX(samples) AS samples FROM {$table} WHERE {$where} ORDER BY created_at DESC LIMIT 50",
+			"SELECT HEX(samples) AS samples,
+			        (SELECT v.layout_w FROM {$views} v WHERE v.id = {$table}.view_id) AS width,
+			        (SELECT v.view_h FROM {$views} v WHERE v.id = {$table}.view_id) AS height
+			 FROM {$table} WHERE {$where} ORDER BY created_at DESC LIMIT 50",
 			...$args
 		), ARRAY_A );
 
@@ -299,6 +344,10 @@ final class Stats {
 		return [
 			'total'  => $total,
 			'trails' => array_map( [ self::class, 'decode_samples' ], array_column( $rows, 'samples' ) ),
+			'sizes'  => array_map( static fn( $row ) => [
+				'width'  => $row['width'] === null ? null : (int) $row['width'],
+				'height' => $row['height'] === null ? null : (int) $row['height'],
+			], $rows ),
 		];
 	}
 
@@ -845,7 +894,7 @@ final class Stats {
 		}
 
 		$view_rows = $wpdb->get_results( $wpdb->prepare(
-			"SELECT v.id, v.created_at, v.duration, v.seq, p.title, p.path, (t.view_id IS NOT NULL) AS has_trail, HEX(t.samples) AS samples
+			"SELECT v.id, v.created_at, v.duration, v.seq, v.layout_w, v.view_h, p.title, p.path, (t.view_id IS NOT NULL) AS has_trail, HEX(t.samples) AS samples
 			 FROM {$views} v
 			 JOIN {$pages} p ON p.id = v.page_id
 			 LEFT JOIN {$trails} t ON t.view_id = v.id
@@ -871,6 +920,9 @@ final class Stats {
 				'path'      => (string) $v['path'],
 				'duration'  => (int) $v['duration'],
 				'has_trail' => (bool) $v['has_trail'],
+				// The page width and window height of this view. Null for views stored before they were recorded.
+				'width'     => $v['layout_w'] === null ? null : (int) $v['layout_w'],
+				'view_h'    => $v['view_h'] === null ? null : (int) $v['view_h'],
 				'trail'     => $v['samples'] ? self::decode_samples( (string) $v['samples'] ) : [],
 				'events'    => [],
 			];

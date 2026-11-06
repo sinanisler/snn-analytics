@@ -372,7 +372,7 @@ final class Admin {
 					<?php self::select( 'retention_months', $retention, (int) $s['retention_months'] ); ?>
 				<?php self::row_end(); ?>
 
-				<?php self::row( 'Click heatmap', 'Counts only, per page, day and device. No click is stored on its own. Shown on the Heatmaps screen.', '', Scale::warning( 'heat' ) ); ?>
+				<?php self::row( 'Click heatmap', 'Counts only, per page, day, device and window width. No click is stored on its own. Shown on the Heatmaps screen.', '', Scale::warning( 'heat' ) ); ?>
 					<?php self::toggle( 'heatmap', (bool) $s['heatmap'], 'Record clicks' ); ?>
 				<?php self::row_end(); ?>
 

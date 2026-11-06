@@ -30,6 +30,8 @@ final class Scale {
 	/** Heatmap: pages that get clicks, and the click spots kept for each page per day. */
 	const BUSY_PAGES      = 10;
 	const SPOTS_PER_PAGE  = 50;
+	/** Window widths that a page gets clicks at, per day: desktop, laptop, tablet, phone and a few others. */
+	const WIDTHS_PER_PAGE = 3;
 
 	/** Seconds of pointer movement per page view, for each estimate. */
 	const PACE = [ 'light' => 5, 'typical' => 20, 'heavy' => 60 ];
@@ -59,7 +61,7 @@ final class Scale {
 
 	/** Heatmap bytes per year for a number of pages that get clicks. Visits do not change it. */
 	public static function heat_year_bytes( int $pages ): int {
-		return $pages * 365 * self::SPOTS_PER_PAGE * self::HEAT_BYTES;
+		return $pages * 365 * self::SPOTS_PER_PAGE * self::WIDTHS_PER_PAGE * self::HEAT_BYTES;
 	}
 
 	/** Visits in the last 30 days, from the daily totals. */

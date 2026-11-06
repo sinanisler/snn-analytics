@@ -1573,10 +1573,9 @@
 	/*
 	 * Heatmaps, cursor trails and replays draw on top of the real page. The page is loaded in an
 	 * iframe (with ?snn_a_preview=1, so the load is not tracked) and a canvas of the same size sits
-	 * over it. A trail point is a share of the page width (per 10000) and px from the top, so it only
-	 * lines up when the page is laid out at the window width it was recorded at. Replays use that width.
-	 * Heatmap clicks are stored with no width (50 columns, 40 px rows), so that screen falls back to
-	 * DEVICE_WIDTHS.
+	 * over it. A click (50 columns of 2% of the page width, and 40 px rows) and a trail point (a share of
+	 * the width, per 10000, and px from the top) only line up when the page is laid out at the width they
+	 * were recorded at, so both are kept with that width. DEVICE_WIDTHS is the fallback for older data.
 	 */
 	var DEVICE_WIDTHS = { 0: 1280, 1: 1280, 2: 390, 3: 820 };
 	// The canvas is drawn at half size, so a long page does not need a huge bitmap.
@@ -1602,23 +1601,107 @@
 		return cfg.site + path + (path.indexOf('?') === -1 ? '?' : '&') + 'snn_a_preview=1';
 	}
 
-	/** A window width recorded with a visit, or 0 when it is missing or not a plausible width. */
-	function viewWidth(value) {
+	/** A size recorded with a visit: a whole number of px inside the limits, or 0 when it is missing or not plausible. */
+	function viewPixels(value, low, high) {
 		var px = Math.round(Number(value));
-		return px >= 240 && px <= 4000 ? px : 0;
+		return px >= low && px <= high ? px : 0;
+	}
+
+	/** A page width recorded with a visit (0 when missing). */
+	function viewWidth(value) {
+		return viewPixels(value, 240, 4000);
+	}
+
+	/** A window height recorded with a visit (0 when missing). */
+	function viewHeight(value) {
+		return viewPixels(value, 200, 6000);
+	}
+
+	/** The most common plausible value (0 when none is). Ties go to the value seen first. */
+	function mostCommon(values) {
+		var counts = {};
+		var best = 0;
+		values.forEach(function (value) {
+			if (value > 0) {
+				counts[value] = (counts[value] || 0) + 1;
+				if (!best || counts[value] > counts[best]) {
+					best = value;
+				}
+			}
+		});
+		return best;
 	}
 
 	/**
-	 * The page scaled down to fit, with a canvas on top. draw(ctx, width, height) is called with the context
-	 * in page pixels each time the page height is known or changes.
-	 * opts: width (the window width the data was recorded at; the device width is used when it is missing),
-	 * minHeight (px the data needs), showPage (false draws on a blank sheet).
+	 * A page sized with vh was laid out at the visitor's window height. The preview is as tall as the whole
+	 * page, so its vh values would follow that height instead, and every element below such a section would
+	 * sit in the wrong place. This turns each vh value into px at the visitor's height. Only style sheets that
+	 * the admin can read (the same origin as the preview) are changed.
+	 */
+	function fitViewport(doc, windowHeight) {
+		if (!doc || !windowHeight) {
+			return;
+		}
+		var unit = windowHeight / 100;
+		var units = /(-?\d*\.?\d+)(?:d|s|l)?vh\b/g;
+
+		function convert(value) {
+			return value.replace(units, function (match, number) {
+				return (parseFloat(number) * unit).toFixed(2) + 'px';
+			});
+		}
+
+		function fixStyle(style) {
+			var names = [];
+			for (var i = 0; i < style.length; i++) {
+				names.push(style[i]);
+			}
+			names.forEach(function (name) {
+				var value = style.getPropertyValue(name);
+				if (/vh\b/.test(value)) {
+					style.setProperty(name, convert(value), style.getPropertyPriority(name));
+				}
+			});
+		}
+
+		function fixRules(rules) {
+			Array.prototype.forEach.call(rules, function (rule) {
+				if (rule.style) {
+					fixStyle(rule.style);
+				}
+				if (rule.cssRules) {
+					fixRules(rule.cssRules);
+				}
+			});
+		}
+
+		Array.prototype.forEach.call(doc.styleSheets, function (sheet) {
+			try {
+				fixRules(sheet.cssRules);
+			} catch (e) {
+				// A sheet from another origin cannot be read, so it keeps its values.
+			}
+		});
+		Array.prototype.forEach.call(doc.querySelectorAll('[style*="vh"]'), function (el) {
+			fixStyle(el.style);
+		});
+	}
+
+	/**
+	 * The page, with a canvas on top. Fit scales it down to the room there is; actual size draws it at 1:1 and the
+	 * box scrolls. draw(ctx, width, height) is called with the context in page pixels each time the page height is
+	 * known or changes.
+	 * opts: width (the page width the data was recorded at; the device width when missing), viewHeight (the window
+	 * height the visitor had, so vh sizes match), minHeight (px the data needs), showPage (false draws on a blank
+	 * sheet), actual (true for 1:1).
 	 */
 	function pageStage(path, device, draw, opts) {
 		opts = opts || {};
 		var width = viewWidth(opts.width) || DEVICE_WIDTHS[device] || DEVICE_WIDTHS[0];
+		var windowHeight = viewHeight(opts.viewHeight);
 		var height = Math.min(STAGE_MAX_HEIGHT, Math.max(800, opts.minHeight || 0));
 		var scale = 1;
+		var actual = opts.actual === true;
 		var showPage = opts.showPage !== false;
 
 		var frame = h('iframe', { class: 'snn-a-stage-frame', title: 'Page preview', tabindex: '-1', loading: 'lazy', scrolling: 'no' });
@@ -1631,7 +1714,7 @@
 
 		function layout() {
 			var room = outer.clientWidth || width;
-			scale = Math.min(1, room / width);
+			scale = actual ? 1 : Math.min(1, room / width);
 			sheet.style.width = width + 'px';
 			sheet.style.height = height + 'px';
 			sheet.style.transform = 'scale(' + scale + ')';
@@ -1672,6 +1755,11 @@
 		}
 
 		frame.addEventListener('load', function () {
+			try {
+				fitViewport(frame.contentDocument, windowHeight);
+			} catch (e) {
+				// Without access to the page, its vh sizes stay as they are.
+			}
 			measure();
 			timers.push(window.setTimeout(measure, 1500));
 		});
@@ -1692,11 +1780,15 @@
 			sheet: sheet,
 			redraw: paint,
 			scale: function () { return scale; },
-			/** Keeps a point of the page (px from the top) in view, for the replay cursor. */
-			follow: function (y) {
+			/** Keeps a point of the page (x and y in px) in view, for the replay cursor. Matters at actual size, where the box scrolls. */
+			follow: function (x, y) {
 				var top = y * scale;
+				var left = x * scale;
 				if (top < outer.scrollTop + outer.clientHeight * 0.2 || top > outer.scrollTop + outer.clientHeight * 0.8) {
 					outer.scrollTop = Math.max(0, top - outer.clientHeight / 2);
+				}
+				if (left < outer.scrollLeft + outer.clientWidth * 0.2 || left > outer.scrollLeft + outer.clientWidth * 0.8) {
+					outer.scrollLeft = Math.max(0, left - outer.clientWidth / 2);
 				}
 			},
 			destroy: function () {
@@ -1855,7 +1947,9 @@
 
 	/** Shared shell for the heatmap and trail screens: range, page and device, then the stage. */
 	function mapScreen(rp, kind) {
-		var state = { page: Number(urlParam('pid')) || 0, device: Number(urlParam('device')) || 0, showPage: true, look: readHeatLook() };
+		// width: the page width the clicks were recorded at. -1 lets the screen pick the one with the most clicks.
+		var hwidth = urlParam('hwidth');
+		var state = { page: Number(urlParam('pid')) || 0, device: Number(urlParam('device')) || 0, showPage: true, look: readHeatLook(), width: hwidth === null ? -1 : Number(hwidth), actual: false };
 		var rows = [];
 		var bar = h('div', { class: 'snn-a-toolbar' });
 		var body = h('div', {}, skeleton(6));
@@ -1910,6 +2004,9 @@
 			}
 			body.appendChild(skeleton(6));
 			var query = Object.assign({}, rp, { id: row.id, device: state.device });
+			if (kind === 'heat') {
+				query.width = state.width;
+			}
 			api(kind === 'heat' ? 'stats/heatmap' : 'stats/trails', query).then(function (data) {
 				clear(body);
 				if (kind === 'heat') {
@@ -1992,10 +2089,47 @@
 				scale,
 				h('span', { text: 'More clicks' })
 			]));
-			stage = pageStage(row.path, state.device, function (ctx, width) {
-				drawHeat(ctx, width, data.cells, data.max, look);
-			}, { minHeight: (lowest + 2) * 40, showPage: state.showPage });
-			body.appendChild(stage.el);
+			// Clicks are kept per page width. The page is drawn at the width the chosen group was recorded at, with the
+			// window height most visits to it had, so a page sized to the window lines up with its clicks.
+			var widths = data.widths || [];
+			var stageBox = h('div');
+			function placeStage() {
+				if (stage) {
+					stage.destroy();
+				}
+				stage = pageStage(row.path, state.device, function (ctx, width) {
+					drawHeat(ctx, width, data.cells, data.max, look);
+				}, { minHeight: (lowest + 2) * 40, showPage: state.showPage, width: data.width, viewHeight: data.view_h, actual: state.actual });
+				clear(stageBox);
+				stageBox.appendChild(stage.el);
+			}
+			var mapBar = [];
+			if (widths.length > 1) {
+				mapBar.push(h('label', { class: 'snn-a-heat-control' }, [
+					h('span', { text: 'Window' }),
+					h('select', { 'aria-label': 'Window width', onchange: function (event) {
+						state.width = Number(event.target.value);
+						setUrlParam('hwidth', state.width);
+						load();
+					} }, widths.map(function (item) {
+						return h('option', {
+							value: String(item.width),
+							text: (item.width ? item.width + ' px wide' : 'Width not recorded') + ' · ' + n(item.clicks) + (item.clicks === 1 ? ' click' : ' clicks'),
+							selected: item.width === data.width ? true : null
+						});
+					}))
+				]));
+			}
+			mapBar.push(segment('Size', [['fit', 'Fit'], ['actual', 'Actual size']], state.actual ? 'actual' : 'fit', function (value) {
+				state.actual = value === 'actual';
+				placeStage();
+			}));
+			body.appendChild(h('div', { class: 'snn-a-mapbar' }, mapBar));
+			if (widths.length > 1) {
+				body.appendChild(h('p', { class: 'snn-a-muted snn-a-stage-note', text: 'Clicks are grouped by the width of the window they were made in. Pick a group to see its clicks.' }));
+			}
+			body.appendChild(stageBox);
+			placeStage();
 			body.appendChild(h('p', { class: 'snn-a-muted snn-a-stage-note', text: 'Each spot covers 2% of the page width and 40 px of height, so a click can sit up to about 20 px from its spot.' }));
 			body.appendChild(note());
 		}
@@ -2006,32 +2140,65 @@
 				body.appendChild(empty('No cursor trails on this page in this range. They are recorded only when cursor trails are turned on in Settings.'));
 				return;
 			}
+			// A trail was recorded at the page width and window height of its visit, and a stage has one of each.
+			// "All trails together" draws the trails that share the most common width. One trail is drawn at its own size.
+			var sizes = data.sizes || [];
+			var widthOf = function (i) { return viewWidth(sizes[i] && sizes[i].width); };
+			var heightOf = function (i) { return viewHeight(sizes[i] && sizes[i].height); };
+			var common = mostCommon(data.trails.map(function (trail, i) { return widthOf(i); }));
+			var together = data.trails.map(function (trail, i) { return i; }).filter(function (i) { return widthOf(i) === common; });
 			var pick = -1;
+			var shownSize = '';
+			var mapBox = h('div');
 			var lowest = data.trails.reduce(function (most, trail) {
 				return trail.reduce(function (inner, p) { return Math.max(inner, p[1]); }, most);
 			}, 0);
 			var shown = data.total > data.trails.length ? ', showing the latest ' + data.trails.length : '';
+
+			function sizeOf() {
+				return pick >= 0 ? [widthOf(pick), heightOf(pick)] : [common, mostCommon(together.map(heightOf))];
+			}
+
+			function build() {
+				var size = sizeOf();
+				if (stage) {
+					stage.destroy();
+				}
+				shownSize = size.join('x');
+				stage = pageStage(row.path, state.device, function (ctx, width) {
+					if (pick >= 0) {
+						drawTrail(ctx, width, data.trails[pick], 'rgba(34,113,177,0.9)');
+						return;
+					}
+					var alpha = Math.max(0.12, Math.min(0.6, 3 / together.length));
+					together.forEach(function (i) {
+						drawTrail(ctx, width, data.trails[i], 'rgba(34,113,177,' + alpha.toFixed(2) + ')');
+					});
+				}, { minHeight: lowest + 200, showPage: state.showPage, width: size[0], viewHeight: size[1] });
+				clear(mapBox);
+				mapBox.appendChild(stage.el);
+			}
+
 			var select = h('select', { 'aria-label': 'Trail', onchange: function () {
 				pick = Number(select.value);
-				stage.redraw();
+				if (sizeOf().join('x') === shownSize) {
+					stage.redraw();
+				} else {
+					build();
+				}
 			} }, [h('option', { value: '-1', text: 'All trails together' })].concat(data.trails.map(function (trail, i) {
 				var clicks = trail.filter(function (p) { return p[3]; }).length;
 				var secs = trail.length ? Math.round(trail[trail.length - 1][2] / 1000) : 0;
-				return h('option', { value: String(i), text: 'Trail ' + (i + 1) + ' · ' + secs + ' s' + (clicks ? ' · ' + clicks + (clicks === 1 ? ' click' : ' clicks') : '') });
+				var px = widthOf(i);
+				return h('option', { value: String(i), text: 'Trail ' + (i + 1) + ' · ' + secs + ' s' + (clicks ? ' · ' + clicks + (clicks === 1 ? ' click' : ' clicks') : '') + (px ? ' · ' + px + ' px' : '') });
 			})));
 			body.appendChild(intro(row, n(data.total) + ' trails in this range' + shown));
 			body.appendChild(h('div', { class: 'snn-a-mapbar' }, [select, h('span', { class: 'snn-a-muted', text: 'Red dots are clicks.' })]));
-			stage = pageStage(row.path, state.device, function (ctx, width) {
-				if (pick >= 0) {
-					drawTrail(ctx, width, data.trails[pick], 'rgba(34,113,177,0.9)');
-					return;
-				}
-				var alpha = Math.max(0.12, Math.min(0.6, 3 / data.trails.length));
-				data.trails.forEach(function (trail) {
-					drawTrail(ctx, width, trail, 'rgba(34,113,177,' + alpha.toFixed(2) + ')');
-				});
-			}, { minHeight: lowest + 200, showPage: state.showPage });
-			body.appendChild(stage.el);
+			if (together.length < data.trails.length) {
+				body.appendChild(h('p', { class: 'snn-a-muted snn-a-stage-note', text: (data.trails.length - together.length) + ' of these trails were recorded at another page width, or with none recorded. Pick one to see it at its own size.' }));
+			}
+			body.appendChild(mapBox);
+			build();
 			body.appendChild(note());
 		}
 
@@ -2217,6 +2384,9 @@
 		} });
 		var clockLabel = h('span', { class: 'snn-a-time', text: '0:00 / 0:00' });
 		var speedBar = h('div', { class: 'snn-a-segment', role: 'group', 'aria-label': 'Speed' });
+		// Fit scales the page to the room there is. 1:1 draws it at its real size, and the box scrolls with the pointer.
+		var actualSize = false;
+		var sizeBar = h('div', { class: 'snn-a-segment', role: 'group', 'aria-label': 'Size' });
 		var chips = h('ol', { class: 'snn-a-replay-steps' });
 		var log = h('ol', { class: 'snn-a-replay-log' });
 		var stageBox = h('div', { class: 'snn-a-replay-stage' });
@@ -2239,6 +2409,22 @@
 			});
 		}
 
+		function renderSizes() {
+			clear(sizeBar);
+			[[false, 'Fit'], [true, '1:1']].forEach(function (option) {
+				sizeBar.appendChild(h('button', {
+					type: 'button',
+					class: 'snn-a-seg' + (actualSize === option[0] ? ' is-active' : ''),
+					'aria-pressed': actualSize === option[0] ? 'true' : 'false',
+					onclick: function () {
+						actualSize = option[0];
+						renderSizes();
+						buildStage();
+					}
+				}, option[1]));
+			});
+		}
+
 		function renderChips() {
 			clear(chips);
 			steps.forEach(function (st, i) {
@@ -2257,11 +2443,31 @@
 			return Math.max(0, (event.at - step.at) * 1000);
 		}
 
-		function show(i, autoplay) {
-			window.clearTimeout(advance);
+		/**
+		 * The page as the visitor had it: laid out at the page width and window height recorded with this view,
+		 * with the trail and the cursor on top. Older views fall back to the visit's window size.
+		 */
+		function buildStage() {
 			if (stage) {
 				stage.destroy();
 			}
+			var lowest = step.trail.reduce(function (most, p) { return Math.max(most, p[1]); }, 0);
+			clear(stageBox);
+			stage = pageStage(step.path, s.device, function (ctx, width) {
+				drawTrail(ctx, width, step.trail, 'rgba(34,113,177,0.55)', time);
+			}, {
+				minHeight: lowest + 400,
+				width: step.width || (s.viewport ? s.viewport[0] : 0),
+				viewHeight: step.view_h || (s.viewport ? s.viewport[1] : 0),
+				actual: actualSize
+			});
+			stage.sheet.appendChild(cursor);
+			stageBox.appendChild(stage.el);
+			frame();
+		}
+
+		function show(i, autoplay) {
+			window.clearTimeout(advance);
 			index = i;
 			step = steps[i];
 			time = 0;
@@ -2273,7 +2479,7 @@
 
 			info.textContent = (step.title || step.path) + ' · ' + step.path + ' · on the page ' + duration(step.duration)
 				+ (step.trail.length ? '' : ' · no cursor trail for this view')
-				+ (viewWidth(s.viewport && s.viewport[0]) ? '' : ' · window size not recorded for this visit, so marks may be off');
+				+ (viewWidth(step.width) || viewWidth(s.viewport && s.viewport[0]) ? '' : ' · page size not recorded for this view, so marks may be off');
 
 			clear(log);
 			log.scrollTop = 0;
@@ -2288,15 +2494,7 @@
 				log.appendChild(h('li', { class: 'snn-a-muted', text: 'No actions on this page.' }));
 			}
 
-			var lowest = step.trail.reduce(function (most, p) { return Math.max(most, p[1]); }, 0);
-			clear(stageBox);
-			// The page is laid out at the window width the visit had, the one the trail was recorded at.
-			stage = pageStage(step.path, s.device, function (ctx, width) {
-				drawTrail(ctx, width, step.trail, 'rgba(34,113,177,0.55)', time);
-			}, { minHeight: lowest + 400, width: s.viewport ? s.viewport[0] : 0 });
-			stage.sheet.appendChild(cursor);
-			stageBox.appendChild(stage.el);
-			frame();
+			buildStage();
 			if (autoplay) {
 				play();
 			} else {
@@ -2340,7 +2538,7 @@
 				cursor.style.left = (pos[0] / 10000 * stage.width) + 'px';
 				cursor.style.top = pos[1] + 'px';
 				if (playing) {
-					stage.follow(pos[1]);
+					stage.follow(pos[0] / 10000 * stage.width, pos[1]);
 				}
 			} else {
 				cursor.hidden = true;
@@ -2450,13 +2648,14 @@
 				h('span', { text: 'From ' + s.referrer })
 			]),
 			chips,
-			h('div', { class: 'snn-a-replay-controls' }, [playBtn, scrub, clockLabel, speedBar]),
+			h('div', { class: 'snn-a-replay-controls' }, [playBtn, scrub, clockLabel, speedBar, sizeBar]),
 			info,
 			h('div', { class: 'snn-a-replay-body' }, [stageBox, h('div', { class: 'snn-a-replay-side' }, [h('h3', { class: 'snn-a-subhead', text: 'Actions' }), log])]),
-			h('p', { class: 'snn-a-muted snn-a-stage-note', text: 'The page is shown as it looks now, at the visitor’s screen width. Scrolling and typing are not recorded; the view follows the pointer.' })
+			h('p', { class: 'snn-a-muted snn-a-stage-note', text: 'The page is shown as it looked then, at the width and window height the visitor had. Scrolling and typing are not recorded; the view follows the pointer.' })
 		], { actions: closeBtn }));
 
 		renderSpeeds();
+		renderSizes();
 		if (steps.length) {
 			show(0, false);
 		} else {

@@ -47,6 +47,8 @@ final class Validator {
 					'sh'   => self::int( $in['sh'] ?? null, 1, 20000 ),
 					'vw'   => self::int( $in['vw'] ?? null, 1, 20000 ),
 					'vh'   => self::int( $in['vh'] ?? null, 1, 20000 ),
+					// Page width without the scrollbar: the width the page is laid out at, and so the width trail points are a share of.
+					'lw'   => self::int( $in['lw'] ?? null, 1, 20000 ),
 					'lang' => self::language( $in['l'] ?? null ),
 				];
 
@@ -58,13 +60,14 @@ final class Validator {
 				return [ 'e' => 'ping', 'vk' => $vk, 'd' => min( $active, 14400 ) ];
 
 			case 'heat':
-				// Click position: 50 columns of 2 percent of the page width, and 40 px rows.
+				// Click position: 50 columns of 2 percent of the page width, and 40 px rows. "w" is the page width the
+				// column was measured against. A click without it (an older script) is kept with no width.
 				$x = self::int( $in['x'] ?? null, 0, 49 );
 				$y = self::int( $in['y'] ?? null, 0, 1999 );
 				if ( $x === null || $y === null ) {
 					return null;
 				}
-				return [ 'e' => 'heat', 'vk' => $vk, 'x' => $x, 'y' => $y ];
+				return [ 'e' => 'heat', 'vk' => $vk, 'x' => $x, 'y' => $y, 'w' => self::int( $in['w'] ?? null, 240, 4000 ) ];
 
 			case 'trail':
 				// Hex of 6-byte samples: x (per 10000 of page width), y (px), t (ms). 1 to 240 samples.

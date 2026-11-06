@@ -227,7 +227,7 @@
 		// Heatmap: where the click happened, counted per cell. Keyboard activations (detail 0) have no position.
 		if (cfg.hm && event.detail > 0) {
 			var width = document.documentElement.scrollWidth || 1;
-			send({ e: 'heat', vk: vk, x: clamp(Math.floor(event.pageX / width * 50), 0, 49), y: clamp(Math.floor(event.pageY / 40), 0, 1999) });
+			send({ e: 'heat', vk: vk, x: clamp(Math.floor(event.pageX / width * 50), 0, 49), y: clamp(Math.floor(event.pageY / 40), 0, 1999), w: width });
 		}
 		if (!target || !target.closest) {
 			return;
@@ -550,6 +550,10 @@
 		// The server times the view from this moment, so the cursor trail starts here too. Starting it at the first
 		// pointer move would move the cursor late against the logged actions when the visitor scrolls or types first.
 		trailStart = trailStart || Date.now();
+		// The window and the page width as the visitor starts. The replay lays the page out at these.
+		pending.vw = window.innerWidth;
+		pending.vh = window.innerHeight;
+		pending.lw = document.documentElement.scrollWidth || 0;
 		var key = vk;
 		deliver(pending).then(function () {
 			flush(key);

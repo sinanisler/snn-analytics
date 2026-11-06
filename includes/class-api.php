@@ -66,6 +66,7 @@ final class API {
 		$get( '/stats/heatmap', [ self::class, 'heatmap' ], $range + [
 			'id'     => [ 'type' => 'integer', 'required' => true ],
 			'device' => [ 'type' => 'integer', 'default' => 0 ],
+			'width'  => [ 'type' => 'integer', 'default' => -1 ],
 		], $for( 'heatmaps', 'pages' ) );
 		$get( '/stats/trails', [ self::class, 'trails' ], $range + [
 			'id'     => [ 'type' => 'integer', 'required' => true ],
@@ -184,7 +185,9 @@ final class API {
 	}
 
 	public static function heatmap( \WP_REST_Request $req ): \WP_REST_Response {
-		return self::ok( Stats::heatmap( (int) $req->get_param( 'id' ), self::range( $req ), self::device( $req ) ) );
+		$width = (int) $req->get_param( 'width' );
+
+		return self::ok( Stats::heatmap( (int) $req->get_param( 'id' ), self::range( $req ), self::device( $req ), $width < 0 ? null : $width ) );
 	}
 
 	public static function trails( \WP_REST_Request $req ): \WP_REST_Response {
