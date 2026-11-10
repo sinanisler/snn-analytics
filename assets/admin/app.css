@@ -1193,6 +1193,30 @@
 	min-height: 240px;
 }
 
+/* Filters above the Conversions overview: one search and one click type, applied to every panel there. */
+.snn-a .snn-a-filters {
+	margin: 0 0 16px;
+}
+.snn-a .snn-a-filter-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+}
+.snn-a .snn-a-filter-row input[type="search"] {
+	flex: 1 1 280px;
+	max-width: 440px;
+	min-width: 0;
+	min-height: 32px;
+}
+.snn-a .snn-a-filter-row select {
+	min-height: 32px;
+}
+.snn-a .snn-a-filters .snn-a-hint {
+	margin: 6px 0 0;
+}
+
 /* The summary row above the grid: three panels, two on a narrower screen, one on a phone. */
 .snn-a .snn-a-grid-3 {
 	display: grid;

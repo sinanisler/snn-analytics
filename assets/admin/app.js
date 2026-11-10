@@ -3162,8 +3162,13 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 		var nav = h('div', { class: 'snn-a-segment snn-a-subtabs', role: 'group', 'aria-label': 'Conversion tracking sections' });
 		var panel = h('div', {});
 
+		// The filters narrow the overview only. The bar is built once, so typing in it keeps its focus.
+		var filters = conversionFilters();
+		var filterBar = conversionFilterBar(filters, function () { draw(); });
+
 		root.appendChild(h('div', { class: 'snn-a-toolbar' }, rangeControl()));
 		root.appendChild(nav);
+		root.appendChild(filterBar);
 		root.appendChild(panel);
 
 		function pick(next) {
@@ -3190,11 +3195,12 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 
 		function draw() {
 			drawNav();
+			filterBar.hidden = tab !== 'conversions';
 			// Charts from the tab we are leaving are removed, so their canvases are not left behind.
 			charts.splice(0).forEach(function (chart) { chart.destroy(); });
 			clear(panel);
 			if (tab === 'conversions') {
-				panel.appendChild(h('div', {}, [conversionSummary(rp), conversionGrid(rp)]));
+				panel.appendChild(h('div', {}, [conversionSummary(rp, filters), conversionGrid(rp, filters)]));
 				return;
 			}
 			if (!data) {
@@ -3282,11 +3288,101 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 		return chart;
 	}
 
+	/** The click types the filter offers, in the order of the Kind column. 0 means every kind. */
+	var CLICK_KIND_FILTERS = [
+		[0, 'All kinds'], [8, 'Button'], [7, 'Link on this site'], [1, 'Outside link'], [2, 'Download'],
+		[9, 'Form'], [3, 'Email link'], [4, 'Phone link']
+	];
+
+	/** The Conversions filters, read from the address bar so a filtered view can be shared. */
+	function conversionFilters() {
+		var kind = Number(urlParam('kind') || 0);
+		return {
+			search: (urlParam('q') || '').trim(),
+			kind: CLICK_KIND_FILTERS.some(function (option) { return option[0] === kind; }) ? kind : 0
+		};
+	}
+
+	function filtersOn(filters) {
+		return !!(filters.search || filters.kind);
+	}
+
+	/** The filters as request parameters. A filter that is off is left out, so the request is the same as before. */
+	function filterParams(filters) {
+		var params = {};
+		if (filters.search) {
+			params.search = filters.search;
+		}
+		if (filters.kind) {
+			params.kind = filters.kind;
+		}
+		return params;
+	}
+
+	/** Goal names are matched the same way the server matches them: any part of the name, ignoring case. */
+	function matchesSearch(text, search) {
+		return !search || String(text || '').toLowerCase().indexOf(search.toLowerCase()) !== -1;
+	}
+
+	/**
+	 * The search and click-type filter above the Conversions overview. It changes all three panels at once.
+	 * The search waits until the user pauses typing (Enter applies it at once). onChange runs after each change.
+	 */
+	function conversionFilterBar(filters, onChange) {
+		var search = h('input', {
+			type: 'search',
+			value: filters.search,
+			placeholder: 'Search buttons, links, pages and goals',
+			'aria-label': 'Search clicks, pages and goals'
+		});
+		var kind = h('select', { 'aria-label': 'Click type' }, CLICK_KIND_FILTERS.map(function (option) {
+			return h('option', { value: option[0], selected: option[0] === filters.kind ? true : null, text: option[1] });
+		}));
+		var reset = h('button', { type: 'button', class: 'button', onclick: function () {
+			search.value = '';
+			kind.value = '0';
+			apply();
+		} }, 'Clear filters');
+		var pause = null;
+
+		function apply() {
+			clearTimeout(pause);
+			var next = { search: search.value.trim(), kind: Number(kind.value) };
+			if (next.search === filters.search && next.kind === filters.kind) {
+				return;
+			}
+			filters.search = next.search;
+			filters.kind = next.kind;
+			setUrlParam('q', next.search);
+			setUrlParam('kind', next.kind ? String(next.kind) : null);
+			reset.hidden = !filtersOn(filters);
+			onChange();
+		}
+
+		search.addEventListener('input', function () {
+			clearTimeout(pause);
+			pause = setTimeout(apply, 350);
+		});
+		// The browser's clear button (the x in a search box) sends this event.
+		search.addEventListener('search', apply);
+		kind.addEventListener('change', apply);
+
+		reset.hidden = !filtersOn(filters);
+		return h('div', { class: 'snn-a-filters' }, [
+			h('form', { class: 'snn-a-filter-row', role: 'search', onsubmit: function (event) {
+				event.preventDefault();
+				clearTimeout(pause);
+				apply();
+			} }, [search, kind, reset]),
+			h('p', { class: 'snn-a-hint', text: 'The search finds clicks by their text or address, pages by title or address, and goals by name. The click type narrows the clicks only.' })
+		]);
+	}
+
 	/**
 	 * The top row of Conversion Tracking: goals reached (a bar chart), the most clicked elements (a bar chart)
-	 * and the latest goals reached (a list). Each panel loads on its own.
+	 * and the latest goals reached (a list). Each panel loads on its own. The filters narrow all three.
 	 */
-	function conversionSummary(rp) {
+	function conversionSummary(rp, filters) {
 		var goalBody = h('div', { class: 'snn-a-fill' }, skeleton(4));
 		var clickBody = h('div', { class: 'snn-a-fill' }, skeleton(4));
 		var latestBody = h('div', {}, skeleton(5));
@@ -3297,7 +3393,12 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 				goalBody.appendChild(empty('No goals yet. The Button, Link and Form goals are added for you.'));
 				return;
 			}
-			var sorted = goals.slice().sort(function (a, b) { return b.conversions - a.conversions; });
+			var shown = goals.filter(function (g) { return matchesSearch(g.name, filters.search); });
+			if (!shown.length) {
+				goalBody.appendChild(empty('No goal matches “' + filters.search + '”.'));
+				return;
+			}
+			var sorted = shown.slice().sort(function (a, b) { return b.conversions - a.conversions; });
 			var total = sorted.reduce(function (sum, g) { return sum + Number(g.conversions || 0); }, 0);
 			barBox(goalBody, sorted.length, function (canvas) {
 				barChart(canvas, sorted.map(function (g) { return shorten(g.name || 'Untitled goal', 28); }), sorted.map(function (g) { return g.conversions; }), ACCENT);
@@ -3308,10 +3409,10 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 			goalBody.appendChild(failed(err));
 		});
 
-		api('stats/clicks', Object.assign({}, rp, { page: 1, per_page: 5 })).then(function (data) {
+		api('stats/clicks', Object.assign({}, rp, filterParams(filters), { page: 1, per_page: 5 })).then(function (data) {
 			clear(clickBody);
 			if (!data.rows.length) {
-				clickBody.appendChild(empty('No clicks in this period yet.'));
+				clickBody.appendChild(empty(filtersOn(filters) ? 'No clicks match these filters in this period.' : 'No clicks in this period yet.'));
 				return;
 			}
 			barBox(clickBody, data.rows.length, function (canvas) {
@@ -3325,11 +3426,12 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 			clickBody.appendChild(failed(err));
 		});
 
-		api('stats/recent-conversions', { limit: 10 }).then(function (rows) {
+		// The click type does not apply to goals, so only the search is sent here.
+		api('stats/recent-conversions', Object.assign({ limit: 10 }, filters.search ? { search: filters.search } : {})).then(function (rows) {
 			clear(latestBody);
 			latestBody.appendChild(table(['When', 'Goal', 'Visitor'], rows.map(function (row) {
 				return [atLabel(row.at), row.goal, [DEVICE_LABELS[row.device] || 'Other', countryName(row.country)].join(' · ')];
-			}), 'No goals reached yet.'));
+			}), filters.search ? 'No goal matches “' + filters.search + '”.' : 'No goals reached yet.'));
 		}).catch(function (err) {
 			clear(latestBody);
 			latestBody.appendChild(failed(err));
@@ -3342,23 +3444,24 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 		]);
 	}
 
-	var CLICKS_PER_PAGE = 10;
+	// Five rows keep the list short, so the chart beside it does not grow tall. Next shows the rest.
+	var CLICKS_PER_PAGE = 5;
 
 	/**
 	 * The two panels above the Conversion Tracking tabs: clicks and conversions per day (left), and the clicks
-	 * for each page and element, ten at a time (right). Each loads on its own, so the tabs below never wait for them.
+	 * for each page and element, five at a time (right). Each loads on its own, so the tabs below never wait for them.
 	 */
-	function conversionGrid(rp) {
+	function conversionGrid(rp, filters) {
 		// The chart box stretches to the height of the list beside it (see .snn-a-conv-chart in app.css).
 		var chartBody = h('div', { class: 'snn-a-conv-chart' }, skeleton(4));
 		var listBody = h('div', {}, skeleton(6));
 		var listPage = 1;
 
 		// The endpoint answers with one row per day, so the rows are used as they come.
-		api('stats/actions-series', rp).then(function (series) {
+		api('stats/actions-series', Object.assign({}, rp, filterParams(filters))).then(function (series) {
 			clear(chartBody);
 			if (!series.some(function (d) { return d.clicks || d.conversions; })) {
-				chartBody.appendChild(empty('No clicks or conversions in this range yet.'));
+				chartBody.appendChild(empty(filtersOn(filters) ? 'Nothing matches these filters in this period.' : 'No clicks or conversions in this range yet.'));
 				return;
 			}
 			var canvas = h('canvas', {});
@@ -3375,7 +3478,7 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 		function loadList() {
 			clear(listBody);
 			listBody.appendChild(skeleton(6));
-			api('stats/clicks', Object.assign({}, rp, { page: listPage, per_page: CLICKS_PER_PAGE })).then(function (data) {
+			api('stats/clicks', Object.assign({}, rp, filterParams(filters), { page: listPage, per_page: CLICKS_PER_PAGE })).then(function (data) {
 				var pages = Math.max(1, Math.ceil(data.total / CLICKS_PER_PAGE));
 				if (listPage > pages) {
 					listPage = pages;
@@ -3385,7 +3488,7 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 				clear(listBody);
 				listBody.appendChild(table(['Page', 'What was clicked', 'Kind', numCol('Clicks')], data.rows.map(function (row) {
 					return [pageCell(row), h('span', { class: 'snn-a-target', text: row.target || 'Unlabeled' }), row.kind, n(row.clicks)];
-				}), 'No clicks or form submits in this range yet.'));
+				}), filtersOn(filters) ? 'No clicks match these filters in this period.' : 'No clicks or form submits in this range yet.'));
 				listBody.appendChild(pager(listPage, pages, function (page) {
 					listPage = page;
 					loadList();

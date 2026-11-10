@@ -88,12 +88,18 @@ final class API {
 		$get( '/stats/journey', [ self::class, 'journey' ], [
 			'id' => [ 'type' => 'integer', 'required' => true ],
 		], $for( 'journeys', 'replay' ) );
-		// The Conversion Tracking grid: a chart of clicks and conversions per day, and the paginated click list.
-		$get( '/stats/actions-series', [ self::class, 'actions_series' ], $range, $for( 'goals' ) );
+		// The Conversion Tracking overview: a chart of clicks and conversions per day, the latest conversions and
+		// the paginated click list. The search text and the click type narrow them (see Stats::filter_values).
+		$filter = [
+			'search' => [ 'type' => 'string', 'default' => '', 'sanitize_callback' => 'sanitize_text_field' ],
+			'kind'   => [ 'type' => 'integer', 'default' => 0 ],
+		];
+		$get( '/stats/actions-series', [ self::class, 'actions_series' ], $range + $filter, $for( 'goals' ) );
 		$get( '/stats/recent-conversions', [ self::class, 'recent_conversions' ], [
-			'limit' => [ 'type' => 'integer', 'default' => 10 ],
+			'limit'  => [ 'type' => 'integer', 'default' => 10 ],
+			'search' => $filter['search'],
 		], $for( 'goals' ) );
-		$get( '/stats/clicks', [ self::class, 'clicks' ], $range + [
+		$get( '/stats/clicks', [ self::class, 'clicks' ], $range + $filter + [
 			'page'     => [ 'type' => 'integer', 'default' => 1 ],
 			'per_page' => [ 'type' => 'integer', 'default' => 10 ],
 		], $for( 'goals' ) );
@@ -244,17 +250,25 @@ final class API {
 	// --------------------------------------------------------------- goals
 
 	public static function actions_series( \WP_REST_Request $req ): \WP_REST_Response {
-		return self::ok( Stats::action_series( self::range( $req ) ) );
+		return self::ok( Stats::action_series( self::range( $req ), self::filter( $req ) ) );
 	}
 
 	public static function recent_conversions( \WP_REST_Request $req ): \WP_REST_Response {
-		return self::ok( Stats::recent_conversions( min( 50, max( 1, (int) $req->get_param( 'limit' ) ) ) ) );
+		return self::ok( Stats::recent_conversions( min( 50, max( 1, (int) $req->get_param( 'limit' ) ) ), self::filter( $req ) ) );
 	}
 
 	public static function clicks( \WP_REST_Request $req ): \WP_REST_Response {
 		$per_page = min( 50, max( 1, (int) $req->get_param( 'per_page' ) ) );
 
-		return self::ok( Stats::clicks( self::range( $req ), max( 1, (int) $req->get_param( 'page' ) ), $per_page ) );
+		return self::ok( Stats::clicks( self::range( $req ), max( 1, (int) $req->get_param( 'page' ) ), $per_page, self::filter( $req ) ) );
+	}
+
+	/** The search text and click type of the Conversion Tracking reports. Stats::filter_values cleans them. */
+	private static function filter( \WP_REST_Request $req ): array {
+		return [
+			'search' => (string) $req->get_param( 'search' ),
+			'kind'   => (int) $req->get_param( 'kind' ),
+		];
 	}
 
 	public static function goals( \WP_REST_Request $req ): \WP_REST_Response {

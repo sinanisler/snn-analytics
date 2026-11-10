@@ -193,10 +193,61 @@ final class Stats {
 	];
 
 	/**
+	 * The filters of the Conversion Tracking reports, cleaned: a search text (at most 100 characters) and a
+	 * click type (0 for every type, otherwise one of CLICK_TYPES).
+	 */
+	public static function filter_values( array $filter ): array {
+		$kind = (int) ( $filter['kind'] ?? 0 );
+
+		return [
+			'search' => mb_substr( trim( (string) ( $filter['search'] ?? '' ) ), 0, 100 ),
+			'kind'   => in_array( $kind, self::CLICK_TYPES, true ) ? $kind : 0,
+		];
+	}
+
+	/**
+	 * The SQL that narrows the click reports, to be added after their other conditions. The search matches the
+	 * clicked text or address, the page's title and address, and the names "Email address" and "Phone number"
+	 * (email and phone taps store only "mailto" or "tel"). Returns the SQL and the values for its placeholders.
+	 * It needs the event_targets, views and pages joins that the click report has.
+	 */
+	private static function click_conditions( array $filter ): array {
+		global $wpdb;
+
+		$f    = self::filter_values( $filter );
+		$sql  = '';
+		$args = [];
+
+		if ( $f['kind'] > 0 ) {
+			$sql    .= ' AND e.type = %d';
+			$args[] = $f['kind'];
+		}
+		if ( $f['search'] !== '' ) {
+			$like  = '%' . $wpdb->esc_like( $f['search'] ) . '%';
+			$named = [];
+			if ( stripos( 'Email address', $f['search'] ) !== false ) {
+				$named[] = 3;
+			}
+			if ( stripos( 'Phone number', $f['search'] ) !== false ) {
+				$named[] = 4;
+			}
+			$either = $named ? ' OR e.type IN (' . implode( ',', $named ) . ')' : '';
+
+			$sql    .= " AND (t.value LIKE %s OR p.title LIKE %s OR p.path LIKE %s{$either})";
+			$args[] = $like;
+			$args[] = $like;
+			$args[] = $like;
+		}
+
+		return [ $sql, $args ];
+	}
+
+	/**
 	 * Clicks and form submits per page and per element, most clicked first. Returns one page of the list
 	 * and the number of rows in all. An element is a button's text, a link's address or a form's id.
+	 * $filter narrows it by click type and search text (see filter_values); an empty filter changes nothing.
 	 */
-	public static function clicks( array $r, int $page, int $per_page ): array {
+	public static function clicks( array $r, int $page, int $per_page, array $filter = [] ): array {
 		global $wpdb;
 
 		$events  = DB::table( 'events' );
@@ -206,23 +257,21 @@ final class Stats {
 		$from    = Ranges::day_start( $r['from'] );
 		$to      = Ranges::day_start( $r['to'] + 1 ) - 1;
 		$types   = implode( ',', self::CLICK_TYPES );
+		[ $narrow, $narrow_args ] = self::click_conditions( $filter );
 
 		$joined = "FROM {$events} e
 			INNER JOIN {$views} v ON v.id = e.view_id
 			INNER JOIN {$pages} p ON p.id = v.page_id
 			INNER JOIN {$targets} t ON t.id = e.target_id
-			WHERE e.created_at BETWEEN %d AND %d AND e.type IN ({$types})
+			WHERE e.created_at BETWEEN %d AND %d AND e.type IN ({$types}){$narrow}
 			GROUP BY p.id, p.path, p.title, e.type, t.id, t.value";
 
-		$total = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM (SELECT p.id {$joined}) grouped", $from, $to ) );
+		$total = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM (SELECT p.id {$joined}) grouped", ...array_merge( [ $from, $to ], $narrow_args ) ) );
 
 		$rows = $wpdb->get_results( $wpdb->prepare(
 			"SELECT p.path, p.title, e.type, t.value AS target, COUNT(*) AS clicks {$joined}
 			 ORDER BY clicks DESC, p.id, e.type, t.id LIMIT %d OFFSET %d",
-			$from,
-			$to,
-			$per_page,
-			max( 0, ( $page - 1 ) * $per_page )
+			...array_merge( [ $from, $to ], $narrow_args, [ $per_page, max( 0, ( $page - 1 ) * $per_page ) ] )
 		), ARRAY_A );
 
 		return [
@@ -256,27 +305,47 @@ final class Stats {
 	 * One row per day in the range: clicks and form submits from the raw events, and conversions from the
 	 * daily goal totals. Days with nothing read zero.
 	 */
-	public static function action_series( array $r ): array {
+	public static function action_series( array $r, array $filter = [] ): array {
 		global $wpdb;
 
-		$events = DB::table( 'events' );
-		$types  = implode( ',', self::CLICK_TYPES );
-		$from   = Ranges::day_start( $r['from'] );
-		$to     = Ranges::day_start( $r['to'] + 1 ) - 1;
+		$events  = DB::table( 'events' );
+		$views   = DB::table( 'views' );
+		$pages   = DB::table( 'pages' );
+		$targets = DB::table( 'event_targets' );
+		$goals   = DB::table( 'goals' );
+		$types   = implode( ',', self::CLICK_TYPES );
+		$from    = Ranges::day_start( $r['from'] );
+		$to      = Ranges::day_start( $r['to'] + 1 ) - 1;
+		$f       = self::filter_values( $filter );
+
+		// The search reads the element and page names, so those tables are joined only when there is a search.
+		$joins = '';
+		if ( $f['search'] !== '' ) {
+			$joins = " INNER JOIN {$targets} t ON t.id = e.target_id
+				INNER JOIN {$views} v ON v.id = e.view_id
+				INNER JOIN {$pages} p ON p.id = v.page_id";
+		}
+		[ $narrow, $narrow_args ] = self::click_conditions( $filter );
 
 		$clicks = $wpdb->get_results( $wpdb->prepare(
-			"SELECT FLOOR((created_at + %d) / 86400) AS day, COUNT(*) AS clicks
-			 FROM {$events} WHERE created_at BETWEEN %d AND %d AND type IN ({$types})
+			"SELECT FLOOR((e.created_at + %d) / 86400) AS day, COUNT(*) AS clicks
+			 FROM {$events} e{$joins}
+			 WHERE e.created_at BETWEEN %d AND %d AND e.type IN ({$types}){$narrow}
 			 GROUP BY day",
-			Ranges::offset(),
-			$from,
-			$to
+			...array_merge( [ Ranges::offset(), $from, $to ], $narrow_args )
 		), ARRAY_A );
 
+		// A search also narrows the conversions to goals whose name matches. The click type does not apply to goals.
+		$goal_narrow = '';
+		$goal_args   = [];
+		if ( $f['search'] !== '' ) {
+			$goal_narrow = " AND goal_id IN (SELECT id FROM {$goals} WHERE name LIKE %s)";
+			$goal_args[] = '%' . $wpdb->esc_like( $f['search'] ) . '%';
+		}
+
 		$conversions = $wpdb->get_results( $wpdb->prepare(
-			'SELECT day, SUM(conversions) AS conversions FROM ' . DB::table( 'd_goals' ) . ' WHERE day BETWEEN %d AND %d GROUP BY day',
-			$r['from'],
-			$r['to']
+			'SELECT day, SUM(conversions) AS conversions FROM ' . DB::table( 'd_goals' ) . " WHERE day BETWEEN %d AND %d{$goal_narrow} GROUP BY day",
+			...array_merge( [ $r['from'], $r['to'] ], $goal_args )
 		), ARRAY_A );
 
 		$by_day = [];
@@ -299,18 +368,30 @@ final class Stats {
 		return $out;
 	}
 
-	/** The latest goals reached, newest first, with the device and country of the visit. Not limited to a range. */
-	public static function recent_conversions( int $limit ): array {
+	/**
+	 * The latest goals reached, newest first, with the device and country of the visit. Not limited to a range.
+	 * A search text keeps only goals whose name contains it.
+	 */
+	public static function recent_conversions( int $limit, array $filter = [] ): array {
 		global $wpdb;
+
+		$search = self::filter_values( $filter )['search'];
+		$where  = '';
+		$args   = [];
+		if ( $search !== '' ) {
+			$where  = ' WHERE g.name LIKE %s';
+			$args[] = '%' . $wpdb->esc_like( $search ) . '%';
+		}
+		$args[] = $limit;
 
 		$rows = $wpdb->get_results( $wpdb->prepare(
 			'SELECT c.created_at, g.name AS goal, s.device, co.code AS country
 			 FROM ' . DB::table( 'conversions' ) . ' c
 			 INNER JOIN ' . DB::table( 'goals' ) . ' g ON g.id = c.goal_id
 			 LEFT JOIN ' . DB::table( 'sessions' ) . ' s ON s.id = c.session_id
-			 LEFT JOIN ' . DB::table( 'countries' ) . ' co ON co.id = s.country_id
-			 ORDER BY c.created_at DESC LIMIT %d',
-			$limit
+			 LEFT JOIN ' . DB::table( 'countries' ) . ' co ON co.id = s.country_id'
+			 . $where . ' ORDER BY c.created_at DESC LIMIT %d',
+			...$args
 		), ARRAY_A );
 
 		return array_map( static fn( $row ) => [
