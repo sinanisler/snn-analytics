@@ -179,6 +179,148 @@ final class Stats {
 		];
 	}
 
+	/** Event types that are clicks or form submits: 1 outside link, 2 download, 3 email, 4 phone, 7 link on this site, 8 button, 9 form. */
+	const CLICK_TYPES = [ 1, 2, 3, 4, 7, 8, 9 ];
+
+	const CLICK_KINDS = [
+		1 => 'Outside link',
+		2 => 'Download',
+		3 => 'Email link',
+		4 => 'Phone link',
+		7 => 'Link on this site',
+		8 => 'Button',
+		9 => 'Form',
+	];
+
+	/**
+	 * Clicks and form submits per page and per element, most clicked first. Returns one page of the list
+	 * and the number of rows in all. An element is a button's text, a link's address or a form's id.
+	 */
+	public static function clicks( array $r, int $page, int $per_page ): array {
+		global $wpdb;
+
+		$events  = DB::table( 'events' );
+		$views   = DB::table( 'views' );
+		$pages   = DB::table( 'pages' );
+		$targets = DB::table( 'event_targets' );
+		$from    = Ranges::day_start( $r['from'] );
+		$to      = Ranges::day_start( $r['to'] + 1 ) - 1;
+		$types   = implode( ',', self::CLICK_TYPES );
+
+		$joined = "FROM {$events} e
+			INNER JOIN {$views} v ON v.id = e.view_id
+			INNER JOIN {$pages} p ON p.id = v.page_id
+			INNER JOIN {$targets} t ON t.id = e.target_id
+			WHERE e.created_at BETWEEN %d AND %d AND e.type IN ({$types})
+			GROUP BY p.id, p.path, p.title, e.type, t.id, t.value";
+
+		$total = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM (SELECT p.id {$joined}) grouped", $from, $to ) );
+
+		$rows = $wpdb->get_results( $wpdb->prepare(
+			"SELECT p.path, p.title, e.type, t.value AS target, COUNT(*) AS clicks {$joined}
+			 ORDER BY clicks DESC, p.id, e.type, t.id LIMIT %d OFFSET %d",
+			$from,
+			$to,
+			$per_page,
+			max( 0, ( $page - 1 ) * $per_page )
+		), ARRAY_A );
+
+		return [
+			'total' => $total,
+			'rows'  => array_map( static fn( $row ) => [
+				'path'   => (string) $row['path'],
+				'title'  => self::clean_title( (string) $row['title'] ),
+				'kind'   => self::CLICK_KINDS[ (int) $row['type'] ] ?? 'Other',
+				// Email and phone taps store only "mailto" or "tel" (the address is never sent), so they get a plain name.
+				'target' => self::target_name( (int) $row['type'], (string) $row['target'] ),
+				'clicks' => (int) $row['clicks'],
+			], $rows ),
+		];
+	}
+
+	/** What a clicked element is called in the report: its text or address, or a plain name for mail and phone taps. */
+	private static function target_name( int $type, string $value ): string {
+		if ( $type === 3 ) {
+			return 'Email address';
+		}
+		if ( $type === 4 ) {
+			return 'Phone number';
+		}
+
+		$name = self::clean_title( $value );
+
+		return $name !== '' ? $name : 'Unlabeled';
+	}
+
+	/**
+	 * One row per day in the range: clicks and form submits from the raw events, and conversions from the
+	 * daily goal totals. Days with nothing read zero.
+	 */
+	public static function action_series( array $r ): array {
+		global $wpdb;
+
+		$events = DB::table( 'events' );
+		$types  = implode( ',', self::CLICK_TYPES );
+		$from   = Ranges::day_start( $r['from'] );
+		$to     = Ranges::day_start( $r['to'] + 1 ) - 1;
+
+		$clicks = $wpdb->get_results( $wpdb->prepare(
+			"SELECT FLOOR((created_at + %d) / 86400) AS day, COUNT(*) AS clicks
+			 FROM {$events} WHERE created_at BETWEEN %d AND %d AND type IN ({$types})
+			 GROUP BY day",
+			Ranges::offset(),
+			$from,
+			$to
+		), ARRAY_A );
+
+		$conversions = $wpdb->get_results( $wpdb->prepare(
+			'SELECT day, SUM(conversions) AS conversions FROM ' . DB::table( 'd_goals' ) . ' WHERE day BETWEEN %d AND %d GROUP BY day',
+			$r['from'],
+			$r['to']
+		), ARRAY_A );
+
+		$by_day = [];
+		foreach ( $clicks as $row ) {
+			$by_day[ (int) $row['day'] ]['clicks'] = (int) $row['clicks'];
+		}
+		foreach ( $conversions as $row ) {
+			$by_day[ (int) $row['day'] ]['conversions'] = (int) $row['conversions'];
+		}
+
+		$out = [];
+		for ( $day = $r['from']; $day <= $r['to']; $day++ ) {
+			$out[] = [
+				'date'        => gmdate( 'Y-m-d', $day * 86400 ),
+				'clicks'      => $by_day[ $day ]['clicks'] ?? 0,
+				'conversions' => $by_day[ $day ]['conversions'] ?? 0,
+			];
+		}
+
+		return $out;
+	}
+
+	/** The latest goals reached, newest first, with the device and country of the visit. Not limited to a range. */
+	public static function recent_conversions( int $limit ): array {
+		global $wpdb;
+
+		$rows = $wpdb->get_results( $wpdb->prepare(
+			'SELECT c.created_at, g.name AS goal, s.device, co.code AS country
+			 FROM ' . DB::table( 'conversions' ) . ' c
+			 INNER JOIN ' . DB::table( 'goals' ) . ' g ON g.id = c.goal_id
+			 LEFT JOIN ' . DB::table( 'sessions' ) . ' s ON s.id = c.session_id
+			 LEFT JOIN ' . DB::table( 'countries' ) . ' co ON co.id = s.country_id
+			 ORDER BY c.created_at DESC LIMIT %d',
+			$limit
+		), ARRAY_A );
+
+		return array_map( static fn( $row ) => [
+			'at'      => (int) $row['created_at'],
+			'goal'    => (string) $row['goal'],
+			'device'  => (int) ( $row['device'] ?? 0 ),
+			'country' => (string) ( $row['country'] ?? '' ),
+		], $rows );
+	}
+
 	public static function pages( array $r, array $args ): array {
 		global $wpdb;
 

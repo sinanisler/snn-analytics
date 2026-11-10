@@ -118,6 +118,14 @@
 		'Exit rate': 'The share of views of this page that were the last page of the visit.',
 		'Exits': 'Visits that ended on this page.',
 		'Conversions': 'Times visitors completed a goal. Each visit counts once per goal.',
+		'Clicks': 'Times a visitor clicked or submitted this, on the page shown.',
+		'What was clicked': 'The text of the button, the address of the link, or the id of the form.',
+		'Kind': 'What sort of click it was: a button, a link, a download, an email or phone link, or a form.',
+		'Clicks and conversions': 'Each day in the period. Clicks are buttons, links and form submits. Conversions are goals reached.',
+		'Clicks by page': 'Every button, link and form that was clicked, grouped by the page it was on. Most clicked first.',
+		'Conversions by goal': 'How many times each goal was reached in the period. A visit counts once per goal.',
+		'Top clicks': 'The buttons, links and forms that were clicked most in the period.',
+		'Latest conversions': 'The last goals reached, newest first, with the device and country of the visit.',
 		'Goal': 'An action you want visitors to take.',
 		'Type': 'What kind of action the goal watches for.',
 		'Rule': 'What a visit has to do to count as a conversion.',
@@ -3154,6 +3162,8 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 
 		root.appendChild(h('div', { class: 'snn-a-toolbar' }, rangeControl()));
 		root.appendChild(nav);
+		root.appendChild(conversionSummary(rp));
+		root.appendChild(conversionGrid(rp));
 		root.appendChild(panel);
 
 		function pick(next) {
@@ -3202,6 +3212,180 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 
 		drawNav();
 		load();
+	}
+
+	/** Shortens a label for a chart axis or a table cell. */
+	function shorten(text, max) {
+		text = String(text || '');
+		return text.length > max ? text.slice(0, max - 1) + '…' : text;
+	}
+
+	/** A link address without its scheme and www, so it reads as a place rather than a URL. */
+	function plainTarget(text) {
+		return String(text || '').replace(/^https?:\/\/(www\.)?/, '');
+	}
+
+	/** "17:53" for a visit today, "9 Kas 17:53" for an earlier one. */
+	function atLabel(ts) {
+		var d = new Date(ts * 1000);
+		var today = new Date().toDateString() === d.toDateString();
+		var label = (today ? '' : d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ') + clock(ts);
+		// No-break spaces keep the date and the time on one line in a narrow column.
+		return label.replace(/ /g, ' ');
+	}
+
+	/**
+	 * Adds a box for a bar chart to parent. The box is at least as tall as its bars and fills the rest of its
+	 * card. draw gets the canvas after it is in the page, which Chart.js needs to size itself.
+	 */
+	function barBox(parent, bars, draw) {
+		var canvas = h('canvas', {});
+		parent.appendChild(h('div', { class: 'snn-a-conv-chart', style: 'min-height:' + Math.max(160, 34 * bars + 30) + 'px' }, canvas));
+		draw(canvas);
+	}
+
+	/** Horizontal bars, one per label. Used by the summary panels above the tabs. */
+	function barChart(canvas, labels, values, color) {
+		var chart = new window.Chart(canvas, {
+			type: 'bar',
+			data: {
+				labels: labels,
+				datasets: [{ data: values, backgroundColor: color, borderRadius: 4, maxBarThickness: 18 }]
+			},
+			options: {
+				indexAxis: 'y',
+				responsive: true,
+				maintainAspectRatio: false,
+				plugins: { legend: { display: false } },
+				scales: {
+					x: { beginAtZero: true, grid: { color: '#f0f0f1' }, ticks: { precision: 0 } },
+					y: { grid: { display: false } }
+				}
+			}
+		});
+		charts.push(chart);
+		return chart;
+	}
+
+	/**
+	 * The top row of Conversion Tracking: goals reached (a bar chart), the most clicked elements (a bar chart)
+	 * and the latest goals reached (a list). Each panel loads on its own.
+	 */
+	function conversionSummary(rp) {
+		var goalBody = h('div', { class: 'snn-a-fill' }, skeleton(4));
+		var clickBody = h('div', { class: 'snn-a-fill' }, skeleton(4));
+		var latestBody = h('div', {}, skeleton(5));
+
+		api('goals', rp).then(function (goals) {
+			clear(goalBody);
+			if (!goals.length) {
+				goalBody.appendChild(empty('No goals yet. The Button, Link and Form goals are added for you.'));
+				return;
+			}
+			var sorted = goals.slice().sort(function (a, b) { return b.conversions - a.conversions; });
+			var total = sorted.reduce(function (sum, g) { return sum + Number(g.conversions || 0); }, 0);
+			barBox(goalBody, sorted.length, function (canvas) {
+				barChart(canvas, sorted.map(function (g) { return shorten(g.name || 'Untitled goal', 28); }), sorted.map(function (g) { return g.conversions; }), ACCENT);
+			});
+			goalBody.appendChild(h('p', { class: 'snn-a-card-foot', text: n(total) + ' goals reached in total' }));
+		}).catch(function (err) {
+			clear(goalBody);
+			goalBody.appendChild(failed(err));
+		});
+
+		api('stats/clicks', Object.assign({}, rp, { page: 1, per_page: 5 })).then(function (data) {
+			clear(clickBody);
+			if (!data.rows.length) {
+				clickBody.appendChild(empty('No clicks in this period yet.'));
+				return;
+			}
+			barBox(clickBody, data.rows.length, function (canvas) {
+				barChart(canvas, data.rows.map(function (row) {
+					return shorten(plainTarget(row.target), 20) + ' · ' + shorten(row.title || row.path, 12);
+				}), data.rows.map(function (row) { return row.clicks; }), COLOR_VIEWS);
+			});
+			clickBody.appendChild(h('p', { class: 'snn-a-card-foot', text: 'Top ' + data.rows.length + ' of ' + n(data.total) + ' clicked elements' }));
+		}).catch(function (err) {
+			clear(clickBody);
+			clickBody.appendChild(failed(err));
+		});
+
+		api('stats/recent-conversions', { limit: 10 }).then(function (rows) {
+			clear(latestBody);
+			latestBody.appendChild(table(['When', 'Goal', 'Visitor'], rows.map(function (row) {
+				return [atLabel(row.at), row.goal, [DEVICE_LABELS[row.device] || 'Other', countryName(row.country)].join(' · ')];
+			}), 'No goals reached yet.'));
+		}).catch(function (err) {
+			clear(latestBody);
+			latestBody.appendChild(failed(err));
+		});
+
+		return h('div', { class: 'snn-a-grid-3' }, [
+			card('Conversions by goal', goalBody, { sub: 'Goals reached in the selected period' }),
+			card('Top clicks', clickBody, { sub: 'The five most clicked buttons, links and forms' }),
+			card('Latest conversions', latestBody, { sub: 'The last ten goals reached' })
+		]);
+	}
+
+	var CLICKS_PER_PAGE = 10;
+
+	/**
+	 * The two panels above the Conversion Tracking tabs: clicks and conversions per day (left), and the clicks
+	 * for each page and element, ten at a time (right). Each loads on its own, so the tabs below never wait for them.
+	 */
+	function conversionGrid(rp) {
+		// The chart box stretches to the height of the list beside it (see .snn-a-conv-chart in app.css).
+		var chartBody = h('div', { class: 'snn-a-conv-chart' }, skeleton(4));
+		var listBody = h('div', {}, skeleton(6));
+		var listPage = 1;
+
+		api('stats/actions-series', rp).then(function (data) {
+			clear(chartBody);
+			var series = data.series || [];
+			if (!series.some(function (d) { return d.clicks || d.conversions; })) {
+				chartBody.appendChild(empty('No clicks or conversions in this range yet.'));
+				return;
+			}
+			var canvas = h('canvas', {});
+			chartBody.appendChild(canvas);
+			lineChart(canvas, series.map(function (d) { return dayLabel(d.date); }), [
+				{ label: 'Clicks and submits', data: series.map(function (d) { return d.clicks; }), color: ACCENT },
+				{ label: 'Conversions', data: series.map(function (d) { return d.conversions; }), color: '#00a32a' }
+			]);
+		}).catch(function (err) {
+			clear(chartBody);
+			chartBody.appendChild(failed(err));
+		});
+
+		function loadList() {
+			clear(listBody);
+			listBody.appendChild(skeleton(6));
+			api('stats/clicks', Object.assign({}, rp, { page: listPage, per_page: CLICKS_PER_PAGE })).then(function (data) {
+				var pages = Math.max(1, Math.ceil(data.total / CLICKS_PER_PAGE));
+				if (listPage > pages) {
+					listPage = pages;
+					loadList();
+					return;
+				}
+				clear(listBody);
+				listBody.appendChild(table(['Page', 'What was clicked', 'Kind', numCol('Clicks')], data.rows.map(function (row) {
+					return [pageCell(row), h('span', { class: 'snn-a-target', text: row.target || 'Unlabeled' }), row.kind, n(row.clicks)];
+				}), 'No clicks or form submits in this range yet.'));
+				listBody.appendChild(pager(listPage, pages, function (page) {
+					listPage = page;
+					loadList();
+				}));
+			}).catch(function (err) {
+				clear(listBody);
+				listBody.appendChild(failed(err, loadList));
+			});
+		}
+		loadList();
+
+		return h('div', { class: 'snn-a-grid snn-a-conv-grid' }, [
+			card('Clicks and conversions', chartBody, { sub: 'Each day in the selected period' }),
+			card('Clicks by page', listBody, { sub: 'Buttons, links and forms, most clicked first' })
+		]);
 	}
 
 	function goalsPanel(goals, reload) {
@@ -3297,11 +3481,25 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 			why: 'Useful when sending people to a partner, a booking system or a shop is the whole point of your page.'
 		},
 		{
-			key: 'click_submit', group: 'Clicks', label: 'Someone submits a form', short: 'Submits a form',
-			type: 2, match: 1, fixed: 'form [type="submit"], form button:not([type="button"]):not([type="reset"])',
-			what: 'Counts a visit when someone clicks the submit button of any form on your site.',
-			how: 'Nothing to enter. It counts the click on the button, so a form that fails validation can still count. For an exact count, use a thank-you page goal instead.',
-			why: 'A quick way to measure contact, sign-up and newsletter forms when you have no thank-you page.'
+			key: 'any_button', group: 'Clicks', label: 'Someone clicks any button', short: 'Any button',
+			type: 4, match: 1, fixed: 'button',
+			what: 'Counts a visit when someone clicks any button on your site, whatever the button says.',
+			how: 'Nothing to enter. Every button counts, including menus and sliders.',
+			why: 'A simple measure of how many visitors interact with your pages at all.'
+		},
+		{
+			key: 'any_link', group: 'Clicks', label: 'Someone clicks any link', short: 'Any link',
+			type: 4, match: 1, fixed: 'link',
+			what: 'Counts a visit when someone clicks any link: to another page, a file, an email address or a phone number.',
+			how: 'Nothing to enter. Every link counts.',
+			why: 'Shows how many visitors go on to something else, such as a file, a partner or your contact details.'
+		},
+		{
+			key: 'any_form', group: 'Clicks', label: 'Someone submits any form', short: 'Any form',
+			type: 4, match: 1, fixed: 'form',
+			what: 'Counts a visit when someone submits any form on your site.',
+			how: 'Nothing to enter. Forms count whether they were sent with a button or the Enter key.',
+			why: 'The clearest sign that someone has got in touch or signed up.'
 		},
 		{
 			key: 'event', group: 'Advanced', label: 'My site sends a custom event', short: 'Custom event',
@@ -3312,33 +3510,38 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 		}
 	];
 
-	/** Quick start buttons: [button label, kind key, value (for kinds that need one), goal name]. */
-	var GOAL_PRESETS = [
-		['Pages', [
-			['Thank-you page', 'page_contains', '/thank', 'Thank-you page visited'],
-			['Shop page', 'page_prefix', '/shop', 'Shop visited'],
-			['Order received (WooCommerce)', 'page_contains', '/order-received', 'Order completed'],
-			['Checkout page', 'page_contains', '/checkout', 'Checkout visited'],
-			['Cart page', 'page_contains', '/cart', 'Cart visited'],
-			['Contact page', 'page_contains', '/contact', 'Contact page visited'],
-			['Pricing page', 'page_contains', '/pricing', 'Pricing viewed'],
-			['Sign-up or register page', 'page_contains', '/regist', 'Sign-up page visited'],
-			['Booking page', 'page_contains', '/book', 'Booking page visited'],
-			['Any blog post', 'page_prefix', '/blog/', 'Read a blog post']
-		]],
-		['Clicks and actions', [
-			['Phone number', 'click_phone', '', 'Phone number clicked'],
-			['Email address', 'click_email', '', 'Email address clicked'],
-			['File download', 'click_download', '', 'File downloaded'],
-			['Link to another site', 'click_outbound', '', 'Outbound link clicked'],
-			['Form submit', 'click_submit', '', 'Form submitted'],
-			['Add to cart (WooCommerce)', 'click_button', '.add_to_cart_button, .single_add_to_cart_button', 'Added to cart'],
-			['WhatsApp link', 'click_button', 'a[href*="wa.me"], a[href*="whatsapp.com"]', 'WhatsApp clicked'],
-			['Social media link', 'click_button', 'a[href*="facebook.com"], a[href*="instagram.com"], a[href*="linkedin.com"], a[href*="twitter.com"], a[href*="youtube.com"]', 'Social link clicked']
-		]]
+	/**
+	 * Every named goal as [label, kind key, value, goal name]. The funnel templates use these by label.
+	 * The Add a goal form offers only the QUICK_GOALS as one-click choices, so the screen stays short.
+	 */
+	var GOAL_LIBRARY = [
+		['Thank-you page', 'page_contains', '/thank', 'Thank-you page visited'],
+		['Shop page', 'page_prefix', '/shop', 'Shop visited'],
+		['Order received (WooCommerce)', 'page_contains', '/order-received', 'Order completed'],
+		['Checkout page', 'page_contains', '/checkout', 'Checkout visited'],
+		['Cart page', 'page_contains', '/cart', 'Cart visited'],
+		['Contact page', 'page_contains', '/contact', 'Contact page visited'],
+		['Pricing page', 'page_contains', '/pricing', 'Pricing viewed'],
+		['Sign-up or register page', 'page_contains', '/regist', 'Sign-up page visited'],
+		['Booking page', 'page_contains', '/book', 'Booking page visited'],
+		['Any blog post', 'page_prefix', '/blog/', 'Read a blog post'],
+		['Phone number', 'click_phone', '', 'Phone number clicked'],
+		['Email address', 'click_email', '', 'Email address clicked'],
+		['File download', 'click_download', '', 'File downloaded'],
+		['Link to another site', 'click_outbound', '', 'Outbound link clicked'],
+		['Form submit', 'any_form', '', 'Form submitted'],
+		['Add to cart (WooCommerce)', 'click_button', '.add_to_cart_button, .single_add_to_cart_button', 'Added to cart'],
+		['WhatsApp link', 'click_button', 'a[href*="wa.me"], a[href*="whatsapp.com"]', 'WhatsApp clicked'],
+		['Social media link', 'click_button', 'a[href*="facebook.com"], a[href*="instagram.com"], a[href*="linkedin.com"], a[href*="twitter.com"], a[href*="youtube.com"]', 'Social link clicked']
 	];
 
-	/** Ready-made funnels. Steps name entries in GOAL_PRESETS; missing goals are created with the funnel. */
+	/**
+	 * The one-click goals shown in Add a goal. Each name is a label in GOAL_LIBRARY. Buttons, links and forms
+	 * are counted by default (see the Button, Link and Form goals), so these three are the page-based ones.
+	 */
+	var QUICK_GOALS = ['Thank-you page', 'Contact page', 'Order received (WooCommerce)'];
+
+	/** Ready-made funnels. Steps name entries in GOAL_LIBRARY; missing goals are created with the funnel. */
 	var FUNNEL_TEMPLATES = [
 		{
 			label: 'Online purchase', name: 'Purchase',
@@ -3353,31 +3556,13 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 			what: 'Follows visitors from the contact page to the thank-you page shown after sending the form.',
 			how: 'Your form needs to send people to a page whose address contains “thank”.',
 			why: 'Tells you how many people who open the contact page actually send a message.'
-		},
-		{
-			label: 'Sign-up', name: 'Sign-up',
-			steps: ['Sign-up or register page', 'Thank-you page'],
-			what: 'Follows visitors from the sign-up page to the page they see once they are registered.',
-			how: 'Registration should end on a page whose address contains “thank”.',
-			why: 'A low rate here means the sign-up form is too long or confusing.'
-		},
-		{
-			label: 'Blog reader to enquiry', name: 'Blog to enquiry',
-			steps: ['Any blog post', 'Pricing page', 'Contact page'],
-			what: 'Follows visitors from reading a blog post to the pricing page and then the contact page.',
-			how: 'Works if your posts live under /blog/. Otherwise create your own goals first.',
-			why: 'Shows whether your content brings in people who go on to become customers.'
 		}
 	];
 
-	function presetSpec(label) {
-		var found = null;
-		GOAL_PRESETS.forEach(function (group) {
-			group[1].forEach(function (p) {
-				if (p[0] === label) { found = { label: p[0], kind: p[1], value: p[2], name: p[3] }; }
-			});
-		});
-		return found;
+	/** One library goal as an object, or null when no goal has that label. */
+	function goalSpec(label) {
+		var row = GOAL_LIBRARY.filter(function (p) { return p[0] === label; })[0];
+		return row ? { label: row[0], kind: row[1], value: row[2], name: row[3] } : null;
 	}
 
 	/** The saved goal that already does what a preset does, if any. */
@@ -3391,13 +3576,13 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 	function funnelTemplates(goals, onSaved) {
 		var detail = h('div');
 		var buttons = h('div', { class: 'snn-a-presets' }, FUNNEL_TEMPLATES.map(function (t) {
-			return h('button', { type: 'button', class: 'button', 'data-tip': t.what, onclick: function () { choose(t); } }, t.label);
+			return h('button', { type: 'button', class: 'button snn-a-preset', 'data-tip': t.what, onclick: function () { choose(t); } }, t.label);
 		}));
 
 		function choose(t) {
 			var error = formMessage();
 			var go = h('button', { type: 'button', class: 'button button-primary' }, 'Create this funnel');
-			var specs = t.steps.map(presetSpec);
+			var specs = t.steps.map(goalSpec);
 			var box = h('div', { class: 'snn-a-explain' });
 			explain(box, t);
 			box.appendChild(h('p', {}, h('strong', { text: 'Steps, in order:' })));
@@ -3442,16 +3627,11 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 
 	var CAMPAIGN_PRESETS = [
 		['Newsletter', 'newsletter', 'email', 'a link inside an email newsletter'],
-		['Email signature', 'email-signature', 'email', 'a link in your email signature'],
 		['Facebook post', 'facebook', 'social', 'a link in an unpaid Facebook post'],
 		['Instagram bio or story', 'instagram', 'social', 'the link in your Instagram bio or a story'],
 		['LinkedIn post', 'linkedin', 'social', 'a link in a LinkedIn post or profile'],
-		['X (Twitter) post', 'twitter', 'social', 'a link in a post on X'],
-		['YouTube description', 'youtube', 'video', 'a link in a YouTube video description'],
 		['Google Ads', 'google', 'cpc', 'the destination link of a Google Ads advertisement'],
-		['Facebook or Instagram ads', 'facebook', 'paid-social', 'the link of a paid ad on Facebook or Instagram'],
-		['QR code on print', 'qr-code', 'print', 'a link behind a QR code on a flyer, poster or business card'],
-		['Partner website', 'partner', 'referral', 'a link you give to a partner or sponsor']
+		['QR code on print', 'qr-code', 'print', 'a link behind a QR code on a flyer, poster or business card']
 	];
 
 	function kindByKey(key) {
@@ -3466,6 +3646,9 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 		if (g.type === 3) {
 			return kindByKey('event');
 		}
+		if (g.type === 4) {
+			return kindByKey({ button: 'any_button', link: 'any_link', form: 'any_form' }[g.value] || 'any_button');
+		}
 		return GOAL_KINDS.filter(function (k) { return k.fixed && k.fixed === g.value; })[0] || kindByKey('click_button');
 	}
 
@@ -3477,6 +3660,9 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 		if (kind.key === 'page_prefix') { return 'Visits a page starting with ' + g.value; }
 		if (kind.key === 'event') { return 'Custom event “' + g.value + '”'; }
 		if (kind.key === 'click_button') { return 'Clicks ' + g.value; }
+		if (kind.key === 'any_button') { return 'Clicks any button'; }
+		if (kind.key === 'any_link') { return 'Clicks any link'; }
+		if (kind.key === 'any_form') { return 'Submits any form'; }
 		return kind.short;
 	}
 
@@ -3498,14 +3684,17 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 		return h('p', { class: 'snn-a-hint is-error', role: 'alert' });
 	}
 
-	/** Three short paragraphs under a choice: what it does, how to set it up, why you would use it. */
+	/** What a choice counts and how to set it up. Why you would use it sits behind a disclosure, to keep the form short. */
 	function explain(box, info) {
 		clear(box);
-		[['What it counts', info.what], ['How to set it up', info.how], ['Why use it', info.why]].forEach(function (row) {
+		[['What it counts', info.what], ['How to set it up', info.how]].forEach(function (row) {
 			if (row[1]) {
 				box.appendChild(h('p', {}, [h('strong', { text: row[0] + ': ' }), row[1]]));
 			}
 		});
+		if (info.why) {
+			box.appendChild(h('details', { class: 'snn-a-why' }, [h('summary', {}, 'Why use this?'), h('p', { text: info.why })]));
+		}
 		if (info.technical) {
 			box.appendChild(h('p', { class: 'snn-a-muted' }, ['Behind the scenes it watches for ', h('code', { text: info.technical }), '.']));
 		}
@@ -3545,24 +3734,19 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 
 		var form = h('details', { class: 'snn-a-add', open: open ? true : null });
 
-		function usePreset(p) {
-			kind.value = p[1];
+		function usePreset(spec) {
+			kind.value = spec.kind;
 			refresh();
-			value.value = p[2];
-			name.value = p[3];
+			value.value = spec.value;
+			name.value = spec.name;
 			error.textContent = '';
 			form.open = true;
 			valueField.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 		}
 
-		var presetBox = h('div', {}, GOAL_PRESETS.map(function (group) {
-			return h('div', {}, [
-				h('p', { class: 'snn-a-presets-sub', text: group[0] }),
-				h('div', { class: 'snn-a-presets' }, group[1].map(function (p) {
-					var k = kindByKey(p[1]);
-					return h('button', { type: 'button', class: 'button', 'data-tip': k.what, onclick: function () { usePreset(p); } }, p[0]);
-				}))
-			]);
+		var presetBox = h('div', { class: 'snn-a-presets', role: 'group', 'aria-label': 'Quick start goals' }, QUICK_GOALS.map(function (label) {
+			var spec = goalSpec(label);
+			return h('button', { type: 'button', class: 'button snn-a-preset', 'data-tip': kindByKey(spec.kind).what, onclick: function () { usePreset(spec); } }, spec.label);
 		}));
 
 		[

@@ -215,6 +215,25 @@ final class Tracker {
 		return $done;
 	}
 
+	/**
+	 * Why a kind of click or submit is not recorded, or null when it is recorded. Types: 8 button, 9 form,
+	 * and 1, 2, 3, 4, 7 for the link kinds (outside, download, email, phone, this site).
+	 */
+	private static function off_by_setting( int $type, array $settings ): ?string {
+		// A missing key means the default, which is on.
+		if ( $type === 8 && ! ( $settings['track_buttons'] ?? true ) ) {
+			return 'button clicks are off';
+		}
+		if ( in_array( $type, [ 1, 2, 3, 4, 7 ], true ) && ! ( $settings['track_links'] ?? true ) ) {
+			return 'link clicks are off';
+		}
+		if ( $type === 9 && ! ( $settings['track_forms'] ?? true ) ) {
+			return 'form submits are off';
+		}
+
+		return null;
+	}
+
 	private static function apply( array $hit, array $found, int $now, array $settings ): array {
 		global $wpdb;
 
@@ -239,6 +258,12 @@ final class Tracker {
 			self::trail( $hit, $view, $session, $now );
 			$note .= ', ' . intdiv( strlen( $hit['s'] ), 12 ) . ' samples';
 		} elseif ( $hit['e'] === 'ev' ) {
+			// A page cached before a setting was turned off can still send the old kind of click. Drop it here too.
+			$off = self::off_by_setting( (int) $hit['t'], $settings );
+			if ( $off !== null ) {
+				return [ 'setting-off', $off ];
+			}
+
 			$target = DB::upsert( DB::table( 'event_targets' ), [ 'hash' => DB::key( $hit['v'] ), 'value' => $hit['v'] ] );
 
 			DB::insert( DB::table( 'events' ), [

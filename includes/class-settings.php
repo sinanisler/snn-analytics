@@ -26,6 +26,10 @@ final class Settings {
 			'goal_rules'      => [],       // active goals, copied here so the tracker can check them without a query
 			'geo_city_file'   => '',       // absolute path of the installed city database, if any
 			'delete_on_uninstall' => false,  // drop all tables and data when the plugin is deleted
+			'track_buttons'       => true,   // clicks on buttons, by their text, on every page
+			'track_links'         => true,   // clicks on links: other sites, files, email, phone and pages on this site
+			'track_forms'         => true,   // form submits, by the form's id (field values are never read)
+			'default_goals_added' => false,  // the Button, Link and Form goals were added to this site (once only)
 			'heatmap'             => true,   // record click positions as per-page counters
 			'cursor_trails'       => false,  // record pointer paths, one trail per view (off by default)
 			'cursor_retention_days' => 30,   // trails older than this are deleted: 14, 30, 365 or 3650

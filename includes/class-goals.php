@@ -15,6 +15,14 @@ final class Goals {
 	const TYPE_PAGE  = 1; // page path
 	const TYPE_CLICK = 2; // CSS selector, reported by the tracker as goal id
 	const TYPE_EVENT = 3; // custom event name from snnA.track()
+	const TYPE_KIND  = 4; // any button, link or form: value is the kind (see KIND_EVENTS), counted from the tracked events
+
+	/** The tracker event types each kind covers. Same numbers as Stats::CLICK_TYPES and the tracker. */
+	const KIND_EVENTS = [
+		'button' => [ 8 ],
+		'link'   => [ 1, 2, 3, 4, 7 ],
+		'form'   => [ 9 ],
+	];
 
 	const MATCH_EXACT    = 1;
 	const MATCH_CONTAINS = 2;
@@ -34,13 +42,16 @@ final class Goals {
 
 	/**
 	 * $type is the tracker event type: 5 for a custom event, 6 for a goal click
-	 * (value "goal:ID"). Other types never convert a goal.
+	 * (value "goal:ID"), and 1 to 4, 7, 8, 9 for the clicks and submits that kind goals count.
+	 * Other types never convert a goal.
 	 */
 	public static function check_event( int $session_id, int $type, string $value, int $now ): void {
 		foreach ( Settings::get()['goal_rules'] as $rule ) {
 			if ( $type === 6 && $rule['type'] === self::TYPE_CLICK && 'goal:' . $rule['id'] === $value ) {
 				self::convert( $rule['id'], $session_id, $now );
 			} elseif ( $type === 5 && $rule['type'] === self::TYPE_EVENT && self::matches( $rule, $value ) ) {
+				self::convert( $rule['id'], $session_id, $now );
+			} elseif ( $rule['type'] === self::TYPE_KIND && in_array( $type, self::KIND_EVENTS[ $rule['value'] ] ?? [], true ) ) {
 				self::convert( $rule['id'], $session_id, $now );
 			}
 		}
@@ -95,8 +106,11 @@ final class Goals {
 		$name  = Validator::text( $data['name'] ?? '', 100 );
 		$value = Validator::text( $data['value'] ?? '', 255 );
 
-		if ( ! in_array( $type, [ self::TYPE_PAGE, self::TYPE_CLICK, self::TYPE_EVENT ], true ) ) {
+		if ( ! in_array( $type, [ self::TYPE_PAGE, self::TYPE_CLICK, self::TYPE_EVENT, self::TYPE_KIND ], true ) ) {
 			throw new \InvalidArgumentException( 'Unknown goal type.' );
+		}
+		if ( $type === self::TYPE_KIND && ! isset( self::KIND_EVENTS[ $value ] ) ) {
+			throw new \InvalidArgumentException( 'Unknown kind of click. Use button, link or form.' );
 		}
 		if ( ! in_array( $match, [ self::MATCH_EXACT, self::MATCH_CONTAINS, self::MATCH_PREFIX ], true ) ) {
 			$match = self::MATCH_EXACT;
@@ -110,7 +124,7 @@ final class Goals {
 		if ( $type === self::TYPE_EVENT && ! preg_match( '/^[\p{L}\p{N} _.:\-]{1,64}$/u', $value ) ) {
 			throw new \InvalidArgumentException( 'Event names may use letters, numbers, spaces, dots, colons, dashes and underscores.' );
 		}
-		if ( $type === self::TYPE_CLICK ) {
+		if ( $type === self::TYPE_CLICK || $type === self::TYPE_KIND ) {
 			$match = self::MATCH_EXACT;
 		}
 		if ( $name === '' ) {
@@ -146,6 +160,27 @@ final class Goals {
 		$wpdb->delete( DB::table( 'funnel_steps' ), [ 'goal_id' => $id ] );
 
 		self::sync_rules();
+	}
+
+	/**
+	 * Adds three goals for the actions most sites have: any button, any link and any form. Runs in the admin
+	 * and only once per site (the flag is in settings), so a goal the user deletes stays deleted.
+	 */
+	public static function seed_defaults(): void {
+		global $wpdb;
+
+		if ( Settings::get()['default_goals_added'] ) {
+			return;
+		}
+
+		$kind_goals = (int) $wpdb->get_var( 'SELECT COUNT(*) FROM ' . DB::table( 'goals' ) . ' WHERE type = ' . self::TYPE_KIND );
+		if ( $kind_goals === 0 ) {
+			foreach ( [ 'button' => 'Button clicked', 'link' => 'Link clicked', 'form' => 'Form submitted' ] as $kind => $name ) {
+				self::save( [ 'name' => $name, 'type' => self::TYPE_KIND, 'match' => self::MATCH_EXACT, 'value' => $kind ] );
+			}
+		}
+
+		Settings::update( [ 'default_goals_added' => true ] );
 	}
 
 	/** Copies active goals into the settings option, which the tracker reads on each hit. */

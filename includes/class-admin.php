@@ -99,6 +99,7 @@ final class Admin {
 		add_action( 'admin_enqueue_scripts', [ self::class, 'assets' ] );
 		add_action( 'admin_post_snn_a_save_settings', [ self::class, 'save_settings' ] );
 		add_action( 'admin_init', [ self::class, 'prepare' ] );
+		add_action( 'admin_init', [ Goals::class, 'seed_defaults' ] );
 	}
 
 	public static function grant_capability(): void {
@@ -219,7 +220,7 @@ final class Admin {
 	 * Start of one setting: title and help on the left, the control on the right. $note is HTML that
 	 * is already escaped (see Scale::warning), shown under the help text.
 	 */
-	private static function row( string $title, string $help = '', string $for = '', string $note = '' ): void {
+	public static function row( string $title, string $help = '', string $for = '', string $note = '' ): void {
 		?>
 		<div class="snn-a-row">
 			<div class="snn-a-row-text">
@@ -237,12 +238,12 @@ final class Admin {
 		<?php
 	}
 
-	private static function row_end(): void {
+	public static function row_end(): void {
 		echo '</div></div>';
 	}
 
 	/** An on/off switch. The checkbox stays a real checkbox, so the form posts it as before. */
-	private static function toggle( string $name, bool $on, string $label ): void {
+	public static function toggle( string $name, bool $on, string $label ): void {
 		?>
 		<label class="snn-a-switch">
 			<input type="checkbox" name="<?php echo esc_attr( $name ); ?>" value="1" <?php checked( $on ); ?>>
@@ -262,7 +263,7 @@ final class Admin {
 		<?php
 	}
 
-	private static function section( string $title, string $text ): void {
+	public static function section( string $title, string $text ): void {
 		?>
 		<section class="snn-a-set">
 			<header class="snn-a-set-head">
@@ -372,6 +373,18 @@ final class Admin {
 					<?php self::select( 'retention_months', $retention, (int) $s['retention_months'] ); ?>
 				<?php self::row_end(); ?>
 
+				<?php self::row( 'Button clicks', 'Counts every button on every page, by its text. Shown on the Conversion Tracking screen, and counted by the Button clicked goal.' ); ?>
+					<?php self::toggle( 'track_buttons', (bool) $s['track_buttons'], 'Record button clicks' ); ?>
+				<?php self::row_end(); ?>
+
+				<?php self::row( 'Link clicks', 'Counts clicks on links to other sites, files, email addresses, phone numbers and pages on this site. Counted by the Link clicked goal.' ); ?>
+					<?php self::toggle( 'track_links', (bool) $s['track_links'], 'Record link clicks' ); ?>
+				<?php self::row_end(); ?>
+
+				<?php self::row( 'Form submits', 'Counts each form submission by the form\'s id and the page it was on. Field values are never read. Counted by the Form submitted goal.' ); ?>
+					<?php self::toggle( 'track_forms', (bool) $s['track_forms'], 'Record form submits' ); ?>
+				<?php self::row_end(); ?>
+
 				<?php self::row( 'Click heatmap', 'Counts only, per page, day, device and window width. No click is stored on its own. Shown on the Heatmaps screen.', '', Scale::warning( 'heat' ) ); ?>
 					<?php self::toggle( 'heatmap', (bool) $s['heatmap'], 'Record clicks' ); ?>
 				<?php self::row_end(); ?>
@@ -470,6 +483,9 @@ final class Admin {
 		Settings::update( [
 			'salt_rotation'         => $rotation,
 			'retention_months'      => $months,
+			'track_buttons'         => isset( $_POST['track_buttons'] ),
+			'track_links'           => isset( $_POST['track_links'] ),
+			'track_forms'           => isset( $_POST['track_forms'] ),
 			'heatmap'               => isset( $_POST['heatmap'] ),
 			'cursor_trails'         => isset( $_POST['cursor_trails'] ),
 			'cursor_retention_days' => $days,

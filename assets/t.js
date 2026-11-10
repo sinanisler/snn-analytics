@@ -244,13 +244,14 @@
 			}
 		});
 
-		var button = target.closest('button, input[type="button"], input[type="submit"], [role="button"]');
+		// Switches from Settings. A missing flag means on, so a page with an older config still records.
+		var button = cfg.tb === false ? null : target.closest('button, input[type="button"], input[type="submit"], [role="button"]');
 		if (button) {
 			sendOnce({ e: 'ev', vk: vk, t: 8, v: label(button) });
 		}
 
 		var link = target.closest('a[href]');
-		if (!link) {
+		if (!link || cfg.tl === false) {
 			return;
 		}
 		// A link styled as a button is one click, and the button event already names it.
@@ -272,13 +273,14 @@
 		}
 	});
 
-	// Form submits: the form's name or id, or where it sends the visitor. Field values are never read.
+	// Form submits: the form's id, name or label, or where it sends the visitor. Field values are never read.
 	document.addEventListener('submit', function (event) {
 		var form = event.target;
-		if (!form || !form.getAttribute) {
+		if (!form || !form.getAttribute || cfg.tf === false) {
 			return;
 		}
-		var name = form.getAttribute('aria-label') || form.id || form.getAttribute('name');
+		// The form's id first, as it is what a site owner names forms by. Then its name, then its label.
+		var name = form.id || form.getAttribute('name') || form.getAttribute('aria-label');
 		if (!name) {
 			try {
 				var action = new URL(form.getAttribute('action') || location.href, location.href);
