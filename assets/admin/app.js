@@ -3147,23 +3147,23 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 	 */
 	function renderConversions(rp) {
 		var TABS = [
+			['conversions', 'Conversions', 'The overview: goals reached, the most clicked buttons and links, and the latest conversions.'],
 			['goals', 'Goals', 'The actions you want visitors to take, such as reaching a thank-you page or clicking a button.'],
 			['funnels', 'Funnels', 'A series of goals in order. Shows how many visitors reach each step and where they drop off.'],
 			['campaigns', 'Campaigns', 'Tag the links you share to see which emails, posts and ads bring visitors and conversions.']
 		];
 		var tab = new URLSearchParams(window.location.search).get('tab');
 		if (!TABS.some(function (t) { return t[0] === tab; })) {
-			tab = 'goals';
+			tab = 'conversions';
 		}
 
+		// Only the overview draws its own charts. Goals, Funnels and Campaigns load the settings below.
 		var data = null;
 		var nav = h('div', { class: 'snn-a-segment snn-a-subtabs', role: 'group', 'aria-label': 'Conversion tracking sections' });
-		var panel = h('div', {}, skeleton(6));
+		var panel = h('div', {});
 
 		root.appendChild(h('div', { class: 'snn-a-toolbar' }, rangeControl()));
 		root.appendChild(nav);
-		root.appendChild(conversionSummary(rp));
-		root.appendChild(conversionGrid(rp));
 		root.appendChild(panel);
 
 		function pick(next) {
@@ -3190,7 +3190,17 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 
 		function draw() {
 			drawNav();
+			// Charts from the tab we are leaving are removed, so their canvases are not left behind.
+			charts.splice(0).forEach(function (chart) { chart.destroy(); });
 			clear(panel);
+			if (tab === 'conversions') {
+				panel.appendChild(h('div', {}, [conversionSummary(rp), conversionGrid(rp)]));
+				return;
+			}
+			if (!data) {
+				panel.appendChild(skeleton(6));
+				return;
+			}
 			if (tab === 'funnels') {
 				panel.appendChild(funnelsPanel(data.goals, data.funnels, rp, load, function () { pick('goals'); }));
 			} else if (tab === 'campaigns') {
@@ -3203,14 +3213,19 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 		function load() {
 			Promise.all([api('goals', rp), api('funnels', rp), api('stats/campaigns', rp)]).then(function (results) {
 				data = { goals: results[0], funnels: results[1], campaigns: results[2] };
-				draw();
+				// The overview does not use these, so it is not redrawn when they arrive.
+				if (tab !== 'conversions') {
+					draw();
+				}
 			}).catch(function (err) {
-				clear(panel);
-				panel.appendChild(failed(err, load));
+				if (tab !== 'conversions') {
+					clear(panel);
+					panel.appendChild(failed(err, load));
+				}
 			});
 		}
 
-		drawNav();
+		draw();
 		load();
 	}
 
@@ -3339,9 +3354,9 @@ cell.appendChild(card('Visit on ' + when(s.started_at), [
 		var listBody = h('div', {}, skeleton(6));
 		var listPage = 1;
 
-		api('stats/actions-series', rp).then(function (data) {
+		// The endpoint answers with one row per day, so the rows are used as they come.
+		api('stats/actions-series', rp).then(function (series) {
 			clear(chartBody);
-			var series = data.series || [];
 			if (!series.some(function (d) { return d.clicks || d.conversions; })) {
 				chartBody.appendChild(empty('No clicks or conversions in this range yet.'));
 				return;
