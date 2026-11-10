@@ -30,6 +30,7 @@ final class Admin {
 		'snn-analytics-devices'   => [ 'devices', 'Devices', self::MENU_CAP ],
 		'snn-analytics-journeys'  => [ 'journeys', 'Journeys', self::MENU_CAP ],
 		'snn-analytics-goals'     => [ 'goals', 'Conversion Tracking', self::MENU_CAP ],
+		'snn-analytics-mcp'       => [ 'mcp', 'MCP', self::MANAGE_CAP ],
 		'snn-analytics-import'    => [ 'import', 'Import', self::MANAGE_CAP ],
 		'snn-analytics-settings'  => [ 'settings', 'Settings', self::MANAGE_CAP ],
 	];
@@ -50,6 +51,7 @@ final class Admin {
 		'snn-analytics-geo',
 		'snn-analytics-devices',
 		'snn-analytics-goals',
+		'snn-analytics-mcp',
 		'snn-analytics-settings',
 	];
 
@@ -66,6 +68,7 @@ final class Admin {
 		'snn-analytics-geo'       => 'Where in the world your visitors are.',
 		'snn-analytics-devices'   => 'Which devices, browsers and operating systems people use.',
 		'snn-analytics-goals'     => 'Track the actions that matter, follow visitors through funnels, and measure your campaigns.',
+		'snn-analytics-mcp'       => 'Connect AI assistants such as Claude to these reports, with a token for each one.',
 		'snn-analytics-settings'  => 'Tracking, privacy, data retention and who can see these reports.',
 	];
 
@@ -166,6 +169,8 @@ final class Admin {
 			</div>
 			<?php if ( $view === 'settings' ) : ?>
 				<?php self::settings_form(); ?>
+			<?php elseif ( $view === 'mcp' ) : ?>
+				<?php MCP::render(); ?>
 			<?php endif; ?>
 		</div>
 		<?php

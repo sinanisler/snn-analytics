@@ -22,6 +22,10 @@ if ( $snn_a_role ) {
 	$snn_a_role->remove_cap( 'snn_a_view' );
 }
 
+// Access tokens for MCP assistants are credentials, so they go even when the statistics are kept.
+delete_option( 'snn_a_mcp_tokens' );
+delete_option( 'snn_a_mcp' );
+
 $snn_a_settings = SNN_Analytics\Store::read( SNN_Analytics\Settings::SETTINGS );
 
 if ( ! empty( $snn_a_settings['delete_on_uninstall'] ) ) {
