@@ -38,14 +38,14 @@ final class API {
 
 		$get = static fn( string $path, callable $cb, array $args, callable $perm ) => register_rest_route( self::NS, $path, [
 			'methods'             => 'GET',
-			'callback'            => $cb,
+			'callback'            => static fn( \WP_REST_Request $req ) => self::guarded( $cb, $req ),
 			'permission_callback' => $perm,
 			'args'                => $args,
 		] );
 
 		$post = static fn( string $path, callable $cb, callable $perm ) => register_rest_route( self::NS, $path, [
 			'methods'             => 'POST',
-			'callback'            => $cb,
+			'callback'            => static fn( \WP_REST_Request $req ) => self::guarded( $cb, $req ),
 			'permission_callback' => $perm,
 		] );
 
@@ -171,6 +171,37 @@ final class API {
 		} catch ( \InvalidArgumentException $e ) {
 			return self::error( $e->getMessage() );
 		}
+	}
+
+	/**
+	 * Runs a route callback so that the reply is always JSON. A PHP warning printed during the callback, or an
+	 * exception from a query that failed, becomes a logged 500 that the admin screens can show. Without this, the
+	 * warning goes out ahead of the JSON and the card says "Unexpected token '<'" instead of what went wrong.
+	 * The exact text goes to the PHP error log.
+	 */
+	private static function guarded( callable $cb, \WP_REST_Request $req ): mixed {
+		global $wpdb;
+
+		$route = $req->get_route();
+		$error = null;
+
+		ob_start();
+		try {
+			$result = $cb( $req );
+		} catch ( \Throwable $e ) {
+			$error = $e->getMessage();
+		}
+		$printed = trim( wp_strip_all_tags( (string) ob_get_clean() ) );
+
+		if ( $error === null && $printed === '' ) {
+			return $result;
+		}
+
+		$detail = $error ?? 'printed output: ' . $printed;
+		$db     = $wpdb->last_error !== '' ? ' Database: ' . $wpdb->last_error : '';
+		error_log( 'SNN Analytics: ' . $route . ' failed, ' . $detail . $db );
+
+		return self::error( 'The data could not be read just now. Try again in a moment.', 500 );
 	}
 
 	// --------------------------------------------------------------- stats

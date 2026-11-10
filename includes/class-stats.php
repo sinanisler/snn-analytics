@@ -20,6 +20,18 @@ final class Stats {
 
 	// ---------------------------------------------------------------- overview
 
+	/**
+	 * A query that failed returns null, and the code after it would turn that into PHP warnings. Stop here instead,
+	 * so the error log names the query and the database error.
+	 */
+	private static function check_query( string $what ): void {
+		global $wpdb;
+
+		if ( $wpdb->last_error !== '' ) {
+			throw new \RuntimeException( $what . ' query failed: ' . $wpdb->last_error );
+		}
+	}
+
 	public static function overview( array $r ): array {
 		global $wpdb;
 
@@ -28,6 +40,7 @@ final class Stats {
 			$r['from'],
 			$r['to']
 		), ARRAY_A );
+		self::check_query( 'daily series' );
 
 		return [
 			'current'  => self::site_totals( $r['from'], $r['to'] ),
@@ -47,6 +60,7 @@ final class Stats {
 			$from,
 			$to
 		), ARRAY_A );
+		self::check_query( 'daily totals' );
 
 		$t = array_map( 'intval', (array) $row );
 
@@ -74,6 +88,9 @@ final class Stats {
 			Ranges::day_start( $from ),
 			Ranges::day_start( $to + 1 )
 		) );
+
+		// A failed count would read as zero, and the zero would then be cached for ten minutes.
+		self::check_query( 'visitor count' );
 
 		set_transient( $key, $count, 10 * MINUTE_IN_SECONDS );
 
@@ -434,6 +451,7 @@ final class Stats {
 			"SELECT COUNT(DISTINCT d.page_id) FROM {$daily} d JOIN {$pages} p ON p.id = d.page_id WHERE {$where}",
 			...$params
 		) );
+		self::check_query( 'page count' );
 
 		$rows = $wpdb->get_results( $wpdb->prepare(
 			"SELECT p.id, p.title, p.path, p.post_type,
@@ -446,6 +464,7 @@ final class Stats {
 			 LIMIT %d OFFSET %d",
 			...array_merge( $params, [ $per_page, $offset ] )
 		), ARRAY_A );
+		self::check_query( 'page list' );
 
 		return [
 			'total' => $total,
