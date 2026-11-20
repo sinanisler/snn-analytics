@@ -1606,6 +1606,14 @@
 	}
 
 	function previewUrl(path) {
+		// The tracker files every search under "/search" and every date archive under "/date" (the search
+		// words are not kept). Neither is a real address, so load a page that uses the same template:
+		// a search for a space (WordPress treats an empty ?s= as the home page) and the home page.
+		if (path === '/search') {
+			path = '/?s=%20';
+		} else if (path === '/date') {
+			path = '/';
+		}
 		return cfg.site + path + (path.indexOf('?') === -1 ? '?' : '&') + 'snn_a_preview=1';
 	}
 
